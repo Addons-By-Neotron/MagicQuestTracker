@@ -1,0 +1,19 @@
+## Interface: 120100, 16001
+## Title: Magic Quest Tracker
+## Notes: Zone-grouped, level-sorted, scrollable quest and recipe tracker
+## Author: NeoTron
+## Version: @project-version@
+## DefaultState: enabled
+## IconTexture: Interface\Icons\INV_Misc_Book_08
+## X-Category: Quests
+## X-eMail: neotron@gmail.com
+## X-Date: @project-date-integer@
+## OptionalDeps: Ace3, LibSharedMedia-3.0, AceGUI-3.0-SharedMediaWidgets, LibMagicUtil-1.0, LibLogger
+## SavedVariables: MagicQuestTrackerDB
+
+embeds.xml
+Locales.xml
+MagicQuestTracker.lua
+Data.lua
+Tracker.lua
+Options.lua
