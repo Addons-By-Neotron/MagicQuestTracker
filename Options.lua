@@ -26,7 +26,6 @@ end
 local SORT_VALUES = {
    level = L["Level"],
    name = L["Name"],
-   log = L["Quest log order"],
 }
 
 local OUTLINE_VALUES = {
@@ -252,5 +251,6 @@ function mod:SetupOptions()
 end
 
 function mod:NotifyOptionsChanged()
+   AceConfigRegistry:NotifyChange(APP_NAME)
    AceConfigRegistry:NotifyChange(APP_NAME .. ": Layout")
 end

@@ -20,8 +20,8 @@ mod.defaults = {
       showAllQuests = true,          -- false = only quests on the built-in watch list
       currentZoneFirst = true,
       onlyCurrentZone = false,
-      zoneSort = "level",            -- level | name | log
-      questSort = "level",           -- level | name | log
+      zoneSort = "level",            -- level | name
+      questSort = "level",           -- level | name
       showLevel = true,
       colorByDifficulty = true,
       showCompletedObjectives = true,
@@ -90,6 +90,10 @@ function mod:OnDisable()
 end
 
 function mod:ApplyProfile()
+   -- "log" sort order was removed; fall back to level.
+   local profile = self.db.profile
+   if profile.zoneSort ~= "name" then profile.zoneSort = "level" end
+   if profile.questSort ~= "name" then profile.questSort = "level" end
    self:ApplyLayout()
    self:SetBlizzardTrackerHidden(self.db.profile.hideBlizzardTracker)
    self:RequestUpdate()

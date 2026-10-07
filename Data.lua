@@ -126,9 +126,6 @@ local questSorters = {
       if a.title ~= b.title then return a.title < b.title end
       return a.questID < b.questID
    end,
-   log = function(a, b)
-      return a.logIndex < b.logIndex
-   end,
 }
 
 local zoneSorters = {
@@ -139,13 +136,10 @@ local zoneSorters = {
    name = function(a, b)
       return a.name < b.name
    end,
-   log = function(a, b)
-      return a.firstLogIndex < b.firstLogIndex
-   end,
 }
 
 --- Returns a sorted list of zone sections:
---- { name, isCurrent, minLevel, firstLogIndex, quests = { quest, ... } }
+--- { name, isCurrent, zoneRank, minLevel, quests = { quest, ... } }
 --- plus the number of quests in the log and the number displayed.
 function mod:CollectQuests()
    local profile = self.db.profile
@@ -175,7 +169,7 @@ function mod:CollectQuests()
             if visible then
                local section = byName[header]
                if not section then
-                  section = { name = header, isCurrent = isCurrentZone, zoneRank = zoneRank, minLevel = math.huge, firstLogIndex = i, quests = {} }
+                  section = { name = header, isCurrent = isCurrentZone, zoneRank = zoneRank, minLevel = math.huge, quests = {} }
                   byName[header] = section
                   tinsert(sections, section)
                end

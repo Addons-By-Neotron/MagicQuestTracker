@@ -12,6 +12,8 @@ local InCombatLockdown = InCombatLockdown
 local TITLE_PADDING = 6
 local SCROLLBAR_WIDTH = 4
 local SCROLL_STEP = 40
+local SCROLLBAR_FADE_IN = 0.15   -- seconds
+local SCROLLBAR_FADE_OUT = 0.6
 local ZONE_SPACING = 6        -- space above each zone header (except first)
 local QUEST_SPACING = 4       -- space above each quest title
 local LINE_SPACING = 1
@@ -91,7 +93,7 @@ function mod:CreateTracker()
    title:SetPoint("TOPLEFT")
    title:SetPoint("TOPRIGHT")
    title:RegisterForDrag("LeftButton")
-   title:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+   title:RegisterForClicks("LeftButtonUp", "RightButtonUp", "MiddleButtonUp")
    title:SetScript("OnDragStart", function()
       if not mod.db.profile.locked then frame:StartMoving() end
    end)
@@ -102,8 +104,20 @@ function mod:CreateTracker()
    title:SetScript("OnClick", function(_, button)
       if button == "RightButton" then
          mod:OpenConfig()
+      elseif button == "MiddleButton" then
+         mod:ToggleCurrentZoneOnly()
       end
    end)
+   title:SetScript("OnEnter", function(self)
+      GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+      GameTooltip:AddLine(L["Middle-click: Toggle current zone only"], 1, 1, 1)
+      GameTooltip:AddLine(L["Right-click: Options"], 1, 1, 1)
+      if not mod.db.profile.locked then
+         GameTooltip:AddLine(L["Drag to move"], 1, 1, 1)
+      end
+      GameTooltip:Show()
+   end)
+   title:SetScript("OnLeave", GameTooltip_Hide)
    frame.title = title
 
    title.text = title:CreateFontString(nil, "OVERLAY")
@@ -146,7 +160,19 @@ function mod:CreateTracker()
    local bar = frame:CreateTexture(nil, "OVERLAY")
    bar:SetColorTexture(1, 0.82, 0, 0.5)
    bar:SetWidth(SCROLLBAR_WIDTH)
+   bar:SetAlpha(0)
    frame.scrollThumb = bar
+
+   -- The tracker is click-through, so hover is polled rather than using OnEnter/OnLeave.
+   frame:SetScript("OnUpdate", function(self, elapsed)
+      if not bar:IsShown() then return end
+      local alpha = bar:GetAlpha()
+      if self:IsMouseOver() then
+         if alpha < 1 then bar:SetAlpha(math.min(1, alpha + elapsed / SCROLLBAR_FADE_IN)) end
+      elseif alpha > 0 then
+         bar:SetAlpha(math.max(0, alpha - elapsed / SCROLLBAR_FADE_OUT))
+      end
+   end)
 
    self.lines = {}
    self.numLinesUsed = 0
@@ -199,6 +225,12 @@ function mod:UpdateMinimizeButton()
    local suffix = minimized and "expand" or "collapse"
    button:SetNormalAtlas("ui-questtrackerbutton-secondary-" .. suffix)
    button:SetPushedAtlas("ui-questtrackerbutton-secondary-" .. suffix .. "-pressed")
+end
+
+function mod:ToggleCurrentZoneOnly()
+   self.db.profile.onlyCurrentZone = not self.db.profile.onlyCurrentZone
+   self:NotifyOptionsChanged()
+   self:RequestUpdate()
 end
 
 function mod:ToggleMinimized()
