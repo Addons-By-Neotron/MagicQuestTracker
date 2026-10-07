@@ -34,7 +34,15 @@ mod.defaults = {
       width = 260,
       maxHeight = 450,
       scale = 1.0,
+      backgroundColor = { r = 0, g = 0, b = 0 },
       backgroundAlpha = 0.0,
+      backgroundHoverAlpha = 0.4,
+
+      -- Spacing (pixels)
+      zoneSpacing = 12,         -- above each zone header
+      zoneHeaderSpacing = 4,    -- between a zone header and its first quest
+      questSpacing = 6,         -- above each quest title
+      objectiveSpacing = 1,     -- between objective lines
       point = { "TOPRIGHT", "UIParent", "TOPRIGHT", -80, -260 },
 
       -- Fonts

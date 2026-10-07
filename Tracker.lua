@@ -12,11 +12,8 @@ local InCombatLockdown = InCombatLockdown
 local TITLE_PADDING = 6
 local SCROLLBAR_WIDTH = 4
 local SCROLL_STEP = 40
-local SCROLLBAR_FADE_IN = 0.15   -- seconds
-local SCROLLBAR_FADE_OUT = 0.6
-local ZONE_SPACING = 6        -- space above each zone header (except first)
-local QUEST_SPACING = 4       -- space above each quest title
-local LINE_SPACING = 1
+local FADE_IN = 0.15   -- seconds (scrollbar and background hover fade)
+local FADE_OUT = 0.6
 local QUEST_INDENT = 6
 local OBJECTIVE_INDENT = 16
 
@@ -86,7 +83,8 @@ function mod:CreateTracker()
 
    frame.bg = frame:CreateTexture(nil, "BACKGROUND")
    frame.bg:SetAllPoints()
-   frame.bg:SetColorTexture(0, 0, 0, 0)
+   frame.bg:SetColorTexture(0, 0, 0, 1)
+   frame.bg:SetAlpha(0)
 
    -- Title bar: drag handle, quest count, minimize button
    local title = CreateFrame("Button", nil, frame)
@@ -164,13 +162,23 @@ function mod:CreateTracker()
    frame.scrollThumb = bar
 
    -- The tracker is click-through, so hover is polled rather than using OnEnter/OnLeave.
+   local function FadeToward(region, target, elapsed, hovered)
+      local alpha = region:GetAlpha()
+      if alpha == target then return end
+      local step = elapsed / (hovered and FADE_IN or FADE_OUT)
+      if alpha < target then
+         region:SetAlpha(math.min(target, alpha + step))
+      else
+         region:SetAlpha(math.max(target, alpha - step))
+      end
+   end
+
    frame:SetScript("OnUpdate", function(self, elapsed)
-      if not bar:IsShown() then return end
-      local alpha = bar:GetAlpha()
-      if self:IsMouseOver() then
-         if alpha < 1 then bar:SetAlpha(math.min(1, alpha + elapsed / SCROLLBAR_FADE_IN)) end
-      elseif alpha > 0 then
-         bar:SetAlpha(math.max(0, alpha - elapsed / SCROLLBAR_FADE_OUT))
+      local hovered = self:IsMouseOver()
+      local profile = mod.db.profile
+      FadeToward(self.bg, hovered and profile.backgroundHoverAlpha or profile.backgroundAlpha, elapsed, hovered)
+      if bar:IsShown() then
+         FadeToward(bar, hovered and 1 or 0, elapsed, hovered)
       end
    end)
 
@@ -210,7 +218,9 @@ function mod:ApplyLayout()
    frame:ClearAllPoints()
    local p = profile.point
    frame:SetPoint(p[1], UIParent, p[3], p[4], p[5])
-   frame.bg:SetColorTexture(0, 0, 0, profile.backgroundAlpha)
+   local c = profile.backgroundColor
+   frame.bg:SetColorTexture(c.r, c.g, c.b, 1)
+   frame.bg:SetAlpha(frame:IsMouseOver() and profile.backgroundHoverAlpha or profile.backgroundAlpha)
 
    local titleHeight = profile.fonts.title.size + TITLE_PADDING
    frame.title:SetHeight(titleHeight)
@@ -342,10 +352,12 @@ local function AddLine(kind, data, text, role, indent, spacing, color, highlight
    line.text:SetTextColor(unpack(color))
    line.bg:SetShown(showHeaderBg or false)
 
-   local height = math.ceil(line.text:GetStringHeight()) + LINE_SPACING
+   local height = math.ceil(line.text:GetStringHeight())
+   -- A header can override the gap before the next line (layout.nextSpacing).
    if layout.y > 0 then
-      layout.y = layout.y + spacing
+      layout.y = layout.y + (layout.nextSpacing or spacing)
    end
+   layout.nextSpacing = nil
    line:ClearAllPoints()
    line:SetPoint("TOPLEFT", mod.frame.child, "TOPLEFT", 0, -layout.y)
    line:SetSize(layout.width, height)
@@ -393,24 +405,24 @@ function mod:RenderQuest(quest, profile)
       or { Color("Header", 0.75, 0.61, 0) }
    layout.rightInset = (self.itemButtonsImplemented and profile.showItemButtons and quest.hasItem) and ITEM_BUTTON_SIZE or 0
 
-   AddLine("quest", quest, FormatQuestTitle(quest, profile), "quest", QUEST_INDENT, QUEST_SPACING,
+   AddLine("quest", quest, FormatQuestTitle(quest, profile), "quest", QUEST_INDENT, profile.questSpacing,
       titleColor, Brighten(titleColor))
 
    if quest.isFailed then
-      AddLine("objective", quest, FAILED or L["Failed"], "objective", OBJECTIVE_INDENT, LINE_SPACING,
+      AddLine("objective", quest, FAILED or L["Failed"], "objective", OBJECTIVE_INDENT, profile.objectiveSpacing,
          { Color("Failed", 1, 0.1, 0.1) })
    elseif quest.isComplete then
       local text = quest.completionText
       if not text or text == "" then
          text = QUEST_WATCH_QUEST_READY or L["Ready for turn-in"]
       end
-      AddLine("objective", quest, text, "objective", OBJECTIVE_INDENT, LINE_SPACING, normal)
+      AddLine("objective", quest, text, "objective", OBJECTIVE_INDENT, profile.objectiveSpacing, normal)
    else
       for _, objective in ipairs(quest.objectives) do
          if not objective.finished then
-            AddLine("objective", quest, "- " .. objective.text, "objective", OBJECTIVE_INDENT, LINE_SPACING, normal)
+            AddLine("objective", quest, "- " .. objective.text, "objective", OBJECTIVE_INDENT, profile.objectiveSpacing, normal)
          elseif profile.showCompletedObjectives then
-            AddLine("objective", quest, "- " .. objective.text, "objective", OBJECTIVE_INDENT, LINE_SPACING, complete)
+            AddLine("objective", quest, "- " .. objective.text, "objective", OBJECTIVE_INDENT, profile.objectiveSpacing, complete)
          end
       end
    end
@@ -423,16 +435,17 @@ function mod:RenderRecipes(recipes, profile)
    local zoneColor = { NORMAL_FONT_COLOR:GetRGB() }
    local header = format("%s %s (%d)", collapsed and "+" or "-",
       PROFESSIONS_TRACKER_HEADER_PROFESSION or L["Professions"], #recipes)
-   AddLine("recipeSection", nil, header, "zone", 0, ZONE_SPACING * 2, zoneColor, { 1, 1, 1 }, true)
+   AddLine("recipeSection", nil, header, "zone", 0, profile.zoneSpacing, zoneColor, { 1, 1, 1 }, true)
    if collapsed then return end
+   layout.nextSpacing = profile.zoneHeaderSpacing
 
    local titleColor = { Color("Header", 0.75, 0.61, 0) }
    local normal = { Color("Normal", 0.8, 0.8, 0.8) }
    local complete = { Color("Complete", 0.6, 0.6, 0.6) }
    for _, recipe in ipairs(recipes) do
-      AddLine("recipe", recipe, recipe.name, "quest", QUEST_INDENT, QUEST_SPACING, titleColor, Brighten(titleColor))
+      AddLine("recipe", recipe, recipe.name, "quest", QUEST_INDENT, profile.questSpacing, titleColor, Brighten(titleColor))
       for _, reagent in ipairs(recipe.reagents) do
-         AddLine("objective", recipe, "- " .. reagent.text, "objective", OBJECTIVE_INDENT, LINE_SPACING,
+         AddLine("objective", recipe, "- " .. reagent.text, "objective", OBJECTIVE_INDENT, profile.objectiveSpacing,
             reagent.finished and complete or normal)
       end
    end
@@ -464,6 +477,7 @@ function mod:Render(sections, numQuests, numShown, recipes)
 
    self.numLinesUsed = 0
    layout.y = 0
+   layout.nextSpacing = nil
    layout.rightInset = 0
    layout.width = profile.width - SCROLLBAR_WIDTH - 4
 
@@ -484,8 +498,9 @@ function mod:Render(sections, numQuests, numShown, recipes)
       local collapsed = collapsedZones[section.name]
       local text = format("%s %s (%d)", collapsed and "+" or "-", section.name, #section.quests)
       local color = section.isCurrent and currentZoneColor or zoneColor
-      AddLine("zone", section, text, "zone", 0, ZONE_SPACING, color, Brighten(color), true)
+      AddLine("zone", section, text, "zone", 0, profile.zoneSpacing, color, Brighten(color), true)
       if not collapsed then
+         layout.nextSpacing = profile.zoneHeaderSpacing
          for _, quest in ipairs(section.quests) do
             self:RenderQuest(quest, profile)
          end

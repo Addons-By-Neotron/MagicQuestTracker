@@ -216,11 +216,63 @@ local function BuildOptions()
                min = 0.5, max = 2.0, step = 0.01, bigStep = 0.05, isPercent = true,
                order = 4,
             },
+            backgroundHeader = { type = "header", name = L["Background"], order = 10 },
+            backgroundColor = {
+               type = "color",
+               name = L["Background color"],
+               order = 11,
+               get = function()
+                  local c = mod.db.profile.backgroundColor
+                  return c.r, c.g, c.b
+               end,
+               set = function(_, r, g, b)
+                  local c = mod.db.profile.backgroundColor
+                  c.r, c.g, c.b = r, g, b
+                  mod:ApplyLayout()
+               end,
+            },
             backgroundAlpha = {
                type = "range",
                name = L["Background opacity"],
+               desc = L["Background opacity when the mouse is not over the tracker."],
                min = 0, max = 1, step = 0.01, bigStep = 0.05, isPercent = true,
-               order = 5,
+               order = 12,
+            },
+            backgroundHoverAlpha = {
+               type = "range",
+               name = L["Mouseover opacity"],
+               desc = L["Background opacity when the mouse is over the tracker."],
+               min = 0, max = 1, step = 0.01, bigStep = 0.05, isPercent = true,
+               order = 13,
+            },
+            spacingHeader = { type = "header", name = L["Spacing"], order = 20 },
+            zoneSpacing = {
+               type = "range",
+               name = L["Zone spacing"],
+               desc = L["Space above each zone header."],
+               min = 0, max = 40, step = 1,
+               order = 21,
+            },
+            zoneHeaderSpacing = {
+               type = "range",
+               name = L["Zone header spacing"],
+               desc = L["Space between a zone header and its first quest."],
+               min = 0, max = 30, step = 1,
+               order = 22,
+            },
+            questSpacing = {
+               type = "range",
+               name = L["Quest spacing"],
+               desc = L["Space above each quest title."],
+               min = 0, max = 30, step = 1,
+               order = 23,
+            },
+            objectiveSpacing = {
+               type = "range",
+               name = L["Objective spacing"],
+               desc = L["Space between objective lines."],
+               min = 0, max = 20, step = 1,
+               order = 24,
             },
          },
       },
