@@ -105,6 +105,13 @@ local function BuildQuest(info)
       isSuperTracked = C_SuperTrack and C_SuperTrack.GetSuperTrackedQuestID() == questID,
       objectives = BuildObjectives(questID),
    }
+   -- Quest tag: tag ID 1 is "Elite" in classic content ("Group" in the retail enum).
+   local tagInfo = C_QuestLog.GetQuestTagInfo and C_QuestLog.GetQuestTagInfo(questID)
+   if tagInfo then
+      quest.tagID = tagInfo.tagID
+      quest.tagName = tagInfo.tagName
+      quest.isElite = tagInfo.isElite or tagInfo.tagID == ((Enum.QuestTag and Enum.QuestTag.Group) or 1)
+   end
    if quest.isComplete and GetQuestLogCompletionText then
       quest.completionText = GetQuestLogCompletionText(logIndex)
    end

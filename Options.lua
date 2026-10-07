@@ -122,9 +122,16 @@ local function BuildOptions()
             showLevel = {
                type = "toggle",
                name = L["Show quest level"],
-               desc = L["Prefix quest titles with their level. + marks group quests, D daily and W weekly."],
+               desc = L["Prefix quest titles with their level. + marks elite and group quests, D daily and W weekly."],
                width = "full",
                order = 16,
+            },
+            showQuestTags = {
+               type = "toggle",
+               name = L["Show quest type"],
+               desc = L["Append the quest type, such as Elite, Dungeon or Raid, to quest titles."],
+               width = "full",
+               order = 16.5,
             },
             colorByDifficulty = {
                type = "toggle",

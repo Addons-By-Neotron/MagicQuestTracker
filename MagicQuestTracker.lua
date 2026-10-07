@@ -23,6 +23,7 @@ mod.defaults = {
       zoneSort = "level",            -- level | name
       questSort = "level",           -- level | name
       showLevel = true,
+      showQuestTags = true,
       colorByDifficulty = true,
       showCompletedObjectives = true,
       showRecipes = true,

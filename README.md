@@ -7,6 +7,7 @@ A replacement for the built-in objective tracker for WoW Retail and Classic Fore
 - Quests within a zone are sorted by level.
 - Option to hide quests that aren't in the current zone.
 - Shows all quests by default, or only those on the built-in watch list.
+- Elite quests are marked with `+` after the level, and the quest type (Elite, Dungeon, Raid, ...) is appended to the title.
 - Tracked profession recipes are shown in a separate section.
 - Scrollable, with a configurable max height, width, scale and background opacity.
 - Configurable fonts (face, size, outline) for the title, zone headers, quest titles and objectives.

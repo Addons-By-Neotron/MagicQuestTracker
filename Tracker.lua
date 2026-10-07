@@ -363,7 +363,7 @@ local function FormatQuestTitle(quest, profile)
    local title = quest.title
    if profile.showLevel then
       local tag = ""
-      if quest.suggestedGroup and quest.suggestedGroup > 0 then
+      if quest.isElite or (quest.suggestedGroup and quest.suggestedGroup > 0) then
          tag = "+"
       end
       if Enum.QuestFrequency then
@@ -374,6 +374,9 @@ local function FormatQuestTitle(quest, profile)
          end
       end
       title = format("[%d%s] %s", quest.level, tag, title)
+   end
+   if profile.showQuestTags and quest.tagName and quest.tagName ~= "" then
+      title = format("%s |cffff8040(%s)|r", title, quest.tagName)
    end
    return title
 end
