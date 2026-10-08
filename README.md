@@ -8,6 +8,7 @@ A replacement for the built-in objective tracker for WoW Retail and Classic Fore
 - Quests within a zone are sorted by level, name, or straight-line distance to the quest's next map location.
 - Optional distance (yards) and direction arrow on each quest.
 - Option to hide quests that aren't in the current zone.
+- Option to auto-fold every zone except the current one when you change zones.
 - Shows all quests by default, or only those on the built-in watch list.
 - The level is suffixed by quest type: `+` elite/group, `D` dungeon, `R` raid, `H` heroic (e.g. `[33D]`, `[60R]`), and the quest type (Elite, Dungeon, Raid, Daily, ...) is appended to the title.
 - Quest item buttons for quests with a usable item.

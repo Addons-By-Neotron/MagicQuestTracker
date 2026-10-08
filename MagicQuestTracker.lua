@@ -43,6 +43,7 @@ mod.defaults = {
       showAllQuests = true,          -- false = only quests on the built-in watch list
       currentZoneFirst = true,
       onlyCurrentZone = false,
+      autoFoldZones = false,
       zoneSort = "level",            -- level | name | distance
       questSort = "level",           -- level | name | distance
       showDistance = false,
@@ -90,6 +91,7 @@ mod.defaults = {
    },
    char = {
       collapsedZones = {},    -- [zoneName] = true
+      autoFoldZone = nil,     -- zone the auto-fold was last applied for
       collapsedSections = {}, -- [quests|worldQuests|bonus|recipes] = true
       minimized = false,
    },
@@ -190,9 +192,29 @@ function mod:RunUpdate()
    self.updateTimer = nil
    if not self.frame then return end
    local sections, numQuests, numShown = self:CollectQuests()
+   self:AutoFoldZones(sections)
    local recipes = self.db.profile.showRecipes and self:CollectRecipes() or nil
    local tasks = self:CollectTasks()
    self:Render(sections, numQuests, numShown, recipes, tasks)
+end
+
+----------------------------------------------------------------
+-- Auto-fold: when all objectives are shown, fold zones other than the
+-- current one, but only when the player changes zone, so zones unfolded
+-- by hand stay open until the next zone change.
+----------------------------------------------------------------
+
+function mod:AutoFoldZones(sections)
+   local profile = self.db.profile
+   if not profile.autoFoldZones or profile.onlyCurrentZone then return end
+   local zone = GetRealZoneText()
+   if not zone or zone == "" or zone == self.db.char.autoFoldZone then return end
+   self.db.char.autoFoldZone = zone
+
+   local collapsed = self.db.char.collapsedZones
+   for _, section in ipairs(sections) do
+      collapsed[section.name] = (not section.isCurrent) or nil
+   end
 end
 
 ----------------------------------------------------------------

@@ -135,6 +135,19 @@ local function BuildOptions()
                width = "full",
                order = 13,
             },
+            autoFoldZones = {
+               type = "toggle",
+               name = L["Auto-fold other zones"],
+               desc = L["When showing all quests, fold every zone except the current one whenever you enter a new zone. Zones you unfold stay open until the next zone change."],
+               width = "full",
+               order = 13.5,
+               disabled = function() return mod.db.profile.onlyCurrentZone end,
+               set = function(_, val)
+                  mod.db.profile.autoFoldZones = val
+                  mod.db.char.autoFoldZone = nil  -- apply right away
+                  mod:RequestUpdate()
+               end,
+            },
             zoneSort = {
                type = "select",
                name = L["Zone sort order"],

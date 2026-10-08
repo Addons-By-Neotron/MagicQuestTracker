@@ -148,3 +148,5 @@ L["%s (%d of %d/%d)"] = true
 L["Section headers"] = true
 L["Section spacing"] = true
 L["Space above each section header (Quests, World Quests, Professions)."] = true
+L["Auto-fold other zones"] = true
+L["When showing all quests, fold every zone except the current one whenever you enter a new zone. Zones you unfold stay open until the next zone change."] = true
