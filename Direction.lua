@@ -87,6 +87,17 @@ local function GetMapSize(mapID)
    return size
 end
 
+--- Straight-line distance in yards from the player to a POI, or nil.
+function mod:GetPOIDistance(poi)
+   local pos = C_Map.GetPlayerMapPosition(poi.mapID, "player")
+   local size = GetMapSize(poi.mapID)
+   if not (pos and size) then return nil end
+   local px, py = pos:GetXY()
+   local east = (poi.x - px) * size[1]
+   local south = (poi.y - py) * size[2]
+   return sqrt(east * east + south * south)
+end
+
 local playerPositions = {}
 
 --- Rotates the arrows of all visible quest lines toward their POI.

@@ -174,6 +174,14 @@ local function BuildOptions()
                order = 15.7,
                disabled = function() return not mod.db.profile.showDirection end,
             },
+            arrowMaxDistance = {
+               type = "range",
+               name = L["Arrow max distance"],
+               desc = L["Only show arrows for quests in other zones within this many yards. Quests in the current zone always get an arrow. 0 shows arrows at any distance."],
+               min = 0, max = 5000, step = 50, bigStep = 250,
+               order = 15.8,
+               disabled = function() return not mod.db.profile.showDirection end,
+            },
             showLevel = {
                type = "toggle",
                name = L["Show quest level"],

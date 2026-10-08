@@ -48,6 +48,7 @@ mod.defaults = {
       showDistance = false,
       showDirection = false,
       arrowSize = 16,
+      arrowMaxDistance = 1000,       -- yards, 0 = no limit
       showLevel = true,
       showQuestTags = true,
       markForeverQuests = true,

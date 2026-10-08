@@ -510,6 +510,13 @@ function mod:RenderQuest(quest, profile)
 
    local distanceText = profile.showDistance and quest.distance and format(L["%d yd"], math.floor(quest.distance + 0.5)) or nil
    local arrowTarget = profile.showDirection and quest.poi or nil
+   -- Quests in the current zone always get an arrow; the limit is for other zones.
+   if arrowTarget and profile.arrowMaxDistance > 0 and not quest.inCurrentZone then
+      local distance = quest.distance or self:GetPOIDistance(arrowTarget)
+      if not distance or distance > profile.arrowMaxDistance then
+         arrowTarget = nil
+      end
+   end
    local titleLine = AddLine("quest", quest, FormatQuestTitle(quest, profile), "quest", QUEST_INDENT, profile.questSpacing,
       titleColor, Brighten(titleColor), nil, distanceText, arrowTarget)
    local questTop = layout.y - titleLine:GetHeight()

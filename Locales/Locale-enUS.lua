@@ -124,3 +124,5 @@ L["Show an arrow pointing toward each quest's next location on the map. Not avai
 L["Arrow size"] = true
 L["Mark new Forever quests"] = true
 L["Show an infinity sign after quests that were not in original Classic."] = true
+L["Arrow max distance"] = true
+L["Only show arrows for quests in other zones within this many yards. Quests in the current zone always get an arrow. 0 shows arrows at any distance."] = true
