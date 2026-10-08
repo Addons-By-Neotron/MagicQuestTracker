@@ -43,6 +43,14 @@ in combat, so:
   catches up as soon as combat ends.
 - Item buttons can be turned off in the options.
 
+## License
+
+Copyright (C) 2026 NeoTron
+
+MagicQuestTracker is free software: you can redistribute it and/or modify it under the terms of the
+GNU General Public License as published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version. See [LICENSE](LICENSE) for the full text.
+
 ## Credits
 
 The infinity sign texture (`Textures/Infinity.tga`) and the idea of marking quests new to WoW Forever
