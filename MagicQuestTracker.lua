@@ -20,8 +20,11 @@ mod.defaults = {
       showAllQuests = true,          -- false = only quests on the built-in watch list
       currentZoneFirst = true,
       onlyCurrentZone = false,
-      zoneSort = "level",            -- level | name
-      questSort = "level",           -- level | name
+      zoneSort = "level",            -- level | name | distance
+      questSort = "level",           -- level | name | distance
+      showDistance = false,
+      showDirection = false,
+      arrowSize = 16,
       showLevel = true,
       showQuestTags = true,
       colorByDifficulty = true,
@@ -104,8 +107,9 @@ end
 function mod:ApplyProfile()
    -- "log" sort order was removed; fall back to level.
    local profile = self.db.profile
-   if profile.zoneSort ~= "name" then profile.zoneSort = "level" end
-   if profile.questSort ~= "name" then profile.questSort = "level" end
+   if profile.zoneSort ~= "name" and profile.zoneSort ~= "distance" then profile.zoneSort = "level" end
+   if profile.questSort ~= "name" and profile.questSort ~= "distance" then profile.questSort = "level" end
+   self:UpdateDistanceTimer()
    self:ApplyLayout()
    self:SetBlizzardTrackerHidden(self.db.profile.hideBlizzardTracker)
    self:RequestUpdate()
@@ -156,6 +160,31 @@ function mod:RunUpdate()
    local sections, numQuests, numShown = self:CollectQuests()
    local recipes = self.db.profile.showRecipes and self:CollectRecipes() or nil
    self:Render(sections, numQuests, numShown, recipes)
+end
+
+----------------------------------------------------------------
+-- Distances change as the player moves; refresh periodically while
+-- they are shown or used for sorting.
+----------------------------------------------------------------
+
+local DISTANCE_INTERVAL = 2
+
+function mod:UpdateDistanceTimer()
+   local profile = self.db.profile
+   local needed = profile.showDistance or profile.showDirection
+      or profile.questSort == "distance" or profile.zoneSort == "distance"
+   if needed and not self.distanceTimer then
+      self.distanceTimer = self:ScheduleRepeatingTimer("OnDistanceTimer", DISTANCE_INTERVAL)
+   elseif not needed and self.distanceTimer then
+      self:CancelTimer(self.distanceTimer)
+      self.distanceTimer = nil
+   end
+end
+
+function mod:OnDistanceTimer()
+   if self.frame and self.frame:IsShown() and not self.db.char.minimized then
+      self:RequestUpdate()
+   end
 end
 
 ----------------------------------------------------------------

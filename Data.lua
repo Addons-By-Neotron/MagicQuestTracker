@@ -86,6 +86,16 @@ local function BuildObjectives(questID)
    return objectives
 end
 
+-- Straight-line distance in yards to the quest's map POI (objective area,
+-- or turn-in when complete). nil when the quest has no POI on this continent.
+local function GetQuestDistance(questID)
+   if not C_QuestLog.GetDistanceSqToQuest then return nil end
+   local distanceSq, onContinent = C_QuestLog.GetDistanceSqToQuest(questID)
+   if onContinent and distanceSq and distanceSq > 0 then
+      return math.sqrt(distanceSq)
+   end
+end
+
 local function BuildQuest(info)
    local questID = info.questID
    local logIndex = info.questLogIndex
@@ -103,6 +113,7 @@ local function BuildQuest(info)
       isFailed = C_QuestLog.IsFailed(questID),
       isWatched = C_QuestLog.GetQuestWatchType(questID) ~= nil,
       isSuperTracked = C_SuperTrack and C_SuperTrack.GetSuperTrackedQuestID() == questID,
+      distance = GetQuestDistance(questID),
       objectives = BuildObjectives(questID),
    }
    -- Quest tag: tag ID 1 is "Elite" in classic content ("Group" in the retail enum).
@@ -141,6 +152,56 @@ local questSorters = {
    end,
 }
 
+----------------------------------------------------------------
+-- Distance sort with hysteresis: distances change as the player moves,
+-- so start from the previous order and only swap neighbours when one is
+-- clearly farther. Entries without a location go last, using the fallback.
+----------------------------------------------------------------
+
+local DISTANCE_SWAP_RATIO = 1.15
+local DISTANCE_SWAP_MIN = 5   -- yards
+
+-- list: entries with a .distance field; getKey(entry) identifies an entry
+-- across updates; ranks: [key] = position from the previous sort (updated).
+local function SortByDistance(list, getKey, ranks, fallback)
+   sort(list, function(a, b)
+      local ra, rb = ranks[getKey(a)], ranks[getKey(b)]
+      if ra and rb then return ra < rb end
+      if ra or rb then return ra ~= nil end
+      if (a.distance ~= nil) ~= (b.distance ~= nil) then return a.distance ~= nil end
+      if a.distance and a.distance ~= b.distance then return a.distance < b.distance end
+      return fallback(a, b)
+   end)
+   -- Bubble passes; a swap needs a clear margin, so it can't oscillate.
+   local swapped = true
+   while swapped do
+      swapped = false
+      for i = 1, #list - 1 do
+         local a, b = list[i], list[i + 1]
+         local swap
+         if a.distance and b.distance then
+            swap = a.distance > b.distance * DISTANCE_SWAP_RATIO + DISTANCE_SWAP_MIN
+         elseif a.distance or b.distance then
+            swap = b.distance ~= nil
+         else
+            swap = fallback(b, a)
+         end
+         if swap then
+            list[i], list[i + 1] = b, a
+            swapped = true
+         end
+      end
+   end
+   wipe(ranks)
+   for i, entry in ipairs(list) do
+      ranks[getKey(entry)] = i
+   end
+end
+
+local questRanks, zoneRanks = {}, {}
+local function QuestKey(quest) return quest.questID end
+local function ZoneKey(section) return section.name end
+
 local zoneSorters = {
    level = function(a, b)
       if a.minLevel ~= b.minLevel then return a.minLevel < b.minLevel end
@@ -159,6 +220,7 @@ function mod:CollectQuests()
    local zoneNames = GetCurrentZoneNames()
    -- In instances, isOnMap can be true for quests of the surrounding zone.
    local useOnMap = not IsInInstance()
+   local pois = profile.showDirection and self:CollectQuestPOIs() or nil
    local sections, byName = {}, {}
    local header = L["Miscellaneous"]
    local numQuests, numShown = 0, 0
@@ -187,6 +249,7 @@ function mod:CollectQuests()
                   tinsert(sections, section)
                end
                local quest = BuildQuest(info)
+               quest.poi = pois and pois[quest.questID]
                tinsert(section.quests, quest)
                if quest.level < section.minLevel then
                   section.minLevel = quest.level
@@ -197,13 +260,48 @@ function mod:CollectQuests()
       end
    end
 
-   local questSorter = questSorters[profile.questSort] or questSorters.level
+   if profile.questSort == "distance" then
+      for _, section in ipairs(sections) do
+         -- Ranks are per quest ID, so one table works across sections.
+         SortByDistance(section.quests, QuestKey, questRanks, questSorters.level)
+      end
+   else
+      local questSorter = questSorters[profile.questSort] or questSorters.level
+      for _, section in ipairs(sections) do
+         sort(section.quests, questSorter)
+      end
+   end
+
+   -- A zone's distance is that of its nearest quest.
    for _, section in ipairs(sections) do
-      sort(section.quests, questSorter)
+      for _, quest in ipairs(section.quests) do
+         if quest.distance and (not section.distance or quest.distance < section.distance) then
+            section.distance = quest.distance
+         end
+      end
    end
 
    local zoneSorter = zoneSorters[profile.zoneSort] or zoneSorters.level
-   if profile.currentZoneFirst then
+   if profile.zoneSort == "distance" then
+      if profile.currentZoneFirst then
+         -- Current zone (and its sub-areas) first, then the rest by distance.
+         local current, others = {}, {}
+         for _, section in ipairs(sections) do
+            tinsert(section.isCurrent and current or others, section)
+         end
+         sort(current, function(a, b)
+            if a.zoneRank ~= b.zoneRank then return a.zoneRank > b.zoneRank end
+            return zoneSorters.level(a, b)
+         end)
+         SortByDistance(others, ZoneKey, zoneRanks, zoneSorters.level)
+         for _, section in ipairs(others) do
+            tinsert(current, section)
+         end
+         sections = current
+      else
+         SortByDistance(sections, ZoneKey, zoneRanks, zoneSorters.level)
+      end
+   elseif profile.currentZoneFirst then
       sort(sections, function(a, b)
          if a.zoneRank ~= b.zoneRank then return a.zoneRank > b.zoneRank end
          return zoneSorter(a, b)

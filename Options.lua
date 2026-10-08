@@ -26,7 +26,14 @@ end
 local SORT_VALUES = {
    level = L["Level"],
    name = L["Name"],
+   distance = L["Distance"],
 }
+
+local function SetAndUpdateDistance(info, val)
+   mod.db.profile[info[#info]] = val
+   mod:UpdateDistanceTimer()
+   mod:RequestUpdate()
+end
 
 local OUTLINE_VALUES = {
    [""] = L["None"],
@@ -108,16 +115,41 @@ local function BuildOptions()
             zoneSort = {
                type = "select",
                name = L["Zone sort order"],
-               desc = L["How zones are ordered. Level sorts zones by their lowest level quest."],
+               desc = L["How zones are ordered. Level sorts zones by their lowest level quest, distance by their nearest quest."],
                values = SORT_VALUES,
                order = 14,
+               set = SetAndUpdateDistance,
             },
             questSort = {
                type = "select",
                name = L["Quest sort order"],
-               desc = L["How quests are ordered within each zone."],
+               desc = L["How quests are ordered within each zone. Distance sorts by straight-line distance to the quest's next location on the map; quests without one are listed last."],
                values = SORT_VALUES,
                order = 15,
+               set = SetAndUpdateDistance,
+            },
+            showDistance = {
+               type = "toggle",
+               name = L["Show distance"],
+               desc = L["Show the straight-line distance to each quest's next location on the map."],
+               width = "full",
+               order = 15.5,
+               set = SetAndUpdateDistance,
+            },
+            showDirection = {
+               type = "toggle",
+               name = L["Show direction"],
+               desc = L["Show an arrow pointing toward each quest's next location on the map. Not available in instances."],
+               width = "full",
+               order = 15.6,
+               set = SetAndUpdateDistance,
+            },
+            arrowSize = {
+               type = "range",
+               name = L["Arrow size"],
+               min = 8, max = 32, step = 1,
+               order = 15.7,
+               disabled = function() return not mod.db.profile.showDirection end,
             },
             showLevel = {
                type = "toggle",

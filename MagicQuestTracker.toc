@@ -15,6 +15,7 @@ embeds.xml
 Locales.xml
 MagicQuestTracker.lua
 ItemButtons.lua
+Direction.lua
 Data.lua
 Tracker.lua
 Options.lua

@@ -173,6 +173,7 @@ function mod:CreateTracker()
    end
 
    frame:SetScript("OnUpdate", function(self, elapsed)
+      mod:TickArrows(elapsed)
       local hovered = self:IsMouseOver()
       local profile = mod.db.profile
       FadeToward(self.bg, hovered and profile.backgroundHoverAlpha or profile.backgroundAlpha, elapsed, hovered)
@@ -314,6 +315,12 @@ local function AcquireLine()
       line.text:SetJustifyH("LEFT")
       line.text:SetJustifyV("TOP")
       line.text:SetWordWrap(true)
+      line.rightText = line:CreateFontString(nil, "OVERLAY")
+      line.rightText:SetJustifyH("RIGHT")
+      line.rightText:SetWordWrap(false)
+      line.arrow = line:CreateTexture(nil, "OVERLAY")
+      line.arrow:SetTexture("Interface\\AddOns\\MagicQuestTracker\\Textures\\Arrow")
+      line.arrow:SetVertexColor(1, 0.82, 0)
       line.bg = line:CreateTexture(nil, "BACKGROUND")
       line.bg:SetAtlas("UI-QuestTracker-Secondary-Objective-Header")
       line.bg:SetPoint("TOPLEFT", -4, 4)
@@ -331,6 +338,7 @@ local function ReleaseUnusedLines(numUsed)
       line:Hide()
       line.data = nil
       line.kind = nil
+      line.arrowTarget = nil
    end
 end
 
@@ -340,7 +348,7 @@ end
 
 local layout = {}  -- reused render state
 
-local function AddLine(kind, data, text, role, indent, spacing, color, highlightColor, showHeaderBg)
+local function AddLine(kind, data, text, role, indent, spacing, color, highlightColor, showHeaderBg, rightText, arrowTarget)
    local line = AcquireLine()
    line.kind = kind
    line.data = data
@@ -349,6 +357,32 @@ local function AddLine(kind, data, text, role, indent, spacing, color, highlight
    line:EnableMouse(highlightColor ~= nil)
 
    local width = layout.width - indent - (layout.rightInset or 0)
+   if rightText then
+      local right = line.rightText
+      right:SetFontObject(fontObjects.objective)
+      right:SetText(rightText)
+      right:SetTextColor(0.6, 0.6, 0.6)
+      right:ClearAllPoints()
+      right:SetPoint("TOPRIGHT", -(layout.rightInset or 0), 0)
+      right:Show()
+      width = width - right:GetStringWidth() - 4
+   else
+      line.rightText:Hide()
+   end
+   line.arrowTarget = arrowTarget
+   if arrowTarget then
+      -- Arrow sits left of the distance text, centered on the first text
+      -- line (it may be taller than the text); rotated by mod:UpdateArrows().
+      local size = mod.db.profile.arrowSize
+      local offset = (layout.rightInset or 0) + (rightText and line.rightText:GetStringWidth() + 3 or 0)
+      local lineHeight = mod.db.profile.fonts[role].size
+      line.arrow:SetSize(size, size)
+      line.arrow:ClearAllPoints()
+      line.arrow:SetPoint("CENTER", line, "TOPRIGHT", -offset - size / 2, -lineHeight / 2)
+      width = width - size - 3
+   else
+      line.arrow:Hide()
+   end
    line.text:SetFontObject(fontObjects[role])
    line.text:ClearAllPoints()
    line.text:SetPoint("TOPLEFT", indent, 0)
@@ -433,8 +467,10 @@ function mod:RenderQuest(quest, profile)
    local itemSize = (profile.showItemButtons and quest.hasItem) and self.ITEM_BUTTON_SIZE or 0
    layout.rightInset = itemSize
 
+   local distanceText = profile.showDistance and quest.distance and format(L["%d yd"], math.floor(quest.distance + 0.5)) or nil
+   local arrowTarget = profile.showDirection and quest.poi or nil
    local titleLine = AddLine("quest", quest, FormatQuestTitle(quest, profile), "quest", QUEST_INDENT, profile.questSpacing,
-      titleColor, Brighten(titleColor))
+      titleColor, Brighten(titleColor), nil, distanceText, arrowTarget)
    local questTop = layout.y - titleLine:GetHeight()
    if itemSize > 0 then
       tinsert(self.itemEntries, { line = titleLine, quest = quest })
@@ -569,6 +605,9 @@ function mod:Render(sections, numQuests, numShown, recipes)
    end
    self:UpdateScrollBar()
    self:RequestItemButtonLayout()
+   if profile.showDirection then
+      self:UpdateArrows()
+   end
 end
 
 ----------------------------------------------------------------
