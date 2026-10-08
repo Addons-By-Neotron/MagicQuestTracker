@@ -27,7 +27,7 @@ mod.defaults = {
       colorByDifficulty = true,
       showCompletedObjectives = true,
       showRecipes = true,
-      showItemButtons = true,        -- reserved: secure quest item buttons (not implemented yet)
+      showItemButtons = true,
 
       -- Layout
       locked = false,
@@ -89,12 +89,15 @@ function mod:OnEnable()
    end
    self:RegisterEvent("PLAYER_ENTERING_WORLD")
    self:RegisterEvent("PLAYER_REGEN_ENABLED")
+   self:RegisterEvent("PLAYER_REGEN_DISABLED")
    self:ApplyProfile()
 end
 
 function mod:OnDisable()
    self:UnregisterAllEvents()
    self:SetBlizzardTrackerHidden(false)
+   self.itemEntries = nil
+   self:HideItemButtons()
    if self.frame then self.frame:Hide() end
 end
 
@@ -114,9 +117,21 @@ function mod:PLAYER_ENTERING_WORLD()
    self:RequestUpdate()
 end
 
+function mod:PLAYER_REGEN_DISABLED()
+   -- Still allowed to move secure frames here; place item buttons now if
+   -- a render happened just before combat started.
+   if self.itemLayoutPending then
+      self:LayoutItemButtons()
+   end
+end
+
 function mod:PLAYER_REGEN_ENABLED()
    if self.pendingBlizzardVisibility ~= nil then
       self:SetBlizzardTrackerHidden(self.pendingBlizzardVisibility)
+   end
+   if self.applyLayoutDeferred then
+      self.applyLayoutDeferred = nil
+      self:ApplyLayout()
    end
    if self.layoutDeferred then
       self.layoutDeferred = nil

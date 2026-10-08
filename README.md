@@ -8,6 +8,7 @@ A replacement for the built-in objective tracker for WoW Retail and Classic Fore
 - Option to hide quests that aren't in the current zone.
 - Shows all quests by default, or only those on the built-in watch list.
 - Elite quests are marked with `+` after the level, and the quest type (Elite, Dungeon, Raid, ...) is appended to the title.
+- Quest item buttons for quests with a usable item.
 - Tracked profession recipes are shown in a separate section.
 - Scrollable, with a configurable max height, width and scale.
 - Configurable background color, with separate opacity for normal and mouseover.
@@ -28,13 +29,14 @@ A replacement for the built-in objective tracker for WoW Retail and Classic Fore
 - `/mqt reset` - reset the tracker position
 - `/mqt config` - open settings
 
-## Planned: quest item buttons
+## Quest item buttons
 
-Quest item buttons require secure action buttons, which can't be created or moved during combat and
-can't sit inside the scroll child without making it combat-restricted. The planned design:
+Quests with a usable item get a button (like the built-in tracker) at the right edge of the quest title.
+Using a quest item is protected, so these are secure action buttons. They can't be moved, shown or hidden
+in combat, so:
 
-- Item buttons live in an overlay frame on the tracker (not in the scroll child).
-- Buttons are positioned from the quest title lines' offsets minus the scroll offset; space is reserved at
-  the right edge of those lines (`ITEM_BUTTON_SIZE` in `Tracker.lua`).
-- While in combat with item buttons visible, rendering and scrolling are deferred (`mod.layoutDeferred`)
-  and re-run on `PLAYER_REGEN_ENABLED`.
+- The buttons live in their own holder frame on UIParent and are positioned from the quest title lines.
+- Buttons are only shown when their quest title is fully inside the visible scroll area.
+- While any item button is shown in combat, the tracker doesn't update, scroll, collapse or move. It
+  catches up as soon as combat ends.
+- Item buttons can be turned off in the options.

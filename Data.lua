@@ -115,10 +115,16 @@ local function BuildQuest(info)
    if quest.isComplete and GetQuestLogCompletionText then
       quest.completionText = GetQuestLogCompletionText(logIndex)
    end
-   -- Used to reserve space for (future) quest item buttons.
+   -- Usable quest item (shown as a secure item button).
    if GetQuestLogSpecialItemInfo then
-      local _, item, _, showItemWhenComplete = GetQuestLogSpecialItemInfo(logIndex)
-      quest.hasItem = item ~= nil and (not quest.isComplete or showItemWhenComplete)
+      local link, texture, charges, showItemWhenComplete = GetQuestLogSpecialItemInfo(logIndex)
+      local itemID = link and tonumber(link:match("item:(%d+)"))
+      if itemID and (not quest.isComplete or showItemWhenComplete) then
+         quest.hasItem = true
+         quest.itemID = itemID
+         quest.itemTexture = texture
+         quest.itemCharges = charges
+      end
    end
    return quest
 end

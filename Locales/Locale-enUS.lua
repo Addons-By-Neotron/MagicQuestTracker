@@ -89,3 +89,4 @@ L["Quest spacing"] = true
 L["Space above each quest title."] = true
 L["Objective spacing"] = true
 L["Space between objective lines."] = true
+L["Show a button to use the quest item next to quests that have one. While a button is shown, the tracker does not update or scroll during combat."] = true

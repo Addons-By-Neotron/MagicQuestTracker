@@ -17,16 +17,6 @@ local FADE_OUT = 0.6
 local QUEST_INDENT = 6
 local OBJECTIVE_INDENT = 16
 
--- Quest item buttons (planned): secure buttons can't live in the scroll
--- child or be moved in combat. The plan is an overlay frame on the tracker
--- (outside the scroll child) holding pooled SecureActionButtons that are
--- positioned from the quest title lines' offsets. While in combat with
--- item buttons visible, Render() sets mod.layoutDeferred and keeps the
--- current layout; PLAYER_REGEN_ENABLED re-renders. Until then this is off
--- and no space is reserved.
-local ITEM_BUTTON_SIZE = 26
-mod.itemButtonsImplemented = false
-
 local function Color(key, r, g, b)
    local c = OBJECTIVE_TRACKER_COLOR and OBJECTIVE_TRACKER_COLOR[key]
    if c then return c.r, c.g, c.b end
@@ -64,10 +54,13 @@ end
 ----------------------------------------------------------------
 
 local function OnScrollWheel(scroll, delta)
+   -- Secure item buttons can't follow the scroll in combat.
+   if mod:IsItemLayoutLocked() then return end
    local maxScroll = math.max(0, scroll.contentHeight - scroll.viewHeight)
    local value = math.min(maxScroll, math.max(0, scroll:GetVerticalScroll() - delta * SCROLL_STEP))
    scroll:SetVerticalScroll(value)
    mod:UpdateScrollBar()
+   mod:RequestItemButtonLayout()
 end
 
 function mod:CreateTracker()
@@ -93,11 +86,17 @@ function mod:CreateTracker()
    title:RegisterForDrag("LeftButton")
    title:RegisterForClicks("LeftButtonUp", "RightButtonUp", "MiddleButtonUp")
    title:SetScript("OnDragStart", function()
-      if not mod.db.profile.locked then frame:StartMoving() end
+      if mod.db.profile.locked or mod:IsItemLayoutLocked() then return end
+      mod:HideItemButtons()
+      frame:StartMoving()
+      frame.isMoving = true
    end)
    title:SetScript("OnDragStop", function()
+      if not frame.isMoving then return end
+      frame.isMoving = nil
       frame:StopMovingOrSizing()
       mod:SavePosition()
+      mod:RequestItemButtonLayout()
    end)
    title:SetScript("OnClick", function(_, button)
       if button == "RightButton" then
@@ -210,6 +209,11 @@ end
 function mod:ApplyLayout()
    local frame = self.frame
    if not frame then return end
+   if self:IsItemLayoutLocked() then
+      -- Would move the tracker out from under the frozen item buttons.
+      self.applyLayoutDeferred = true
+      return
+   end
    local profile = self.db.profile
    self:UpdateFonts()
 
@@ -244,6 +248,7 @@ function mod:ToggleCurrentZoneOnly()
 end
 
 function mod:ToggleMinimized()
+   if self:IsItemLayoutLocked() then return end
    self.db.char.minimized = not self.db.char.minimized
    self:UpdateMinimizeButton()
    self:RequestUpdate()
@@ -403,10 +408,15 @@ function mod:RenderQuest(quest, profile)
 
    local titleColor = profile.colorByDifficulty and DifficultyColor(quest.difficultyLevel)
       or { Color("Header", 0.75, 0.61, 0) }
-   layout.rightInset = (self.itemButtonsImplemented and profile.showItemButtons and quest.hasItem) and ITEM_BUTTON_SIZE or 0
+   local itemSize = (profile.showItemButtons and quest.hasItem) and self.ITEM_BUTTON_SIZE or 0
+   layout.rightInset = itemSize
 
-   AddLine("quest", quest, FormatQuestTitle(quest, profile), "quest", QUEST_INDENT, profile.questSpacing,
+   local titleLine = AddLine("quest", quest, FormatQuestTitle(quest, profile), "quest", QUEST_INDENT, profile.questSpacing,
       titleColor, Brighten(titleColor))
+   local questTop = layout.y - titleLine:GetHeight()
+   if itemSize > 0 then
+      tinsert(self.itemEntries, { line = titleLine, quest = quest })
+   end
 
    if quest.isFailed then
       AddLine("objective", quest, FAILED or L["Failed"], "objective", OBJECTIVE_INDENT, profile.objectiveSpacing,
@@ -425,6 +435,10 @@ function mod:RenderQuest(quest, profile)
             AddLine("objective", quest, "- " .. objective.text, "objective", OBJECTIVE_INDENT, profile.objectiveSpacing, complete)
          end
       end
+   end
+   -- Make room for the whole item button before the next quest.
+   if itemSize > 0 and layout.y - questTop < itemSize then
+      layout.y = questTop + itemSize
    end
    layout.rightInset = 0
 end
@@ -455,11 +469,12 @@ function mod:Render(sections, numQuests, numShown, recipes)
    local frame = self.frame
    local profile = self.db.profile
 
-   if InCombatLockdown() and self.itemButtonsActive then
+   if self:IsItemLayoutLocked() then
       -- Secure item buttons can't move during combat; re-render afterwards.
       self.layoutDeferred = true
       return
    end
+   self.itemEntries = {}
 
    local titleText = format("%s (%d/%d)", TRACKER_HEADER_QUESTS or L["Quests"], numQuests,
       C_QuestLog.GetMaxNumQuestsCanAccept and C_QuestLog.GetMaxNumQuestsCanAccept() or numQuests)
@@ -471,6 +486,7 @@ function mod:Render(sections, numQuests, numShown, recipes)
    local hasContent = numQuests > 0 or (recipes and #recipes > 0)
    if not hasContent and profile.locked then
       frame:Hide()
+      self:RequestItemButtonLayout()
       return
    end
    frame:Show()
@@ -487,6 +503,7 @@ function mod:Render(sections, numQuests, numShown, recipes)
       frame.scroll:Hide()
       frame:SetHeight(titleHeight)
       self:UpdateScrollBar()
+      self:RequestItemButtonLayout()
       return
    end
    frame.scroll:Show()
@@ -529,6 +546,7 @@ function mod:Render(sections, numQuests, numShown, recipes)
       frame.scroll:SetVerticalScroll(maxScroll)
    end
    self:UpdateScrollBar()
+   self:RequestItemButtonLayout()
 end
 
 ----------------------------------------------------------------

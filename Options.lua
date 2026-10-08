@@ -157,9 +157,9 @@ local function BuildOptions()
             showItemButtons = {
                type = "toggle",
                name = L["Show quest item buttons"],
+               desc = L["Show a button to use the quest item next to quests that have one. While a button is shown, the tracker does not update or scroll during combat."],
                width = "full",
                order = 20,
-               hidden = function() return not mod.itemButtonsImplemented end,
             },
             hideBlizzardTracker = {
                type = "toggle",

@@ -22,7 +22,8 @@ read_globals = {
     "InCombatLockdown", "IsInGroup", "IsModifiedClick", "GetRealZoneText", "GetZoneText", "IsInInstance", "GetInstanceInfo",
     "GetQuestDifficultyColor", "GetQuestLogCompletionText", "GetQuestLogSpecialItemInfo",
     "GetQuestProgressBarPercent", "QuestMapFrame_OpenToQuestDetails", "QuestMapQuestOptions_AbandonQuest",
-    "ToggleQuestLog", "GameTooltip_Hide", "ShowQuestComplete", "ProfessionsFrame_LoadUI", "ChatEdit_InsertLink",
+    "ToggleQuestLog", "GameTooltip_Hide", "C_Timer", "CooldownFrame_Set", "GetQuestLogSpecialItemCooldown",
+    "IsQuestLogSpecialItemInRange", "RANGE_INDICATOR", "tonumber", "ShowQuestComplete", "ProfessionsFrame_LoadUI", "ChatEdit_InsertLink",
 
     -- Constants / strings
     "NORMAL_FONT_COLOR", "OBJECTIVE_TRACKER_COLOR", "STANDARD_TEXT_FONT", "RETRIEVING_ITEM_INFO",
