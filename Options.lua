@@ -158,6 +158,14 @@ local function BuildOptions()
                width = "full",
                order = 16,
             },
+            markForeverQuests = {
+               type = "toggle",
+               name = L["Mark new Forever quests"],
+               desc = L["Show an infinity sign after quests that were not in original Classic."],
+               width = "full",
+               order = 16.6,
+               hidden = function() return not mod.IS_FOREVER end,
+            },
             showQuestTags = {
                type = "toggle",
                name = L["Show quest type"],

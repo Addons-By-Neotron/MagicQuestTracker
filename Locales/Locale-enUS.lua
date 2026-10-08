@@ -99,3 +99,5 @@ L["How zones are ordered. Level sorts zones by their lowest level quest, distanc
 L["Show direction"] = true
 L["Show an arrow pointing toward each quest's next location on the map. Not available in instances."] = true
 L["Arrow size"] = true
+L["Mark new Forever quests"] = true
+L["Show an infinity sign after quests that were not in original Classic."] = true

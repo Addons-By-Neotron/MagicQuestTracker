@@ -430,10 +430,28 @@ local function GetLevelSuffix(quest)
    return ""
 end
 
+-- Infinity sign from ForeverQuestTint; visible area inside the 64x64 image.
+local INFINITY_PATH = "Interface\\AddOns\\MagicQuestTracker\\Textures\\Infinity"
+local INFINITY_L, INFINITY_R, INFINITY_T, INFINITY_B = 1, 63, 12, 51
+
+local function ForeverMarker(profile)
+   local size = profile.fonts.quest.size
+   local h = math.max(6, math.floor(size * 0.65 + 0.5))
+   local w = math.floor(h * (INFINITY_R - INFINITY_L) / (INFINITY_B - INFINITY_T) + 0.5)
+   -- Inline textures are centered on the line; drop it toward the text baseline.
+   local offY = -math.floor(size * 0.25 + 0.5)
+   -- |T path:height:width:offX:offY:texW:texH:left:right:top:bottom:r:g:b|t
+   return format("|T%s:%d:%d:0:%d:64:64:%d:%d:%d:%d:153:230:242|t",
+      INFINITY_PATH, h, w, offY, INFINITY_L, INFINITY_R, INFINITY_T, INFINITY_B)
+end
+
 local function FormatQuestTitle(quest, profile)
    local title = quest.title
    if profile.showLevel then
       title = format("[%d%s] %s", quest.level, GetLevelSuffix(quest), title)
+   end
+   if quest.isForeverQuest and profile.markForeverQuests then
+      title = title .. " " .. ForeverMarker(profile)
    end
    if profile.showQuestTags then
       local labels = {}

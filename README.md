@@ -3,13 +3,14 @@
 A replacement for the built-in objective tracker for WoW Retail and Classic Forever.
 
 - Quests are grouped by zone (quest log header), using only the built-in quest log API (no quest database).
-- Optionally shows the current zone first; remaining zones are sorted by their lowest quest level (or name).
+- Optionally shows the current zone first; remaining zones are sorted by their lowest quest level, name or quest distance.
 - Quests within a zone are sorted by level, name, or straight-line distance to the quest's next map location.
-- Optional distance (yards) and direction arrow on each quest; zones can also be sorted by their nearest quest.
+- Optional distance (yards) and direction arrow on each quest.
 - Option to hide quests that aren't in the current zone.
 - Shows all quests by default, or only those on the built-in watch list.
 - The level is suffixed by quest type: `+` elite/group, `D` dungeon, `R` raid, `H` heroic (e.g. `[33D]`, `[60R]`), and the quest type (Elite, Dungeon, Raid, Daily, ...) is appended to the title.
 - Quest item buttons for quests with a usable item.
+- On WoW Forever, quests that were not in original Classic are marked with an infinity sign.
 - Tracked profession recipes are shown in a separate section.
 - Scrollable, with a configurable max height, width and scale.
 - Configurable background color, with separate opacity for normal and mouseover.
@@ -41,3 +42,8 @@ in combat, so:
 - While any item button is shown in combat, the tracker doesn't update, scroll, collapse or move. It
   catches up as soon as combat ends.
 - Item buttons can be turned off in the options.
+
+## Credits
+
+The infinity sign texture (`Textures/Infinity.tga`) and the idea of marking quests new to WoW Forever
+come from Forever Quest Tint by xanastar (GPLv3).

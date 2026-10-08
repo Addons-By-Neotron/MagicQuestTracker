@@ -27,6 +27,7 @@ mod.defaults = {
       arrowSize = 16,
       showLevel = true,
       showQuestTags = true,
+      markForeverQuests = true,
       colorByDifficulty = true,
       showCompletedObjectives = true,
       showRecipes = true,

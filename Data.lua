@@ -2,6 +2,13 @@ local L = LibStub("AceLocale-3.0"):GetLocale("MagicQuestTracker")
 local mod = LibStub("AceAddon-3.0"):GetAddon("MagicQuestTracker")
 
 local C_QuestLog = C_QuestLog
+
+-- WoW Forever (Interface 16xxx) adds quests on top of original Classic.
+-- The highest quest ID in original Classic is 9665 (per ForeverQuestTint's
+-- vanilla quest list); anything above it is new to Forever.
+local IS_FOREVER = (select(4, GetBuildInfo()) or 0) >= 16000 and (select(4, GetBuildInfo()) or 0) < 17000
+local MAX_VANILLA_QUEST_ID = 9665
+mod.IS_FOREVER = IS_FOREVER
 local C_Map = C_Map
 local tinsert, sort = table.insert, table.sort
 
@@ -114,6 +121,7 @@ local function BuildQuest(info)
       isWatched = C_QuestLog.GetQuestWatchType(questID) ~= nil,
       isSuperTracked = C_SuperTrack and C_SuperTrack.GetSuperTrackedQuestID() == questID,
       distance = GetQuestDistance(questID),
+      isForeverQuest = IS_FOREVER and questID > MAX_VANILLA_QUEST_ID,
       objectives = BuildObjectives(questID),
    }
    -- Quest tag: tag ID 1 is "Elite" in classic content ("Group" in the retail enum).
