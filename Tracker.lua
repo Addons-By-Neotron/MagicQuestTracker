@@ -376,24 +376,46 @@ local function DifficultyColor(level)
    return { Color("Header", 0.75, 0.61, 0) }
 end
 
+-- Level suffix by quest tag ID (Enum.QuestTag values).
+local TAG_SUFFIX = {
+   [62] = "R",  -- Raid
+   [88] = "R",  -- Raid (10)
+   [89] = "R",  -- Raid (25)
+   [81] = "D",  -- Dungeon
+   [85] = "H",  -- Heroic
+}
+
+local function GetLevelSuffix(quest)
+   local suffix = quest.tagID and TAG_SUFFIX[quest.tagID]
+   if suffix then
+      return suffix
+   end
+   if quest.isElite or (quest.suggestedGroup and quest.suggestedGroup > 0) then
+      return "+"
+   end
+   return ""
+end
+
 local function FormatQuestTitle(quest, profile)
    local title = quest.title
    if profile.showLevel then
-      local tag = ""
-      if quest.isElite or (quest.suggestedGroup and quest.suggestedGroup > 0) then
-         tag = "+"
+      title = format("[%d%s] %s", quest.level, GetLevelSuffix(quest), title)
+   end
+   if profile.showQuestTags then
+      local labels = {}
+      if quest.tagName and quest.tagName ~= "" then
+         tinsert(labels, quest.tagName)
       end
       if Enum.QuestFrequency then
          if quest.frequency == Enum.QuestFrequency.Daily then
-            tag = tag .. "D"
+            tinsert(labels, DAILY or L["Daily"])
          elseif quest.frequency == Enum.QuestFrequency.Weekly then
-            tag = tag .. "W"
+            tinsert(labels, WEEKLY or L["Weekly"])
          end
       end
-      title = format("[%d%s] %s", quest.level, tag, title)
-   end
-   if profile.showQuestTags and quest.tagName and quest.tagName ~= "" then
-      title = format("%s |cffff8040(%s)|r", title, quest.tagName)
+      if #labels > 0 then
+         title = format("%s |cffff8040(%s)|r", title, table.concat(labels, ", "))
+      end
    end
    return title
 end
