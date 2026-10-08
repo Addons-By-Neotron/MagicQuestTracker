@@ -23,7 +23,7 @@ read_globals = {
     "GetQuestDifficultyColor", "GetQuestLogCompletionText", "GetQuestLogSpecialItemInfo",
     "GetQuestProgressBarPercent", "QuestMapFrame_OpenToQuestDetails", "QuestMapQuestOptions_AbandonQuest",
     "ToggleQuestLog", "GameTooltip_Hide", "C_Timer", "CooldownFrame_Set", "GetQuestLogSpecialItemCooldown",
-    "IsQuestLogSpecialItemInRange", "GetPlayerFacing", "GetBuildInfo", "CreateVector2D", "wipe", "RANGE_INDICATOR", "tonumber", "ShowQuestComplete", "ProfessionsFrame_LoadUI", "ChatEdit_InsertLink",
+    "IsQuestLogSpecialItemInRange", "GetPlayerFacing", "GetBuildInfo", "IsControlKeyDown", "TomTom", "CreateVector2D", "wipe", "RANGE_INDICATOR", "tonumber", "ShowQuestComplete", "ProfessionsFrame_LoadUI", "ChatEdit_InsertLink",
 
     -- Constants / strings
     "NORMAL_FONT_COLOR", "OBJECTIVE_TRACKER_COLOR", "STANDARD_TEXT_FONT", "RETRIEVING_ITEM_INFO",

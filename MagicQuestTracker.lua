@@ -49,6 +49,7 @@ mod.defaults = {
       showDirection = false,
       arrowSize = 16,
       arrowMaxDistance = 1000,       -- yards, 0 = no limit
+      waypointMode = "both",         -- ctrl-click: tomtom | blizzard | both
       showLevel = true,
       showQuestTags = true,
       markForeverQuests = true,

@@ -281,6 +281,7 @@ function mod:CollectQuests()
                end
                local quest = BuildQuest(info)
                quest.poi = pois and pois[quest.questID]
+               quest.zoneName = header
                quest.inCurrentZone = isCurrentZone or (useOnMap and info.isOnMap) or false
                tinsert(section.quests, quest)
                if quest.level < section.minLevel then

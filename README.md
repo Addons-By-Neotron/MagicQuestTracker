@@ -17,6 +17,7 @@ A replacement for the built-in objective tracker for WoW Retail and Classic Fore
 - Configurable spacing between zones, zone header and quests, quests and objectives.
 - Configurable fonts (face, size, outline) for the title, zone headers, quest titles and objectives.
 - Clicks behave like the built-in tracker: left-click opens the quest on the map, shift-click links, right-click opens a menu.
+- Ctrl-click a quest to navigate to its next location (objective area, or turn-in when complete) with a TomTom waypoint, Blizzard's navigation (focusing the quest), or both. Without TomTom, Blizzard's navigation is used.
 
 ## Tracker title
 

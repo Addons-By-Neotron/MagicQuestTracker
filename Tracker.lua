@@ -688,9 +688,16 @@ local function ToggleQuestWatch(questID)
    end
 end
 
-local function ShowQuestMenu(owner, questID)
+local function ShowQuestMenu(owner, quest)
+   local questID = quest.questID
    MenuUtil.CreateContextMenu(owner, function(_, root)
       root:CreateTitle(C_QuestLog.GetTitleForQuestID(questID) or "")
+
+      if mod:HasTomTom() then
+         root:CreateButton(L["Set TomTom waypoint"], function()
+            mod:SetQuestWaypoint(quest, "tomtom")
+         end)
+      end
 
       if C_SuperTrack.GetSuperTrackedQuestID() ~= questID then
          root:CreateButton(SUPER_TRACK_QUEST or L["Focus quest"], function()
@@ -776,9 +783,11 @@ mod.lineClickHandlers = {
          return
       end
       if button == "RightButton" then
-         ShowQuestMenu(line, questID)
+         ShowQuestMenu(line, quest)
       elseif IsModifiedClick("QUESTWATCHTOGGLE") then
          ToggleQuestWatch(questID)
+      elseif IsControlKeyDown() then
+         self:SetQuestWaypoint(quest)
       elseif quest.isAutoComplete and quest.isComplete and ShowQuestComplete then
          ShowQuestComplete(questID)
       else

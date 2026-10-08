@@ -16,6 +16,7 @@ Locales.xml
 MagicQuestTracker.lua
 ItemButtons.lua
 Direction.lua
+Waypoint.lua
 Data.lua
 Tracker.lua
 Options.lua

@@ -189,6 +189,17 @@ local function BuildOptions()
                width = "full",
                order = 16,
             },
+            waypointMode = {
+               type = "select",
+               name = L["Ctrl-click navigation"],
+               desc = L["What ctrl-clicking a quest does: set a TomTom waypoint, focus the quest for Blizzard's navigation, or both. Without TomTom, Blizzard's navigation is always used."],
+               values = {
+                  tomtom = L["TomTom"],
+                  blizzard = L["Blizzard"],
+                  both = L["Both"],
+               },
+               order = 15.9,
+            },
             markForeverQuests = {
                type = "toggle",
                name = L["Mark new Forever quests"],
