@@ -59,6 +59,22 @@ local function Color(key, r, g, b)
    return r, g, b
 end
 
+-- Shared color tables (never modified), so rendering doesn't allocate them.
+local COLOR_NORMAL = { Color("Normal", 0.8, 0.8, 0.8) }
+local COLOR_COMPLETE = { Color("Complete", 0.6, 0.6, 0.6) }
+local COLOR_HEADER = { Color("Header", 0.75, 0.61, 0) }
+local COLOR_FAILED = { Color("Failed", 1, 0.1, 0.1) }
+local COLOR_TIME_LEFT = { Color("TimeLeft", 0.75, 0.1, 0.1) }
+local COLOR_ZONE = { NORMAL_FONT_COLOR:GetRGB() }
+local COLOR_WHITE = { 1, 1, 1 }
+
+-- Line data for section headers (constant per section key).
+local SECTION_DATA = setmetatable({}, { __index = function(t, key)
+   local data = { key = key }
+   t[key] = data
+   return data
+end })
+
 ----------------------------------------------------------------
 -- Fonts: one Font object per role, updated from the profile.
 ----------------------------------------------------------------
@@ -454,11 +470,19 @@ local function AddLine(kind, data, text, role, indent, spacing, color, highlight
    return line
 end
 
+-- Difficulty colors depend on the player's level; cached per (quest, player) level.
+local difficultyColors = {}
 local function DifficultyColor(level)
    -- World quests / bonus objectives have no level.
-   local c = level and GetQuestDifficultyColor and GetQuestDifficultyColor(level)
-   if c then return { c.r, c.g, c.b } end
-   return { Color("Header", 0.75, 0.61, 0) }
+   if not (level and GetQuestDifficultyColor) then return COLOR_HEADER end
+   local key = level * 1000 + UnitLevel("player")
+   local color = difficultyColors[key]
+   if not color then
+      local c = GetQuestDifficultyColor(level)
+      color = c and { c.r, c.g, c.b } or COLOR_HEADER
+      difficultyColors[key] = color
+   end
+   return color
 end
 
 -- Level suffix by quest tag ID (Enum.QuestTag values).
@@ -496,6 +520,8 @@ local function ForeverMarker(profile)
       INFINITY_PATH, h, w, offY, INFINITY_L, INFINITY_R, INFINITY_T, INFINITY_B)
 end
 
+local titleLabels = {}
+
 local function FormatQuestTitle(quest, profile)
    local title = quest.title
    if profile.showLevel and quest.level then
@@ -505,7 +531,8 @@ local function FormatQuestTitle(quest, profile)
       title = title .. " " .. ForeverMarker(profile)
    end
    if profile.showQuestTags then
-      local labels = {}
+      local labels = titleLabels
+      wipe(labels)
       if quest.tagName and quest.tagName ~= "" then
          tinsert(labels, quest.tagName)
       end
@@ -523,8 +550,15 @@ local function FormatQuestTitle(quest, profile)
    return title
 end
 
+-- Highlight colors, cached per (shared) color table.
+local brightened = setmetatable({}, { __mode = "k" })
 local function Brighten(color)
-   return { math.min(1, color[1] + 0.2), math.min(1, color[2] + 0.2), math.min(1, color[3] + 0.2) }
+   local bright = brightened[color]
+   if not bright then
+      bright = { math.min(1, color[1] + 0.2), math.min(1, color[2] + 0.2), math.min(1, color[3] + 0.2) }
+      brightened[color] = bright
+   end
+   return bright
 end
 
 local function POIButtonsEnabled(profile)
@@ -582,11 +616,8 @@ local function AttachGroupButton(line, quest, rightOffset)
 end
 
 function mod:RenderQuest(quest, profile)
-   local normal = { Color("Normal", 0.8, 0.8, 0.8) }
-   local complete = { Color("Complete", 0.6, 0.6, 0.6) }
-
-   local titleColor = profile.colorByDifficulty and DifficultyColor(quest.difficultyLevel)
-      or { Color("Header", 0.75, 0.61, 0) }
+   local normal, complete = COLOR_NORMAL, COLOR_COMPLETE
+   local titleColor = profile.colorByDifficulty and DifficultyColor(quest.difficultyLevel) or COLOR_HEADER
    local itemSize = (profile.showItemButtons and quest.hasItem) and self.ITEM_BUTTON_SIZE or 0
    local groupSize = (profile.showFindGroupButton and CanFindGroup(quest)) and GROUP_BUTTON_SIZE or 0
    layout.rightInset = itemSize + groupSize
@@ -613,12 +644,12 @@ function mod:RenderQuest(quest, profile)
       AttachGroupButton(titleLine, quest, itemSize)
    end
    if itemSize > 0 then
-      tinsert(self.itemEntries, { line = titleLine, quest = quest })
+      tinsert(self.itemEntries, self.newHash("line", titleLine, "quest", quest))
    end
 
    if quest.isFailed then
       AddLine("objective", quest, FAILED or L["Failed"], "objective", objectiveIndent, profile.objectiveSpacing,
-         { Color("Failed", 1, 0.1, 0.1) })
+         COLOR_FAILED)
    elseif quest.isComplete then
       local text = quest.completionText
       if not text or text == "" then
@@ -636,7 +667,7 @@ function mod:RenderQuest(quest, profile)
    end
    if quest.timeLeftText then
       AddLine("objective", quest, quest.timeLeftText, "objective", objectiveIndent, profile.objectiveSpacing,
-         { Color("TimeLeft", 0.75, 0.1, 0.1) })
+         COLOR_TIME_LEFT)
    end
    -- Make room for the whole item / group button before the next quest.
    local buttonSize = math.max(itemSize, groupSize)
@@ -651,8 +682,7 @@ end
 -- Returns true when the section is expanded.
 function mod:RenderSectionHeader(key, text, profile)
    local collapsed = self.db.char.collapsedSections[key]
-   local color = { NORMAL_FONT_COLOR:GetRGB() }
-   local line = AddLine("section", { key = key }, text, "module", 0, profile.sectionSpacing, color, Brighten(color), true)
+   local line = AddLine("section", SECTION_DATA[key], text, "module", 0, profile.sectionSpacing, COLOR_ZONE, Brighten(COLOR_ZONE), true)
    local icon = line.collapseIcon
    icon:SetAtlas(collapsed and "ui-questtrackerbutton-secondary-expand" or "ui-questtrackerbutton-secondary-collapse")
    icon:Show()
@@ -675,9 +705,7 @@ function mod:RenderRecipes(recipes, profile)
    local header = format("%s (%d)", PROFESSIONS_TRACKER_HEADER_PROFESSION or L["Professions"], #recipes)
    if not self:RenderSectionHeader("recipes", header, profile) then return end
 
-   local titleColor = { Color("Header", 0.75, 0.61, 0) }
-   local normal = { Color("Normal", 0.8, 0.8, 0.8) }
-   local complete = { Color("Complete", 0.6, 0.6, 0.6) }
+   local titleColor, normal, complete = COLOR_HEADER, COLOR_NORMAL, COLOR_COMPLETE
    for _, recipe in ipairs(recipes) do
       AddLine("recipe", recipe, recipe.name, "quest", QUEST_INDENT, profile.questSpacing, titleColor, Brighten(titleColor))
       for _, reagent in ipairs(recipe.reagents) do
@@ -693,10 +721,16 @@ function mod:Render(sections, numQuests, numShown, recipes, tasks)
 
    if self:IsItemLayoutLocked() then
       -- Secure item buttons can't move during combat; re-render afterwards.
+      -- The caller keeps the previous data, which the lines still show.
       self.layoutDeferred = true
-      return
+      return false
    end
-   self.itemEntries = {}
+   -- Reuse the item button entry list (entries are pooled).
+   local entries = self.itemEntries or {}
+   for i, entry in ipairs(entries) do
+      entries[i] = self.del(entry)
+   end
+   self.itemEntries = entries
 
    frame.title.text:SetText(profile.onlyCurrentZone and L["Zone Objectives"] or L["All Objectives"])
 
@@ -704,8 +738,10 @@ function mod:Render(sections, numQuests, numShown, recipes, tasks)
       or (tasks and (#tasks.worldQuests > 0 or #tasks.bonus > 0))
    if not hasContent and profile.locked then
       frame:Hide()
+      self.numLinesUsed = 0
+      ReleaseUnusedLines(0)
       self:RequestItemButtonLayout()
-      return
+      return true
    end
    frame:Show()
 
@@ -722,7 +758,7 @@ function mod:Render(sections, numQuests, numShown, recipes, tasks)
       frame:SetHeight(titleHeight)
       self:UpdateScrollBar()
       self:RequestItemButtonLayout()
-      return
+      return true
    end
    frame.scroll:Show()
 
@@ -738,8 +774,7 @@ function mod:Render(sections, numQuests, numShown, recipes, tasks)
       if self:RenderSectionHeader("quests", header, profile) then
          -- Zone headers: plain text under the section bar.
          local collapsedZones = self.db.char.collapsedZones
-         local zoneColor = { NORMAL_FONT_COLOR:GetRGB() }
-         local currentZoneColor = { 1, 1, 1 }
+         local zoneColor, currentZoneColor = COLOR_ZONE, COLOR_WHITE
          for _, section in ipairs(sections) do
             local collapsed = collapsedZones[section.name]
             local text = format("%s %s (%d)", collapsed and "+" or "-", section.name, #section.quests)
@@ -786,6 +821,7 @@ function mod:Render(sections, numQuests, numShown, recipes, tasks)
    if profile.showDirection then
       self:UpdateArrows()
    end
+   return true
 end
 
 ----------------------------------------------------------------
@@ -834,6 +870,20 @@ local function OpenTaskOnMap(questID)
    end
 end
 
+-- Menus can stay open across updates, which recycle the quest tables, so
+-- menu actions work on a copy of the fields they need.
+local function SnapshotQuest(quest)
+   local poi = quest.poi
+   return {
+      questID = quest.questID,
+      title = quest.title,
+      isTask = quest.isTask,
+      isWorldQuest = quest.isWorldQuest,
+      zoneName = quest.zoneName,
+      poi = poi and { mapID = poi.mapID, x = poi.x, y = poi.y },
+   }
+end
+
 local function ShowTaskMenu(owner, quest)
    local questID = quest.questID
    MenuUtil.CreateContextMenu(owner, function(_, root)
@@ -865,6 +915,7 @@ local function ShowTaskMenu(owner, quest)
 end
 
 local function ShowQuestMenu(owner, quest)
+   quest = SnapshotQuest(quest)
    if quest.isTask then
       return ShowTaskMenu(owner, quest)
    end
@@ -930,15 +981,17 @@ local function OpenRecipe(recipeID, isRecraft)
 end
 
 local function ShowRecipeMenu(owner, recipe)
+   -- Copy the fields: the recipe table is recycled on the next update.
+   local recipeID, isRecraft, name = recipe.recipeID, recipe.isRecraft, recipe.name
    MenuUtil.CreateContextMenu(owner, function(_, root)
-      root:CreateTitle(recipe.name)
-      if not recipe.isRecraft then
+      root:CreateTitle(name)
+      if not isRecraft then
          root:CreateButton(PROFESSIONS_TRACKING_VIEW_RECIPE or L["View recipe"], function()
-            OpenRecipe(recipe.recipeID, recipe.isRecraft)
+            OpenRecipe(recipeID, isRecraft)
          end)
       end
       root:CreateButton(PROFESSIONS_UNTRACK_RECIPE or L["Untrack recipe"], function()
-         C_TradeSkillUI.SetRecipeTracked(recipe.recipeID, false, recipe.isRecraft)
+         C_TradeSkillUI.SetRecipeTracked(recipeID, false, isRecraft)
       end)
    end)
 end

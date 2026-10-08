@@ -41,8 +41,9 @@ local atan2, sqrt = math.atan2, math.sqrt
 local ARROW_INTERVAL = 0.05
 
 --- Returns [questID] = { mapID, x, y } for quests with a POI near the player.
+--- The result is from the table pool; recycle it with mod.deepDel.
 function mod:CollectQuestPOIs()
-   local pois = {}
+   local pois = mod.new()
    if IsInInstance() then return pois end
 
    local continentType = Enum.UIMapType and Enum.UIMapType.Continent or 2
@@ -53,7 +54,7 @@ function mod:CollectQuestPOIs()
       if C_Map.GetPlayerMapPosition(mapID, "player") then
          for _, poi in ipairs(C_QuestLog.GetQuestsOnMap(mapID) or {}) do
             if not pois[poi.questID] then
-               pois[poi.questID] = { mapID = mapID, x = poi.x, y = poi.y }
+               pois[poi.questID] = mod.newHash("mapID", mapID, "x", poi.x, "y", poi.y)
             end
          end
       end

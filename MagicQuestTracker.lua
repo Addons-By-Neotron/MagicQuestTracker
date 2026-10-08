@@ -195,7 +195,22 @@ function mod:RunUpdate()
    self:AutoFoldZones(sections)
    local recipes = self.db.profile.showRecipes and self:CollectRecipes() or nil
    local tasks = self:CollectTasks()
-   self:Render(sections, numQuests, numShown, recipes, tasks)
+
+   -- The rendered lines reference the data they show, so the previous data
+   -- is only recycled once a render has replaced it. A deferred render (item
+   -- buttons in combat) keeps the old data on screen; recycle the new instead.
+   local data = self.dataPool or {}
+   self.dataPool = data
+   if self:Render(sections, numQuests, numShown, recipes, tasks) then
+      self.deepDel(data.sections)
+      self.deepDel(data.recipes)
+      self.deepDel(data.tasks)
+      data.sections, data.recipes, data.tasks = sections, recipes, tasks
+   else
+      self.deepDel(sections)
+      self.deepDel(recipes)
+      self.deepDel(tasks)
+   end
 end
 
 ----------------------------------------------------------------

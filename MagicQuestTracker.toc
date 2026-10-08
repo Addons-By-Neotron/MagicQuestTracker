@@ -14,6 +14,7 @@
 embeds.xml
 Locales.xml
 MagicQuestTracker.lua
+TablePool.lua
 ItemButtons.lua
 Direction.lua
 Waypoint.lua

@@ -76,7 +76,13 @@ function mod:GetQuestLocation(quest)
    if quest.isTask then
       return self.GetTaskLocation(questID)
    end
-   local location = quest.poi or self:CollectQuestPOIs()[questID]
+   local location = quest.poi
+   if not location then
+      local pois = self:CollectQuestPOIs()
+      location = pois[questID]
+      pois[questID] = nil
+      mod.deepDel(pois)
+   end
    if location then return location end
 
    if C_QuestLog.GetNextWaypoint then

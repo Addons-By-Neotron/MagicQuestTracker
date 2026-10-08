@@ -176,13 +176,15 @@ function mod:IsItemLayoutLocked()
 end
 
 --- Position buttons on the next frame, once the new line layout has resolved.
+local function RunPendingItemLayout()
+   mod.itemLayoutPending = nil
+   mod:LayoutItemButtons()
+end
+
 function mod:RequestItemButtonLayout()
    if self.itemLayoutPending then return end
    self.itemLayoutPending = true
-   C_Timer.After(0, function()
-      mod.itemLayoutPending = nil
-      mod:LayoutItemButtons()
-   end)
+   C_Timer.After(0, RunPendingItemLayout)
 end
 
 function mod:HideItemButtons()

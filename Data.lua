@@ -25,6 +25,7 @@ local L = LibStub("AceLocale-3.0"):GetLocale("MagicQuestTracker")
 local mod = LibStub("AceAddon-3.0"):GetAddon("MagicQuestTracker")
 
 local C_QuestLog = C_QuestLog
+local new, del = mod.new, mod.del
 
 -- WoW Forever (Interface 16xxx) adds quests on top of original Classic.
 -- The highest quest ID in original Classic is 9665 (per ForeverQuestTint's
@@ -42,13 +43,16 @@ local tinsert, sort = table.insert, table.sort
 -- (climbing out of micro maps, but not out of instances).
 ----------------------------------------------------------------
 
-local function GetCurrentZoneNames()
-   local names = {}
-   local function add(name)
-      if name and name ~= "" then
-         names[name] = true
-      end
+-- Reused between calls; only valid until the next call.
+local zoneNames = {}
+local function add(name)
+   if name and name ~= "" then
+      zoneNames[name] = true
    end
+end
+
+local function GetCurrentZoneNames()
+   wipe(zoneNames)
    add(GetRealZoneText())
    add(GetZoneText())
 
@@ -58,7 +62,7 @@ local function GetCurrentZoneNames()
       add((GetInstanceInfo()))
       local info = mapID and C_Map.GetMapInfo(mapID)
       add(info and info.name)
-      return names
+      return zoneNames
    end
    local zoneType = Enum.UIMapType and Enum.UIMapType.Zone or 3
    while mapID and mapID > 0 do
@@ -68,7 +72,7 @@ local function GetCurrentZoneNames()
       if info.mapType <= zoneType then break end
       mapID = info.parentMapID
    end
-   return names
+   return zoneNames
 end
 mod.GetCurrentZoneNames = GetCurrentZoneNames
 
@@ -100,7 +104,7 @@ local function ShouldTrackQuest(info)
 end
 
 local function BuildObjectives(questID)
-   local objectives = {}
+   local objectives = new()
    local list = C_QuestLog.GetQuestObjectives(questID)
    if not list then return objectives end
    for _, obj in ipairs(list) do
@@ -110,7 +114,10 @@ local function BuildObjectives(questID)
          text = (text and text ~= "") and format("%s (%d%%)", text, pct) or format("%d%%", pct)
       end
       if text and text ~= "" then
-         tinsert(objectives, { text = text, finished = obj.finished })
+         local objective = new()
+         objective.text = text
+         objective.finished = obj.finished
+         tinsert(objectives, objective)
       end
    end
    return objectives
@@ -129,24 +136,23 @@ end
 local function BuildQuest(info)
    local questID = info.questID
    local logIndex = info.questLogIndex
-   local quest = {
-      questID = questID,
-      logIndex = logIndex,
-      title = info.title,
-      level = info.level,
-      difficultyLevel = (info.difficultyLevel and info.difficultyLevel > 0) and info.difficultyLevel or info.level,
-      suggestedGroup = info.suggestedGroup,
-      frequency = info.frequency,
-      isOnMap = info.isOnMap,
-      isAutoComplete = info.isAutoComplete,
-      isComplete = C_QuestLog.IsComplete(questID),
-      isFailed = C_QuestLog.IsFailed(questID),
-      isWatched = C_QuestLog.GetQuestWatchType(questID) ~= nil,
-      isSuperTracked = C_SuperTrack and C_SuperTrack.GetSuperTrackedQuestID() == questID,
-      distance = GetQuestDistance(questID),
-      isForeverQuest = IS_FOREVER and questID > MAX_VANILLA_QUEST_ID,
-      objectives = BuildObjectives(questID),
-   }
+   local quest = new()
+   quest.questID = questID
+   quest.logIndex = logIndex
+   quest.title = info.title
+   quest.level = info.level
+   quest.difficultyLevel = (info.difficultyLevel and info.difficultyLevel > 0) and info.difficultyLevel or info.level
+   quest.suggestedGroup = info.suggestedGroup
+   quest.frequency = info.frequency
+   quest.isOnMap = info.isOnMap
+   quest.isAutoComplete = info.isAutoComplete
+   quest.isComplete = C_QuestLog.IsComplete(questID)
+   quest.isFailed = C_QuestLog.IsFailed(questID)
+   quest.isWatched = C_QuestLog.GetQuestWatchType(questID) ~= nil
+   quest.isSuperTracked = C_SuperTrack and C_SuperTrack.GetSuperTrackedQuestID() == questID
+   quest.distance = GetQuestDistance(questID)
+   quest.isForeverQuest = IS_FOREVER and questID > MAX_VANILLA_QUEST_ID
+   quest.objectives = BuildObjectives(questID)
    -- Quest tag: tag ID 1 is "Elite" in classic content ("Group" in the retail enum).
    local tagInfo = C_QuestLog.GetQuestTagInfo and C_QuestLog.GetQuestTagInfo(questID)
    if tagInfo then
@@ -194,15 +200,20 @@ local DISTANCE_SWAP_MIN = 5   -- yards
 
 -- list: entries with a .distance field; getKey(entry) identifies an entry
 -- across updates; ranks: [key] = position from the previous sort (updated).
+-- Comparator state for SortByDistance (module-level to avoid a closure per sort).
+local sortRanks, sortGetKey, sortFallback
+local function PreviousOrderFirst(a, b)
+   local ra, rb = sortRanks[sortGetKey(a)], sortRanks[sortGetKey(b)]
+   if ra and rb then return ra < rb end
+   if ra or rb then return ra ~= nil end
+   if (a.distance ~= nil) ~= (b.distance ~= nil) then return a.distance ~= nil end
+   if a.distance and a.distance ~= b.distance then return a.distance < b.distance end
+   return sortFallback(a, b)
+end
+
 local function SortByDistance(list, getKey, ranks, fallback)
-   sort(list, function(a, b)
-      local ra, rb = ranks[getKey(a)], ranks[getKey(b)]
-      if ra and rb then return ra < rb end
-      if ra or rb then return ra ~= nil end
-      if (a.distance ~= nil) ~= (b.distance ~= nil) then return a.distance ~= nil end
-      if a.distance and a.distance ~= b.distance then return a.distance < b.distance end
-      return fallback(a, b)
-   end)
+   sortRanks, sortGetKey, sortFallback = ranks, getKey, fallback
+   sort(list, PreviousOrderFirst)
    -- Bubble passes; a swap needs a clear margin, so it can't oscillate.
    local swapped = true
    while swapped do
@@ -243,6 +254,18 @@ local zoneSorters = {
    end,
 }
 
+-- Current zone (and sub-areas) first; comparators are module-level so
+-- sorting doesn't create closures on every update.
+local activeZoneSorter = zoneSorters.level
+local function CurrentZoneFirst(a, b)
+   if a.zoneRank ~= b.zoneRank then return a.zoneRank > b.zoneRank end
+   return activeZoneSorter(a, b)
+end
+local function CurrentZoneFirstByLevel(a, b)
+   if a.zoneRank ~= b.zoneRank then return a.zoneRank > b.zoneRank end
+   return zoneSorters.level(a, b)
+end
+
 --- Returns a sorted list of zone sections:
 --- { name, isCurrent, zoneRank, minLevel, quests = { quest, ... } }
 --- plus the number of quests in the log and the number displayed.
@@ -252,7 +275,7 @@ function mod:CollectQuests()
    -- In instances, isOnMap can be true for quests of the surrounding zone.
    local useOnMap = not IsInInstance()
    local pois = profile.showDirection and self:CollectQuestPOIs() or nil
-   local sections, byName = {}, {}
+   local sections, byName = new(), new()
    local header = L["Miscellaneous"]
    local numQuests, numShown = 0, 0
 
@@ -275,12 +298,21 @@ function mod:CollectQuests()
             if visible then
                local section = byName[header]
                if not section then
-                  section = { name = header, isCurrent = isCurrentZone, zoneRank = zoneRank, minLevel = math.huge, quests = {} }
+                  section = new()
+                  section.name = header
+                  section.isCurrent = isCurrentZone
+                  section.zoneRank = zoneRank
+                  section.minLevel = math.huge
+                  section.quests = new()
                   byName[header] = section
                   tinsert(sections, section)
                end
                local quest = BuildQuest(info)
-               quest.poi = pois and pois[quest.questID]
+               if pois then
+                  -- Hand the POI over to the quest (recycled with it).
+                  quest.poi = pois[quest.questID]
+                  pois[quest.questID] = nil
+               end
                quest.zoneName = header
                quest.inCurrentZone = isCurrentZone or (useOnMap and info.isOnMap) or false
                tinsert(section.quests, quest)
@@ -318,31 +350,30 @@ function mod:CollectQuests()
    if profile.zoneSort == "distance" then
       if profile.currentZoneFirst then
          -- Current zone (and its sub-areas) first, then the rest by distance.
-         local current, others = {}, {}
+         local current, others = new(), new()
          for _, section in ipairs(sections) do
             tinsert(section.isCurrent and current or others, section)
          end
-         sort(current, function(a, b)
-            if a.zoneRank ~= b.zoneRank then return a.zoneRank > b.zoneRank end
-            return zoneSorters.level(a, b)
-         end)
+         sort(current, CurrentZoneFirstByLevel)
          SortByDistance(others, ZoneKey, zoneRanks, zoneSorters.level)
          for _, section in ipairs(others) do
             tinsert(current, section)
          end
+         del(others)
+         del(sections)
          sections = current
       else
          SortByDistance(sections, ZoneKey, zoneRanks, zoneSorters.level)
       end
    elseif profile.currentZoneFirst then
-      sort(sections, function(a, b)
-         if a.zoneRank ~= b.zoneRank then return a.zoneRank > b.zoneRank end
-         return zoneSorter(a, b)
-      end)
+      activeZoneSorter = zoneSorter
+      sort(sections, CurrentZoneFirst)
    else
       sort(sections, zoneSorter)
    end
 
+   del(byName)
+   mod.deepDel(pois)  -- POIs of quests that weren't shown
    return sections, numQuests, numShown
 end
 
@@ -357,10 +388,14 @@ local function GetTaskLocation(questID)
    if not mapID then return nil end
    local x, y = C_TaskQuest.GetQuestLocation(questID, mapID)
    if x and y then
-      return { mapID = mapID, x = x, y = y }
+      return mod.newHash("mapID", mapID, "x", x, "y", y)
    end
 end
 mod.GetTaskLocation = GetTaskLocation
+
+-- Scratch "quest log info" for BuildQuest when building tasks.
+local taskInfo = {}
+local EMPTY_TASKS = {}
 
 local function TaskSorter(a, b)
    if a.inArea ~= b.inArea then return a.inArea end
@@ -378,7 +413,7 @@ function mod:CollectTasks()
       return nil
    end
    local profile = self.db.profile
-   local worldQuests, bonus, seen = {}, {}, {}
+   local worldQuests, bonus, seen = new(), new(), new()
 
    local function add(list, questID, tracked)
       if not questID or seen[questID] then return end
@@ -386,12 +421,12 @@ function mod:CollectTasks()
       if not numObjectives or not (tracked or isInArea) then return end
       seen[questID] = true
 
-      local task = BuildQuest({
-         questID = questID,
-         questLogIndex = C_QuestLog.GetLogIndexForQuestID(questID),
-         title = taskName or C_TaskQuest.GetQuestInfoByQuestID(questID) or "",
-         isOnMap = isOnMap,
-      })
+      wipe(taskInfo)
+      taskInfo.questID = questID
+      taskInfo.questLogIndex = C_QuestLog.GetLogIndexForQuestID(questID)
+      taskInfo.title = taskName or C_TaskQuest.GetQuestInfoByQuestID(questID) or ""
+      taskInfo.isOnMap = isOnMap
+      local task = BuildQuest(taskInfo)
       task.isTask = true
       task.isWorldQuest = list == worldQuests
       task.inArea = isInArea or false
@@ -409,7 +444,7 @@ function mod:CollectTasks()
       tinsert(list, task)
    end
 
-   for _, questID in ipairs(GetTasksTable() or {}) do
+   for _, questID in ipairs(GetTasksTable() or EMPTY_TASKS) do
       if QuestUtils_IsQuestWorldQuest(questID) then
          if profile.showWorldQuests then
             add(worldQuests, questID)
@@ -424,9 +459,13 @@ function mod:CollectTasks()
       end
    end
 
+   del(seen)
    sort(worldQuests, TaskSorter)
    sort(bonus, TaskSorter)
-   return { worldQuests = worldQuests, bonus = bonus }
+   local tasks = new()
+   tasks.worldQuests = worldQuests
+   tasks.bonus = bonus
+   return tasks
 end
 
 ----------------------------------------------------------------
@@ -460,7 +499,7 @@ local function BuildRecipe(recipeID, isRecraft)
    if isRecraft and PROFESSIONS_CRAFTING_FORM_RECRAFTING_HEADER then
       name = PROFESSIONS_CRAFTING_FORM_RECRAFTING_HEADER:format(name)
    end
-   local recipe = { recipeID = recipeID, isRecraft = isRecraft, name = name, reagents = {} }
+   local recipe = mod.newHash("recipeID", recipeID, "isRecraft", isRecraft, "name", name, "reagents", new())
 
    for _, slot in ipairs(schematic.reagentSlotSchematics) do
       if ProfessionsUtil.IsReagentSlotRequired(slot) then
@@ -473,7 +512,8 @@ local function BuildRecipe(recipeID, isRecraft)
          end
 
          if reagentName then
-            local entry = { name = reagentName }
+            local entry = new()
+            entry.name = reagentName
             if slot.IsVariableQuantityReagent and slot:IsVariableQuantityReagent(reagent) then
                local min, max = slot:GetVariableQuantityRange(reagent)
                entry.text = format("%d-%d %s", min, max, reagentName)
@@ -496,14 +536,17 @@ local function BuildRecipe(recipeID, isRecraft)
    return recipe
 end
 
+local EMPTY = {}
+
 --- Returns a list of { recipeID, isRecraft, name, reagents = { { text, finished } } }
 function mod:CollectRecipes()
    if not (C_TradeSkillUI and C_TradeSkillUI.GetRecipesTracked and ProfessionsUtil) then
       return nil
    end
-   local recipes = {}
-   for _, isRecraft in ipairs({ false, true }) do
-      for _, recipeID in ipairs(C_TradeSkillUI.GetRecipesTracked(isRecraft) or {}) do
+   local recipes = new()
+   for pass = 1, 2 do
+      local isRecraft = pass == 2
+      for _, recipeID in ipairs(C_TradeSkillUI.GetRecipesTracked(isRecraft) or EMPTY) do
          local recipe = BuildRecipe(recipeID, isRecraft)
          if recipe then
             tinsert(recipes, recipe)
