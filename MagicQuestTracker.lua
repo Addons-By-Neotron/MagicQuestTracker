@@ -56,7 +56,11 @@ mod.defaults = {
       colorByDifficulty = true,
       showCompletedObjectives = true,
       showRecipes = true,
+      showWorldQuests = true,
+      showBonusObjectives = true,
       showItemButtons = true,
+      showPOIButtons = true,
+      showFindGroupButton = true,
 
       -- Layout
       locked = false,
@@ -68,8 +72,9 @@ mod.defaults = {
       backgroundHoverAlpha = 0.4,
 
       -- Spacing (pixels)
-      zoneSpacing = 12,         -- above each zone header
-      zoneHeaderSpacing = 4,    -- between a zone header and its first quest
+      sectionSpacing = 10,      -- above each section header (Quests, World Quests, ...)
+      zoneSpacing = 8,          -- above each zone header
+      zoneHeaderSpacing = 2,    -- between a zone header and its first quest
       questSpacing = 6,         -- above each quest title
       objectiveSpacing = 1,     -- between objective lines
       point = { "TOPRIGHT", "UIParent", "TOPRIGHT", -80, -260 },
@@ -77,14 +82,15 @@ mod.defaults = {
       -- Fonts
       fonts = {
          title = FontDefaults(14),
-         zone = FontDefaults(13),
+         module = FontDefaults(13),
+         zone = FontDefaults(12),
          quest = FontDefaults(12),
          objective = FontDefaults(11),
       },
    },
    char = {
       collapsedZones = {},    -- [zoneName] = true
-      collapsedRecipes = false,
+      collapsedSections = {}, -- [quests|worldQuests|bonus|recipes] = true
       minimized = false,
    },
 }
@@ -185,7 +191,8 @@ function mod:RunUpdate()
    if not self.frame then return end
    local sections, numQuests, numShown = self:CollectQuests()
    local recipes = self.db.profile.showRecipes and self:CollectRecipes() or nil
-   self:Render(sections, numQuests, numShown, recipes)
+   local tasks = self:CollectTasks()
+   self:Render(sections, numQuests, numShown, recipes, tasks)
 end
 
 ----------------------------------------------------------------

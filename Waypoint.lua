@@ -73,6 +73,9 @@ end
 --- Returns { mapID, x, y } for the quest's next location, or nil.
 function mod:GetQuestLocation(quest)
    local questID = quest.questID
+   if quest.isTask then
+      return self.GetTaskLocation(questID)
+   end
    local location = quest.poi or self:CollectQuestPOIs()[questID]
    if location then return location end
 

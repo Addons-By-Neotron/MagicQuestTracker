@@ -33,12 +33,25 @@ local InCombatLockdown = InCombatLockdown
 ----------------------------------------------------------------
 
 local TITLE_PADDING = 6
+-- Header art as in Blizzard's tracker: drawn at the atlas' natural height,
+-- full alpha, in a header block at least this tall with the text centered.
+local TITLE_ATLAS = "ui-questtracker-primary-objective-header"
+local HEADER_ATLAS = "UI-QuestTracker-Secondary-Objective-Header"
+local TITLE_MIN_HEIGHT = 30
+local BLIZZARD_TRACKER_WIDTH = 260
+local HEADER_MIN_HEIGHT = 24
+local HEADER_TEXT_INDENT = 7
 local SCROLLBAR_WIDTH = 4
 local SCROLL_STEP = 40
 local FADE_IN = 0.15   -- seconds (scrollbar and background hover fade)
 local FADE_OUT = 0.6
+local ZONE_INDENT = 4
 local QUEST_INDENT = 6
 local OBJECTIVE_INDENT = 16
+-- With quest POI buttons (left of the title), like Blizzard's tracker.
+local POI_QUEST_INDENT = 26
+local POI_OBJECTIVE_INDENT = 30
+local GROUP_BUTTON_SIZE = 24
 
 local function Color(key, r, g, b)
    local c = OBJECTIVE_TRACKER_COLOR and OBJECTIVE_TRACKER_COLOR[key]
@@ -50,7 +63,7 @@ end
 -- Fonts: one Font object per role, updated from the profile.
 ----------------------------------------------------------------
 
-local FONT_ROLES = { "title", "zone", "quest", "objective" }
+local FONT_ROLES = { "title", "module", "zone", "quest", "objective" }
 local fontObjects = {}
 
 function mod:UpdateFonts()
@@ -147,20 +160,20 @@ function mod:CreateTracker()
    title.text:SetTextColor(NORMAL_FONT_COLOR:GetRGB())
 
    local minimize = CreateFrame("Button", nil, title)
-   minimize:SetSize(16, 16)
+   minimize:SetSize(20, 20)
    minimize:SetPoint("RIGHT", -2, 0)
-   minimize:SetHighlightAtlas("ui-questtrackerbutton-yellow-highlight", "ADD")
+   minimize:SetHighlightAtlas("ui-questtrackerbutton-red-highlight", "ADD")
    minimize:SetScript("OnClick", function() mod:ToggleMinimized() end)
    title.minimize = minimize
-   title.text:SetPoint("LEFT", 4, 0)
+   title.text:SetPoint("LEFT", HEADER_TEXT_INDENT, 0)
    title.text:SetPoint("RIGHT", minimize, "LEFT", -4, 0)
 
-   title.line = title:CreateTexture(nil, "ARTWORK")
-   title.line:SetAtlas("UI-QuestTracker-Secondary-Objective-Header")
-   title.line:SetPoint("BOTTOMLEFT", 0, -4)
-   title.line:SetPoint("BOTTOMRIGHT", 0, -4)
-   title.line:SetHeight(16)
-   title.line:SetAlpha(0.6)
+   title.bg = title:CreateTexture(nil, "BACKGROUND")
+   -- Natural size, centered: on Blizzard's 260 px header the art overhangs
+   -- both ends (the swirl left of the text). ApplyLayout keeps that overhang.
+   title.bg:SetAtlas(TITLE_ATLAS, true)
+   title.bg:SetPoint("CENTER")
+   title.bg.naturalWidth = title.bg:GetWidth()
 
    -- Scroll area
    local scroll = CreateFrame("ScrollFrame", nil, frame)
@@ -250,8 +263,9 @@ function mod:ApplyLayout()
    frame.bg:SetColorTexture(c.r, c.g, c.b, 1)
    frame.bg:SetAlpha(frame:IsMouseOver() and profile.backgroundHoverAlpha or profile.backgroundAlpha)
 
-   local titleHeight = profile.fonts.title.size + TITLE_PADDING
+   local titleHeight = math.max(TITLE_MIN_HEIGHT, profile.fonts.title.size + TITLE_PADDING)
    frame.title:SetHeight(titleHeight)
+   frame.title.bg:SetWidth(frame.title.bg.naturalWidth + profile.width - BLIZZARD_TRACKER_WIDTH)
    frame.title:EnableMouse(true)
    self:UpdateMinimizeButton()
    self:RequestUpdate()
@@ -260,9 +274,9 @@ end
 function mod:UpdateMinimizeButton()
    local button = self.frame.title.minimize
    local minimized = self.db.char.minimized
-   local suffix = minimized and "expand" or "collapse"
-   button:SetNormalAtlas("ui-questtrackerbutton-secondary-" .. suffix)
-   button:SetPushedAtlas("ui-questtrackerbutton-secondary-" .. suffix .. "-pressed")
+   local atlas = minimized and "ui-questtrackerbutton-expand-all" or "ui-questtrackerbutton-collapse-all"
+   button:SetNormalAtlas(atlas)
+   button:SetPushedAtlas(atlas .. "-pressed")
 end
 
 function mod:ToggleCurrentZoneOnly()
@@ -344,11 +358,13 @@ local function AcquireLine()
       line.arrow = line:CreateTexture(nil, "OVERLAY")
       line.arrow:SetTexture("Interface\\AddOns\\MagicQuestTracker\\Textures\\Arrow")
       line.arrow:SetVertexColor(1, 0.82, 0)
+      line.collapseIcon = line:CreateTexture(nil, "OVERLAY")
+      line.collapseIcon:SetSize(16, 16)
+      line.collapseIcon:SetPoint("RIGHT", -2, 0)
       line.bg = line:CreateTexture(nil, "BACKGROUND")
-      line.bg:SetAtlas("UI-QuestTracker-Secondary-Objective-Header")
-      line.bg:SetPoint("TOPLEFT", -4, 4)
-      line.bg:SetPoint("BOTTOMRIGHT", 0, -4)
-      line.bg:SetAlpha(0.5)
+      line.bg:SetAtlas(HEADER_ATLAS, true)
+      line.bg:SetPoint("LEFT")
+      line.bg:SetPoint("RIGHT")
       mod.lines[mod.numLinesUsed] = line
    end
    line:Show()
@@ -393,6 +409,9 @@ local function AddLine(kind, data, text, role, indent, spacing, color, highlight
       line.rightText:Hide()
    end
    line.arrowTarget = arrowTarget
+   line.collapseIcon:Hide()
+   if line.poiButton then line.poiButton:Hide() end
+   if line.groupButton then line.groupButton:Hide() end
    if arrowTarget then
       -- Arrow sits left of the distance text, centered on the first text
       -- line (it may be taller than the text); rotated by mod:UpdateArrows().
@@ -408,13 +427,21 @@ local function AddLine(kind, data, text, role, indent, spacing, color, highlight
    end
    line.text:SetFontObject(fontObjects[role])
    line.text:ClearAllPoints()
-   line.text:SetPoint("TOPLEFT", indent, 0)
+   if showHeaderBg then
+      line.text:SetPoint("LEFT", indent + HEADER_TEXT_INDENT, 0)
+      width = width - HEADER_TEXT_INDENT
+   else
+      line.text:SetPoint("TOPLEFT", indent, 0)
+   end
    line.text:SetWidth(width)
    line.text:SetText(text)
    line.text:SetTextColor(unpack(color))
    line.bg:SetShown(showHeaderBg or false)
 
    local height = math.ceil(line.text:GetStringHeight())
+   if showHeaderBg then
+      height = math.max(HEADER_MIN_HEIGHT, height + 6)
+   end
    -- A header can override the gap before the next line (layout.nextSpacing).
    if layout.y > 0 then
       layout.y = layout.y + (layout.nextSpacing or spacing)
@@ -428,7 +455,8 @@ local function AddLine(kind, data, text, role, indent, spacing, color, highlight
 end
 
 local function DifficultyColor(level)
-   local c = GetQuestDifficultyColor and GetQuestDifficultyColor(level)
+   -- World quests / bonus objectives have no level.
+   local c = level and GetQuestDifficultyColor and GetQuestDifficultyColor(level)
    if c then return { c.r, c.g, c.b } end
    return { Color("Header", 0.75, 0.61, 0) }
 end
@@ -470,7 +498,7 @@ end
 
 local function FormatQuestTitle(quest, profile)
    local title = quest.title
-   if profile.showLevel then
+   if profile.showLevel and quest.level then
       title = format("[%d%s] %s", quest.level, GetLevelSuffix(quest), title)
    end
    if quest.isForeverQuest and profile.markForeverQuests then
@@ -499,6 +527,60 @@ local function Brighten(color)
    return { math.min(1, color[1] + 0.2), math.min(1, color[2] + 0.2), math.min(1, color[3] + 0.2) }
 end
 
+local function POIButtonsEnabled(profile)
+   if not (profile.showPOIButtons and POIButtonUtil) then return false end
+   -- Blizzard's tracker hides POI buttons when the questPOI CVar is off.
+   local cvar = GetCVar("questPOI")
+   return cvar == nil or cvar == "1"
+end
+
+local function CanFindGroup(quest)
+   return QuestUtil and QuestUtil.CanCreateQuestGroup and C_LFGList
+      and QuestUtil.CanCreateQuestGroup(quest.questID) or false
+end
+
+-- Quest POI button (same as Blizzard's tracker): shows in progress / complete,
+-- highlighted when focused; clicking it focuses (super tracks) the quest.
+local function AttachPOIButton(line, quest)
+   local button = line.poiButton
+   if not button then
+      button = CreateFrame("Button", nil, line, "POIButtonTemplate")
+      line.poiButton = button
+   end
+   button:SetQuestID(quest.questID)
+   local style
+   if quest.isWorldQuest then
+      style = POIButtonUtil.Style.WorldQuest
+   elseif quest.isTask then
+      style = POIButtonUtil.Style.BonusObjective
+   elseif quest.isComplete then
+      style = POIButtonUtil.Style.QuestComplete
+   else
+      style = POIButtonUtil.Style.QuestInProgress
+   end
+   button:SetStyle(style)
+   button:SetSelected(quest.isSuperTracked)
+   button:SetPingWorldMap(quest.isWorldQuest or false)
+   button:UpdateButtonStyle()
+   button:ClearAllPoints()
+   button:SetPoint("TOPRIGHT", line.text, "TOPLEFT", -4, 4)
+   button:Show()
+end
+
+-- Blizzard's "find group" button, left of the item button.
+local function AttachGroupButton(line, quest, rightOffset)
+   local button = line.groupButton
+   if not button then
+      button = CreateFrame("Button", nil, line, "QuestObjectiveFindGroupButtonTemplate")
+      button:SetSize(GROUP_BUTTON_SIZE, GROUP_BUTTON_SIZE)
+      line.groupButton = button
+   end
+   button:SetUp(quest.questID)
+   button:ClearAllPoints()
+   button:SetPoint("TOPRIGHT", line, "TOPRIGHT", -rightOffset, 4)
+   button:Show()
+end
+
 function mod:RenderQuest(quest, profile)
    local normal = { Color("Normal", 0.8, 0.8, 0.8) }
    local complete = { Color("Complete", 0.6, 0.6, 0.6) }
@@ -506,7 +588,11 @@ function mod:RenderQuest(quest, profile)
    local titleColor = profile.colorByDifficulty and DifficultyColor(quest.difficultyLevel)
       or { Color("Header", 0.75, 0.61, 0) }
    local itemSize = (profile.showItemButtons and quest.hasItem) and self.ITEM_BUTTON_SIZE or 0
-   layout.rightInset = itemSize
+   local groupSize = (profile.showFindGroupButton and CanFindGroup(quest)) and GROUP_BUTTON_SIZE or 0
+   layout.rightInset = itemSize + groupSize
+   local showPOI = POIButtonsEnabled(profile)
+   local questIndent = showPOI and POI_QUEST_INDENT or QUEST_INDENT
+   local objectiveIndent = showPOI and POI_OBJECTIVE_INDENT or OBJECTIVE_INDENT
 
    local distanceText = profile.showDistance and quest.distance and format(L["%d yd"], math.floor(quest.distance + 0.5)) or nil
    local arrowTarget = profile.showDirection and quest.poi or nil
@@ -517,47 +603,77 @@ function mod:RenderQuest(quest, profile)
          arrowTarget = nil
       end
    end
-   local titleLine = AddLine("quest", quest, FormatQuestTitle(quest, profile), "quest", QUEST_INDENT, profile.questSpacing,
+   local titleLine = AddLine("quest", quest, FormatQuestTitle(quest, profile), "quest", questIndent, profile.questSpacing,
       titleColor, Brighten(titleColor), nil, distanceText, arrowTarget)
    local questTop = layout.y - titleLine:GetHeight()
+   if showPOI then
+      AttachPOIButton(titleLine, quest)
+   end
+   if groupSize > 0 then
+      AttachGroupButton(titleLine, quest, itemSize)
+   end
    if itemSize > 0 then
       tinsert(self.itemEntries, { line = titleLine, quest = quest })
    end
 
    if quest.isFailed then
-      AddLine("objective", quest, FAILED or L["Failed"], "objective", OBJECTIVE_INDENT, profile.objectiveSpacing,
+      AddLine("objective", quest, FAILED or L["Failed"], "objective", objectiveIndent, profile.objectiveSpacing,
          { Color("Failed", 1, 0.1, 0.1) })
    elseif quest.isComplete then
       local text = quest.completionText
       if not text or text == "" then
          text = QUEST_WATCH_QUEST_READY or L["Ready for turn-in"]
       end
-      AddLine("objective", quest, text, "objective", OBJECTIVE_INDENT, profile.objectiveSpacing, normal)
+      AddLine("objective", quest, text, "objective", objectiveIndent, profile.objectiveSpacing, normal)
    else
       for _, objective in ipairs(quest.objectives) do
          if not objective.finished then
-            AddLine("objective", quest, "- " .. objective.text, "objective", OBJECTIVE_INDENT, profile.objectiveSpacing, normal)
+            AddLine("objective", quest, "- " .. objective.text, "objective", objectiveIndent, profile.objectiveSpacing, normal)
          elseif profile.showCompletedObjectives then
-            AddLine("objective", quest, "- " .. objective.text, "objective", OBJECTIVE_INDENT, profile.objectiveSpacing, complete)
+            AddLine("objective", quest, "- " .. objective.text, "objective", objectiveIndent, profile.objectiveSpacing, complete)
          end
       end
    end
-   -- Make room for the whole item button before the next quest.
-   if itemSize > 0 and layout.y - questTop < itemSize then
-      layout.y = questTop + itemSize
+   if quest.timeLeftText then
+      AddLine("objective", quest, quest.timeLeftText, "objective", objectiveIndent, profile.objectiveSpacing,
+         { Color("TimeLeft", 0.75, 0.1, 0.1) })
+   end
+   -- Make room for the whole item / group button before the next quest.
+   local buttonSize = math.max(itemSize, groupSize)
+   if buttonSize > 0 and layout.y - questTop < buttonSize then
+      layout.y = questTop + buttonSize
    end
    layout.rightInset = 0
 end
 
+-- Section headers (Quests, World Quests, ...) look like Blizzard's module
+-- headers: header bar, collapse icon on the right, click to fold.
+-- Returns true when the section is expanded.
+function mod:RenderSectionHeader(key, text, profile)
+   local collapsed = self.db.char.collapsedSections[key]
+   local color = { NORMAL_FONT_COLOR:GetRGB() }
+   local line = AddLine("section", { key = key }, text, "module", 0, profile.sectionSpacing, color, Brighten(color), true)
+   local icon = line.collapseIcon
+   icon:SetAtlas(collapsed and "ui-questtrackerbutton-secondary-expand" or "ui-questtrackerbutton-secondary-collapse")
+   icon:Show()
+   if not collapsed then
+      layout.nextSpacing = profile.zoneHeaderSpacing
+   end
+   return not collapsed
+end
+
+function mod:RenderTaskSection(key, name, tasks, profile)
+   if not tasks or #tasks == 0 then return end
+   if not self:RenderSectionHeader(key, format("%s (%d)", name, #tasks), profile) then return end
+   for _, task in ipairs(tasks) do
+      self:RenderQuest(task, profile)
+   end
+end
+
 function mod:RenderRecipes(recipes, profile)
    if not recipes or #recipes == 0 then return end
-   local collapsed = self.db.char.collapsedRecipes
-   local zoneColor = { NORMAL_FONT_COLOR:GetRGB() }
-   local header = format("%s %s (%d)", collapsed and "+" or "-",
-      PROFESSIONS_TRACKER_HEADER_PROFESSION or L["Professions"], #recipes)
-   AddLine("recipeSection", nil, header, "zone", 0, profile.zoneSpacing, zoneColor, { 1, 1, 1 }, true)
-   if collapsed then return end
-   layout.nextSpacing = profile.zoneHeaderSpacing
+   local header = format("%s (%d)", PROFESSIONS_TRACKER_HEADER_PROFESSION or L["Professions"], #recipes)
+   if not self:RenderSectionHeader("recipes", header, profile) then return end
 
    local titleColor = { Color("Header", 0.75, 0.61, 0) }
    local normal = { Color("Normal", 0.8, 0.8, 0.8) }
@@ -571,7 +687,7 @@ function mod:RenderRecipes(recipes, profile)
    end
 end
 
-function mod:Render(sections, numQuests, numShown, recipes)
+function mod:Render(sections, numQuests, numShown, recipes, tasks)
    local frame = self.frame
    local profile = self.db.profile
 
@@ -582,14 +698,10 @@ function mod:Render(sections, numQuests, numShown, recipes)
    end
    self.itemEntries = {}
 
-   local titleText = format("%s (%d/%d)", TRACKER_HEADER_QUESTS or L["Quests"], numQuests,
-      C_QuestLog.GetMaxNumQuestsCanAccept and C_QuestLog.GetMaxNumQuestsCanAccept() or numQuests)
-   if numShown ~= numQuests then
-      titleText = format("%d %s - %s", numShown, L["shown"], titleText)
-   end
-   frame.title.text:SetText(titleText)
+   frame.title.text:SetText(profile.onlyCurrentZone and L["Zone Objectives"] or L["All Objectives"])
 
    local hasContent = numQuests > 0 or (recipes and #recipes > 0)
+      or (tasks and (#tasks.worldQuests > 0 or #tasks.bonus > 0))
    if not hasContent and profile.locked then
       frame:Hide()
       self:RequestItemButtonLayout()
@@ -614,20 +726,38 @@ function mod:Render(sections, numQuests, numShown, recipes)
    end
    frame.scroll:Show()
 
-   local collapsedZones = self.db.char.collapsedZones
-   local zoneColor = { NORMAL_FONT_COLOR:GetRGB() }
-   local currentZoneColor = { 1, 1, 1 }
-   for _, section in ipairs(sections) do
-      local collapsed = collapsedZones[section.name]
-      local text = format("%s %s (%d)", collapsed and "+" or "-", section.name, #section.quests)
-      local color = section.isCurrent and currentZoneColor or zoneColor
-      AddLine("zone", section, text, "zone", 0, profile.zoneSpacing, color, Brighten(color), true)
-      if not collapsed then
-         layout.nextSpacing = profile.zoneHeaderSpacing
-         for _, quest in ipairs(section.quests) do
-            self:RenderQuest(quest, profile)
+   if numQuests > 0 then
+      local maxQuests = C_QuestLog.GetMaxNumQuestsCanAccept and C_QuestLog.GetMaxNumQuestsCanAccept() or numQuests
+      local questsLabel = TRACKER_HEADER_QUESTS or L["Quests"]
+      local header
+      if numShown ~= numQuests then
+         header = format(L["%s (%d of %d/%d)"], questsLabel, numShown, numQuests, maxQuests)
+      else
+         header = format("%s (%d/%d)", questsLabel, numQuests, maxQuests)
+      end
+      if self:RenderSectionHeader("quests", header, profile) then
+         -- Zone headers: plain text under the section bar.
+         local collapsedZones = self.db.char.collapsedZones
+         local zoneColor = { NORMAL_FONT_COLOR:GetRGB() }
+         local currentZoneColor = { 1, 1, 1 }
+         for _, section in ipairs(sections) do
+            local collapsed = collapsedZones[section.name]
+            local text = format("%s %s (%d)", collapsed and "+" or "-", section.name, #section.quests)
+            local color = section.isCurrent and currentZoneColor or zoneColor
+            AddLine("zone", section, text, "zone", ZONE_INDENT, profile.zoneSpacing, color, Brighten(color))
+            if not collapsed then
+               layout.nextSpacing = profile.zoneHeaderSpacing
+               for _, quest in ipairs(section.quests) do
+                  self:RenderQuest(quest, profile)
+               end
+            end
          end
       end
+   end
+
+   if tasks then
+      self:RenderTaskSection("worldQuests", TRACKER_HEADER_WORLD_QUESTS or L["World Quests"], tasks.worldQuests, profile)
+      self:RenderTaskSection("bonus", TRACKER_HEADER_BONUS_OBJECTIVES or L["Bonus Objectives"], tasks.bonus, profile)
    end
 
    if profile.showRecipes then
@@ -680,15 +810,64 @@ local function OpenQuestOnMap(questID)
    end
 end
 
-local function ToggleQuestWatch(questID)
-   if C_QuestLog.GetQuestWatchType(questID) ~= nil then
+local function ToggleQuestWatch(questID, isWorldQuest)
+   if isWorldQuest then
+      if QuestUtils_IsQuestWatched(questID) then
+         C_QuestLog.RemoveWorldQuestWatch(questID)
+      else
+         C_QuestLog.AddWorldQuestWatch(questID)
+      end
+   elseif C_QuestLog.GetQuestWatchType(questID) ~= nil then
       C_QuestLog.RemoveQuestWatch(questID)
    else
       C_QuestLog.AddQuestWatch(questID)
    end
 end
 
+local function OpenTaskOnMap(questID)
+   local mapID = C_TaskQuest.GetQuestZoneID(questID)
+   if mapID and OpenQuestLog then
+      OpenQuestLog(mapID)
+      if EventRegistry then
+         EventRegistry:TriggerEvent("MapCanvas.PingQuestID", questID)
+      end
+   end
+end
+
+local function ShowTaskMenu(owner, quest)
+   local questID = quest.questID
+   MenuUtil.CreateContextMenu(owner, function(_, root)
+      root:CreateTitle(quest.title)
+      if mod:HasTomTom() then
+         root:CreateButton(L["Set TomTom waypoint"], function()
+            mod:SetQuestWaypoint(quest, "tomtom")
+         end)
+      end
+      if C_SuperTrack.GetSuperTrackedQuestID() ~= questID then
+         root:CreateButton(SUPER_TRACK_QUEST or L["Focus quest"], function()
+            C_SuperTrack.SetSuperTrackedQuestID(questID)
+         end)
+      else
+         root:CreateButton(STOP_SUPER_TRACK_QUEST or L["Stop focusing quest"], function()
+            C_SuperTrack.SetSuperTrackedQuestID(0)
+         end)
+      end
+      root:CreateButton(OBJECTIVES_SHOW_QUEST_MAP or L["Show on map"], function()
+         OpenTaskOnMap(questID)
+      end)
+      if quest.isWorldQuest then
+         local watched = QuestUtils_IsQuestWatched(questID)
+         root:CreateButton(watched and (OBJECTIVES_STOP_TRACKING or L["Stop tracking"]) or (TRACK_QUEST or L["Track quest"]), function()
+            ToggleQuestWatch(questID, true)
+         end)
+      end
+   end)
+end
+
 local function ShowQuestMenu(owner, quest)
+   if quest.isTask then
+      return ShowTaskMenu(owner, quest)
+   end
    local questID = quest.questID
    MenuUtil.CreateContextMenu(owner, function(_, root)
       root:CreateTitle(C_QuestLog.GetTitleForQuestID(questID) or "")
@@ -771,8 +950,9 @@ mod.lineClickHandlers = {
       self:RequestUpdate()
    end,
 
-   recipeSection = function(self)
-      self.db.char.collapsedRecipes = not self.db.char.collapsedRecipes
+   section = function(self, _, section)
+      local collapsed = self.db.char.collapsedSections
+      collapsed[section.key] = not collapsed[section.key] or nil
       self:RequestUpdate()
    end,
 
@@ -785,9 +965,13 @@ mod.lineClickHandlers = {
       if button == "RightButton" then
          ShowQuestMenu(line, quest)
       elseif IsModifiedClick("QUESTWATCHTOGGLE") then
-         ToggleQuestWatch(questID)
+         if not quest.isTask or quest.isWorldQuest then
+            ToggleQuestWatch(questID, quest.isWorldQuest)
+         end
       elseif IsControlKeyDown() then
          self:SetQuestWaypoint(quest)
+      elseif quest.isTask then
+         OpenTaskOnMap(questID)
       elseif quest.isAutoComplete and quest.isComplete and ShowQuestComplete then
          ShowQuestComplete(questID)
       else

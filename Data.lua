@@ -154,11 +154,11 @@ local function BuildQuest(info)
       quest.tagName = tagInfo.tagName
       quest.isElite = tagInfo.isElite or tagInfo.tagID == ((Enum.QuestTag and Enum.QuestTag.Group) or 1)
    end
-   if quest.isComplete and GetQuestLogCompletionText then
+   if logIndex and quest.isComplete and GetQuestLogCompletionText then
       quest.completionText = GetQuestLogCompletionText(logIndex)
    end
    -- Usable quest item (shown as a secure item button).
-   if GetQuestLogSpecialItemInfo then
+   if logIndex and GetQuestLogSpecialItemInfo then
       local link, texture, charges, showItemWhenComplete = GetQuestLogSpecialItemInfo(logIndex)
       local itemID = link and tonumber(link:match("item:(%d+)"))
       if itemID and (not quest.isComplete or showItemWhenComplete) then
@@ -344,6 +344,89 @@ function mod:CollectQuests()
    end
 
    return sections, numQuests, numShown
+end
+
+----------------------------------------------------------------
+-- World quests and bonus objectives (retail; mirrors Blizzard's
+-- WorldQuest / BonusObjective trackers): tasks in the current area, plus
+-- watched world quests anywhere.
+----------------------------------------------------------------
+
+local function GetTaskLocation(questID)
+   local mapID = C_TaskQuest.GetQuestZoneID(questID)
+   if not mapID then return nil end
+   local x, y = C_TaskQuest.GetQuestLocation(questID, mapID)
+   if x and y then
+      return { mapID = mapID, x = x, y = y }
+   end
+end
+mod.GetTaskLocation = GetTaskLocation
+
+local function TaskSorter(a, b)
+   if a.inArea ~= b.inArea then return a.inArea end
+   if (a.distance ~= nil) ~= (b.distance ~= nil) then return a.distance ~= nil end
+   if a.distance and a.distance ~= b.distance then return a.distance < b.distance end
+   if a.title ~= b.title then return a.title < b.title end
+   return a.questID < b.questID
+end
+
+--- Returns { worldQuests = { quest, ... }, bonus = { quest, ... } } or nil when
+--- the client has no tasks (e.g. Forever). Entries are quest records
+--- (as from BuildQuest) without a level, flagged with isTask.
+function mod:CollectTasks()
+   if not (GetTasksTable and GetTaskInfo and C_TaskQuest and QuestUtils_IsQuestWorldQuest) then
+      return nil
+   end
+   local profile = self.db.profile
+   local worldQuests, bonus, seen = {}, {}, {}
+
+   local function add(list, questID, tracked)
+      if not questID or seen[questID] then return end
+      local isInArea, isOnMap, numObjectives, taskName = GetTaskInfo(questID)
+      if not numObjectives or not (tracked or isInArea) then return end
+      seen[questID] = true
+
+      local task = BuildQuest({
+         questID = questID,
+         questLogIndex = C_QuestLog.GetLogIndexForQuestID(questID),
+         title = taskName or C_TaskQuest.GetQuestInfoByQuestID(questID) or "",
+         isOnMap = isOnMap,
+      })
+      task.isTask = true
+      task.isWorldQuest = list == worldQuests
+      task.inArea = isInArea or false
+      task.inCurrentZone = isInArea or isOnMap or false
+      if profile.showDirection then
+         task.poi = GetTaskLocation(questID)
+      end
+      if task.isWorldQuest and QuestUtils_ShouldDisplayExpirationWarning
+         and QuestUtils_ShouldDisplayExpirationWarning(questID) then
+         local minutes = C_TaskQuest.GetQuestTimeLeftMinutes(questID)
+         if minutes and minutes > 0 and BONUS_OBJECTIVE_TIME_LEFT then
+            task.timeLeftText = BONUS_OBJECTIVE_TIME_LEFT:format(SecondsToTime(minutes * 60))
+         end
+      end
+      tinsert(list, task)
+   end
+
+   for _, questID in ipairs(GetTasksTable() or {}) do
+      if QuestUtils_IsQuestWorldQuest(questID) then
+         if profile.showWorldQuests then
+            add(worldQuests, questID)
+         end
+      elseif profile.showBonusObjectives and not QuestUtils_IsQuestWatched(questID) then
+         add(bonus, questID)
+      end
+   end
+   if profile.showWorldQuests then
+      for i = 1, C_QuestLog.GetNumWorldQuestWatches() do
+         add(worldQuests, C_QuestLog.GetQuestIDForWorldQuestWatchIndex(i), true)
+      end
+   end
+
+   sort(worldQuests, TaskSorter)
+   sort(bonus, TaskSorter)
+   return { worldQuests = worldQuests, bonus = bonus }
 end
 
 ----------------------------------------------------------------
