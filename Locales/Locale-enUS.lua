@@ -159,7 +159,6 @@ L["Buttons"] = true
 L["Other"] = true
 L["Padding"] = true
 L["Space between the tracker's edges and its content, for example to keep it clear of the border."] = true
-L["Open settings"] = true
 L["Custom"] = true
 L["Bar color"] = true
 L["With zero opacity and no border, zone headers are shown as plain text."] = true
@@ -190,6 +189,7 @@ L["Paste a theme export string and click Import."] = true
 L["Import"] = true
 L["Theme: %s"] = true
 L["Theme: %s (imported as %s)"] = true
-L["Move and size the tracker in Edit Mode. Position and size are saved per Edit Mode layout."] = true
-L["Open Edit Mode"] = true
-L["Current layout: %s"] = true
+L["LAYOUT_SUMMARY"] = [[
+The tracker's position and size are set in Edit Mode and saved separately for each Edit Mode layout. In the current layout (%s) it is %d pixels wide at %d%% scale, and grows with its contents up to %d pixels tall before it scrolls.
+
+To change this, open Edit Mode from the game menu (or type /editmode) and click the tracker. Its dialog has sliders for width, maximum height and scale, a button to match Blizzard's tracker, and a reset button.]]

@@ -815,6 +815,10 @@ function mod:Render(sections, numQuests, numShown, recipes, tasks)
 
    local maxContent = math.max(20, size.maxHeight - titleHeight)
    local viewHeight = math.min(contentHeight, maxContent)
+   if self:IsInEditMode() then
+      -- Show the full maximum height while sizing the tracker.
+      viewHeight = maxContent
+   end
    frame:SetHeight(titleHeight + viewHeight)
    frame.scroll.contentHeight = contentHeight
    frame.scroll.viewHeight = viewHeight

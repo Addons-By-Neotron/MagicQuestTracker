@@ -192,7 +192,6 @@ function mod:SetupEditMode()
    })
    LEM:AddFrameSettingsButtons(frame, {
       { text = L["Match Blizzard tracker"], click = function() mod:MatchBlizzardTracker() end },
-      { text = L["Open settings"], click = function() mod:OpenConfig() end },
    })
 
    LEM:RegisterCallback("layout", function()
@@ -235,14 +234,9 @@ function mod:GetEditModeLayoutName()
    return GetLayoutName()
 end
 
---- Closes the settings window and opens Edit Mode.
-function mod:OpenEditMode()
-   if InCombatLockdown() or not EditModeManagerFrame then return end
-   if SettingsPanel and SettingsPanel:IsShown() then
-      HideUIPanel(SettingsPanel)
-   end
-   ShowUIPanel(EditModeManagerFrame)
-end
+-- Edit Mode is never opened or closed from here: entering and leaving it
+-- runs protected code (target/focus and party frame resets) that is
+-- blocked and taints Blizzard's frames when started by an addon.
 
 function mod:IsInEditMode()
    return self.inEditMode

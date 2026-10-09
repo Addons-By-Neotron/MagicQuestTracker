@@ -456,49 +456,17 @@ local function BuildOptions()
       layout = {
          type = "group",
          name = L["Layout"],
-         get = function(info) return mod:GetLayoutSettings()[info[#info]] end,
-         set = function() end,
          args = {
-            desc = {
-               type = "description",
-               name = L["Move and size the tracker in Edit Mode. Position and size are saved per Edit Mode layout."],
-               fontSize = "medium",
-               order = 1,
-            },
-            openEditMode = {
-               type = "execute",
-               name = L["Open Edit Mode"],
-               order = 2,
-               disabled = function() return not EditModeManagerFrame or InCombatLockdown() end,
-               func = function() mod:OpenEditMode() end,
-            },
-            layoutName = {
+            current = {
                type = "description",
                name = function()
-                  return format(L["Current layout: %s"], mod:GetEditModeLayoutName() or UNKNOWN or "?")
+                  local size = mod:GetLayoutSettings()
+                  return format(L["LAYOUT_SUMMARY"], mod:GetEditModeLayoutName() or UNKNOWN or "?",
+                     size.width, size.scale * 100 + 0.5, size.maxHeight)
                end,
+               fontSize = "medium",
+               width = "full",
                order = 3,
-            },
-            width = {
-               type = "range",
-               name = L["Width"],
-               min = 150, max = 600, step = 1,
-               disabled = true,
-               order = 4,
-            },
-            maxHeight = {
-               type = "range",
-               name = L["Maximum height"],
-               min = 100, max = 1200, step = 1,
-               disabled = true,
-               order = 5,
-            },
-            scale = {
-               type = "range",
-               name = L["Scale"],
-               min = 0.5, max = 2.0, step = 0.01, isPercent = true,
-               disabled = true,
-               order = 6,
             },
          },
       },

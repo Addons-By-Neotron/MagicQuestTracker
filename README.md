@@ -25,7 +25,7 @@ A replacement for the built-in objective tracker for WoW Retail and Classic Fore
 
 ## Position and size
 
-The tracker is moved in Blizzard's Edit Mode, with its position saved per Edit Mode layout. Width, maximum height and scale are set in the Edit Mode dialog and, like the position, saved per Edit Mode layout. The Layout settings page shows them and has a button to open Edit Mode. The Edit Mode dialog's "Match Blizzard tracker" button moves it to where the built-in objective tracker sits in the current layout and copies its height. Outside Edit Mode the tracker hides when there is nothing to track.
+The tracker is moved in Blizzard's Edit Mode, with its position saved per Edit Mode layout. Width, maximum height and scale are set in the Edit Mode dialog and, like the position, saved per Edit Mode layout. The Layout settings page shows them. Open Edit Mode from the game menu or with /editmode. The Edit Mode dialog's "Match Blizzard tracker" button moves it to where the built-in objective tracker sits in the current layout and copies its height. Outside Edit Mode the tracker hides when there is nothing to track.
 
 ## Tracker title
 
