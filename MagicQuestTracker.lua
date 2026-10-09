@@ -111,6 +111,8 @@ mod.defaults = {
    profile = {
       -- Behaviour
       hideBlizzardTracker = true,
+      hideInCombat = "never",        -- never | instances | always
+      hideInInstances = "never",     -- never | noQuests | always
       showAllQuests = true,          -- false = only quests on the built-in watch list
       currentZoneFirst = true,
       onlyCurrentZone = false,
@@ -170,7 +172,7 @@ end
 local QUEST_EVENTS = {
    "QUEST_LOG_UPDATE", "QUEST_WATCH_LIST_CHANGED", "QUEST_ACCEPTED", "QUEST_REMOVED",
    "QUEST_TURNED_IN", "SUPER_TRACKING_CHANGED", "PLAYER_LEVEL_UP",
-   "ZONE_CHANGED", "ZONE_CHANGED_INDOORS", "ZONE_CHANGED_NEW_AREA",
+   "ZONE_CHANGED", "ZONE_CHANGED_INDOORS",
    "TRACKED_RECIPE_UPDATE", "BAG_UPDATE_DELAYED", "CURRENCY_DISPLAY_UPDATE",
 }
 
@@ -182,6 +184,10 @@ function mod:OnEnable()
    self:RegisterEvent("PLAYER_ENTERING_WORLD")
    self:RegisterEvent("PLAYER_REGEN_ENABLED")
    self:RegisterEvent("PLAYER_REGEN_DISABLED")
+   self:RegisterEvent("ZONE_CHANGED_NEW_AREA", function()
+      mod:UpdateCombatVisibility()
+      mod:RequestUpdate()
+   end)
    self:ApplyProfile()
 end
 
@@ -200,6 +206,7 @@ function mod:ApplyProfile()
    if profile.questSort ~= "name" and profile.questSort ~= "distance" then profile.questSort = "level" end
    self:MigrateCustomTheme()
    self:UpdateDistanceTimer()
+   self:UpdateCombatVisibility()
    self:ApplyLayout()
    self:SetBlizzardTrackerHidden(self.db.profile.hideBlizzardTracker)
    self:RequestUpdate()
@@ -208,6 +215,7 @@ end
 function mod:PLAYER_ENTERING_WORLD()
    -- Blizzard's tracker initializes on PLAYER_ENTERING_WORLD; re-apply afterwards.
    self:SetBlizzardTrackerHidden(self.db.profile.hideBlizzardTracker)
+   self:UpdateCombatVisibility()
    self:RequestUpdate()
 end
 
@@ -217,9 +225,55 @@ function mod:PLAYER_REGEN_DISABLED()
    if self.itemLayoutPending then
       self:LayoutItemButtons()
    end
+   if self:ShouldHideInCombat() and self.frame then
+      self.combatHidden = true
+      self.frame:Hide()
+   end
+end
+
+----------------------------------------------------------------
+-- Hide in combat. The tracker frame is hidden on PLAYER_REGEN_DISABLED;
+-- the secure item buttons can't be hidden in combat by addon code, so their
+-- holder gets a [combat] visibility state driver, set up out of combat.
+----------------------------------------------------------------
+
+local function InInstance()
+   local inInstance, instanceType = IsInInstance()
+   return inInstance and instanceType ~= "none" or false
+end
+
+--- True when the tracker should be hidden in the current instance: always,
+--- or when none of the quests are for this instance (sections from CollectQuests).
+function mod:ShouldHideInInstance(sections)
+   local mode = self.db.profile.hideInInstances
+   if mode == "never" or not InInstance() then return false end
+   if mode == "noQuests" then
+      for _, section in ipairs(sections) do
+         if section.isCurrent or section.hasLocalQuests then return false end
+      end
+   end
+   return true
+end
+
+function mod:ShouldHideInCombat()
+   local mode = self.db.profile.hideInCombat
+   if mode == "always" then return true end
+   if mode == "instances" then
+      return InInstance()
+   end
+   return false
+end
+
+function mod:UpdateCombatVisibility()
+   if InCombatLockdown() then return end
+   self:SetItemButtonsCombatHidden(self:ShouldHideInCombat())
 end
 
 function mod:PLAYER_REGEN_ENABLED()
+   if self.combatHidden then
+      self.combatHidden = nil
+      self.layoutDeferred = true  -- render (and show) below
+   end
    if self.pendingBlizzardVisibility ~= nil then
       self:SetBlizzardTrackerHidden(self.pendingBlizzardVisibility)
    end

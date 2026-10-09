@@ -151,11 +151,31 @@ local function SetupButton(button, quest)
    UpdateCooldown(button)
 end
 
+local holderCombatHidden = false
+
+--- Hides the item buttons in combat (via a state driver; call out of combat).
+function mod:SetItemButtonsCombatHidden(hide)
+   if hide == holderCombatHidden or not holder then
+      holderCombatHidden = hide
+      return
+   end
+   holderCombatHidden = hide
+   if hide then
+      RegisterStateDriver(holder, "visibility", "[combat] hide; show")
+   else
+      UnregisterStateDriver(holder, "visibility")
+      holder:Show()
+   end
+end
+
 local function CreateHolder()
    holder = CreateFrame("Frame", "MagicQuestTrackerItemHolder", UIParent)
    holder:SetSize(1, 1)
    holder:SetPoint("BOTTOMLEFT")
    holder:SetFrameStrata("LOW")
+   if holderCombatHidden then
+      RegisterStateDriver(holder, "visibility", "[combat] hide; show")
+   end
    holder:RegisterEvent("BAG_UPDATE_COOLDOWN")
    holder:SetScript("OnEvent", function()
       for _, button in ipairs(buttons) do

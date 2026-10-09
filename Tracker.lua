@@ -768,6 +768,11 @@ function mod:Render(sections, numQuests, numShown, recipes, tasks)
    local frame = self.frame
    local profile = self.db.profile
 
+   if self.combatHidden then
+      -- Hidden for combat; render when it ends.
+      self.layoutDeferred = true
+      return false
+   end
    if self:IsItemLayoutLocked() then
       -- Secure item buttons can't move during combat; re-render afterwards.
       -- The caller keeps the previous data, which the lines still show.
@@ -786,7 +791,7 @@ function mod:Render(sections, numQuests, numShown, recipes, tasks)
 
    local hasContent = numQuests > 0 or (recipes and #recipes > 0)
       or (tasks and (#tasks.worldQuests > 0 or #tasks.bonus > 0))
-   if not hasContent and not self:IsInEditMode() then
+   if (not hasContent or self:ShouldHideInInstance(sections)) and not self:IsInEditMode() then
       frame:Hide()
       self.numLinesUsed = 0
       ReleaseUnusedLines(0)

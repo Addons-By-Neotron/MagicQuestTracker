@@ -465,6 +465,34 @@ local function BuildOptions()
                   mod:SetBlizzardTrackerHidden(val)
                end,
             },
+            hideInCombat = {
+               type = "select",
+               name = L["Hide in combat"],
+               desc = L["Hide the tracker while in combat: never, only inside instances (dungeons, raids, battlegrounds, ...), or always."],
+               values = {
+                  never = L["Never"],
+                  instances = L["In instances"],
+                  always = L["Always"],
+               },
+               order = 62,
+               width = COLUMN_WIDTH,
+               set = function(_, val)
+                  mod.db.profile.hideInCombat = val
+                  mod:UpdateCombatVisibility()
+               end,
+            },
+            hideInInstances = {
+               type = "select",
+               name = L["Hide in instances"],
+               desc = L["Hide the tracker inside instances (dungeons, raids, battlegrounds, ...): never, when none of your quests are for the instance, or always."],
+               values = {
+                  never = L["Never"],
+                  noQuests = L["Without quests there"],
+                  always = L["Always"],
+               },
+               order = 63,
+               width = COLUMN_WIDTH,
+            },
             cmdHeader = { type = "header", name = L["Commands"], order = 90 },
             cmdDesc = {
                type = "description",
