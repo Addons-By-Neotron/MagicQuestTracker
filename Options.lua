@@ -99,6 +99,80 @@ local function FontGroup(role, name, order)
    }
 end
 
+local THEME_VALUES = {
+   blizzard = L["Blizzard"],
+   custom = L["Custom"],
+}
+
+local function IsNotCustom()
+   return mod.db.profile.theme ~= "custom"
+end
+
+-- Color with opacity in a Custom theme settings table.
+local function ColorOption(name, order)
+   return {
+      type = "color",
+      name = name,
+      hasAlpha = true,
+      order = order,
+      get = function(info)
+         local c = mod.db.profile.custom[info[#info - 1]][info[#info]]
+         return c.r, c.g, c.b, c.a
+      end,
+      set = function(info, r, g, b, a)
+         local c = mod.db.profile.custom[info[#info - 1]][info[#info]]
+         c.r, c.g, c.b, c.a = r, g, b, a
+         mod:ApplyLayout()
+      end,
+   }
+end
+
+-- Bar texture, color and border for one header kind of the Custom theme.
+local function CustomGroup(kind, name, order, desc)
+   return {
+      type = "group",
+      name = name,
+      inline = true,
+      order = order,
+      hidden = IsNotCustom,
+      get = function(info) return mod.db.profile.custom[kind][info[#info]] end,
+      set = function(info, val)
+         mod.db.profile.custom[kind][info[#info]] = val
+         mod:ApplyLayout()
+      end,
+      args = {
+         desc = desc and { type = "description", name = desc, order = 0 } or nil,
+         borderedButton = kind == "title" and {
+            type = "toggle",
+            name = L["Bordered minimize button"],
+            order = 6,
+         } or nil,
+         texture = {
+            type = "select",
+            dialogControl = "LSM30_Statusbar",
+            name = L["Bar texture"],
+            values = function() return mod:GetBarTextureList() end,
+            order = 1,
+         },
+         color = ColorOption(L["Bar color"], 2),
+         border = {
+            type = "select",
+            dialogControl = "LSM30_Border",
+            name = L["Border"],
+            values = AceGUIWidgetLSMlists.border,
+            order = 3,
+         },
+         borderSize = {
+            type = "range",
+            name = L["Border size"],
+            min = 1, max = 32, step = 1,
+            order = 4,
+         },
+         borderColor = ColorOption(L["Border color"], 5),
+      },
+   }
+end
+
 local function BuildOptions()
    options = {
       general = {
@@ -114,33 +188,38 @@ local function BuildOptions()
                fontSize = "medium",
             },
             displayHeader = { type = "header", name = L["Quests"], order = 10 },
+            titleHeader = { type = "header", name = L["Quest titles"], order = 20 },
+            distanceHeader = { type = "header", name = L["Distance and navigation"], order = 30 },
+            sectionHeader = { type = "header", name = L["Sections"], order = 40 },
+            buttonHeader = { type = "header", name = L["Buttons"], order = 50 },
+            otherHeader = { type = "header", name = L["Other"], order = 60 },
             showAllQuests = {
                type = "toggle",
                name = L["Show all quests"],
                desc = L["Show every quest in the quest log. When disabled, only quests on the built-in watch list are shown."],
-               width = "full",
                order = 11,
+               width = COLUMN_WIDTH,
             },
             currentZoneFirst = {
                type = "toggle",
                name = L["Show current zone first"],
                desc = L["Place the zone you are currently in at the top. Remaining zones are sorted using the zone sort order."],
-               width = "full",
-               order = 12,
+               order = 13,
+               width = COLUMN_WIDTH,
             },
             onlyCurrentZone = {
                type = "toggle",
                name = L["Only show quests in current zone"],
                desc = L["Hide quests that are not in your current zone or on the current map."],
-               width = "full",
-               order = 13,
+               order = 12,
+               width = COLUMN_WIDTH,
             },
             autoFoldZones = {
                type = "toggle",
                name = L["Auto-fold other zones"],
                desc = L["When showing all quests, fold every zone except the current one whenever you enter a new zone. Zones you unfold stay open until the next zone change."],
-               width = "full",
-               order = 13.5,
+               order = 14,
+               width = COLUMN_WIDTH,
                disabled = function() return mod.db.profile.onlyCurrentZone end,
                set = function(_, val)
                   mod.db.profile.autoFoldZones = val
@@ -153,7 +232,8 @@ local function BuildOptions()
                name = L["Zone sort order"],
                desc = L["How zones are ordered. Level sorts zones by their lowest level quest, distance by their nearest quest."],
                values = SORT_VALUES,
-               order = 14,
+               order = 15,
+               width = COLUMN_WIDTH,
                set = SetAndUpdateDistance,
             },
             questSort = {
@@ -161,30 +241,32 @@ local function BuildOptions()
                name = L["Quest sort order"],
                desc = L["How quests are ordered within each zone. Distance sorts by straight-line distance to the quest's next location on the map; quests without one are listed last."],
                values = SORT_VALUES,
-               order = 15,
+               order = 16,
+               width = COLUMN_WIDTH,
                set = SetAndUpdateDistance,
             },
             showDistance = {
                type = "toggle",
                name = L["Show distance"],
                desc = L["Show the straight-line distance to each quest's next location on the map."],
-               width = "full",
-               order = 15.5,
+               order = 31,
+               width = COLUMN_WIDTH,
                set = SetAndUpdateDistance,
             },
             showDirection = {
                type = "toggle",
                name = L["Show direction"],
                desc = L["Show an arrow pointing toward each quest's next location on the map. Not available in instances."],
-               width = "full",
-               order = 15.6,
+               order = 32,
+               width = COLUMN_WIDTH,
                set = SetAndUpdateDistance,
             },
             arrowSize = {
                type = "range",
                name = L["Arrow size"],
                min = 8, max = 32, step = 1,
-               order = 15.7,
+               order = 33,
+               width = COLUMN_WIDTH,
                disabled = function() return not mod.db.profile.showDirection end,
             },
             arrowMaxDistance = {
@@ -192,15 +274,16 @@ local function BuildOptions()
                name = L["Arrow max distance"],
                desc = L["Only show arrows for quests in other zones within this many yards. Quests in the current zone always get an arrow. 0 shows arrows at any distance."],
                min = 0, max = 5000, step = 50, bigStep = 250,
-               order = 15.8,
+               order = 34,
+               width = COLUMN_WIDTH,
                disabled = function() return not mod.db.profile.showDirection end,
             },
             showLevel = {
                type = "toggle",
                name = L["Show quest level"],
                desc = L["Prefix quest titles with their level. + marks elite and group quests, D dungeon, R raid and H heroic quests."],
-               width = "full",
-               order = 16,
+               order = 21,
+               width = COLUMN_WIDTH,
             },
             waypointMode = {
                type = "select",
@@ -211,87 +294,88 @@ local function BuildOptions()
                   blizzard = L["Blizzard"],
                   both = L["Both"],
                },
-               order = 15.9,
+               order = 35,
+               width = COLUMN_WIDTH,
             },
             markForeverQuests = {
                type = "toggle",
                name = L["Mark new Forever quests"],
                desc = L["Show an infinity sign after quests that were not in original Classic."],
-               width = "full",
-               order = 16.6,
+               order = 25,
+               width = COLUMN_WIDTH,
                hidden = function() return not mod.IS_FOREVER end,
             },
             showQuestTags = {
                type = "toggle",
                name = L["Show quest type"],
                desc = L["Append the quest type, such as Elite, Dungeon, Raid or Daily, to quest titles."],
-               width = "full",
-               order = 16.5,
+               order = 22,
+               width = COLUMN_WIDTH,
             },
             colorByDifficulty = {
                type = "toggle",
                name = L["Color by difficulty"],
                desc = L["Color quest titles by their difficulty relative to your level."],
-               width = "full",
-               order = 17,
+               order = 23,
+               width = COLUMN_WIDTH,
             },
             showCompletedObjectives = {
                type = "toggle",
                name = L["Show completed objectives"],
                desc = L["Show finished objectives of incomplete quests, dimmed."],
-               width = "full",
-               order = 18,
+               order = 24,
+               width = COLUMN_WIDTH,
             },
             showRecipes = {
                type = "toggle",
                name = L["Show tracked recipes"],
                desc = L["Show recipes tracked from the professions window in a separate section."],
-               width = "full",
-               order = 19,
+               order = 41,
+               width = COLUMN_WIDTH,
             },
             showWorldQuests = {
                type = "toggle",
                name = L["Show world quests"],
                desc = L["Show world quests in the current area and tracked world quests in a separate section."],
-               width = "full",
-               order = 19.1,
-               hidden = function() return not GetTasksTable end,
+               order = 42,
+               width = COLUMN_WIDTH,
+               hidden = function() return mod.IS_FOREVER or not GetTasksTable end,
             },
             showBonusObjectives = {
                type = "toggle",
                name = L["Show bonus objectives"],
                desc = L["Show bonus objectives in the current area in a separate section."],
-               width = "full",
-               order = 19.2,
+               order = 43,
+               width = COLUMN_WIDTH,
                hidden = function() return not GetTasksTable end,
             },
             showItemButtons = {
                type = "toggle",
                name = L["Show quest item buttons"],
                desc = L["Show a button to use the quest item next to quests that have one. While a button is shown, the tracker does not update or scroll during combat."],
-               width = "full",
-               order = 20,
+               order = 51,
+               width = COLUMN_WIDTH,
             },
             showPOIButtons = {
                type = "toggle",
                name = L["Show quest POI buttons"],
                desc = L["Show the quest map icon next to each quest, like the built-in tracker. Click it to focus the quest. Follows the game's quest POI setting."],
-               width = "full",
-               order = 20.1,
+               order = 52,
+               width = COLUMN_WIDTH,
             },
             showFindGroupButton = {
                type = "toggle",
                name = L["Show find group buttons"],
                desc = L["Show the group finder button on quests that support it, like the built-in tracker."],
-               width = "full",
-               order = 20.2,
+               order = 53,
+               width = COLUMN_WIDTH,
             },
             hideBlizzardTracker = {
                type = "toggle",
                name = L["Hide Blizzard tracker"],
                desc = L["Hide the built-in objective tracker. Note that this hides all of its sections, including scenarios and bonus objectives."],
-               width = "full",
-               order = 21,
+               order = 61,
+               width = COLUMN_WIDTH,
                set = function(_, val)
                   mod.db.profile.hideBlizzardTracker = val
                   mod:SetBlizzardTrackerHidden(val)
@@ -353,6 +437,48 @@ local function BuildOptions()
                   mod:ApplyLayout()
                end,
             },
+            backgroundTexture = {
+               type = "select",
+               dialogControl = "LSM30_Background",
+               name = L["Background texture"],
+               values = AceGUIWidgetLSMlists.background,
+               order = 10.5,
+            },
+            backgroundBorder = {
+               type = "select",
+               dialogControl = "LSM30_Border",
+               name = L["Border"],
+               values = AceGUIWidgetLSMlists.border,
+               order = 14,
+            },
+            backgroundBorderSize = {
+               type = "range",
+               name = L["Border size"],
+               min = 1, max = 32, step = 1,
+               order = 15,
+            },
+            padding = {
+               type = "range",
+               name = L["Padding"],
+               desc = L["Space between the tracker's edges and its content, for example to keep it clear of the border."],
+               min = 0, max = 30, step = 1,
+               order = 17,
+            },
+            backgroundBorderColor = {
+               type = "color",
+               name = L["Border color"],
+               desc = L["The border fades in and out with the background opacity."],
+               order = 16,
+               get = function()
+                  local c = mod.db.profile.backgroundBorderColor
+                  return c.r, c.g, c.b
+               end,
+               set = function(_, r, g, b)
+                  local c = mod.db.profile.backgroundBorderColor
+                  c.r, c.g, c.b = r, g, b
+                  mod:ApplyLayout()
+               end,
+            },
             backgroundAlpha = {
                type = "range",
                name = L["Background opacity"],
@@ -405,6 +531,27 @@ local function BuildOptions()
             },
          },
       },
+      theme = {
+         type = "group",
+         name = L["Theme"],
+         args = {
+            theme = {
+               type = "select",
+               name = L["Theme"],
+               values = THEME_VALUES,
+               order = 1,
+               get = function() return mod.db.profile.theme end,
+               set = function(_, val)
+                  mod.db.profile.theme = val
+                  mod:ApplyLayout()
+               end,
+            },
+            title = CustomGroup("title", L["Tracker title"], 10),
+            section = CustomGroup("section", L["Section headers"], 11),
+            zone = CustomGroup("zone", L["Zone headers"], 12,
+               L["With zero opacity and no border, zone headers are shown as plain text."]),
+         },
+      },
       fonts = {
          type = "group",
          name = L["Fonts"],
@@ -435,6 +582,7 @@ function mod:SetupOptions()
    BuildOptions()
    self.optionsMain = self:OptReg(APP_NAME, options.general)
    self:OptReg(": Layout", options.layout, L["Layout"])
+   self:OptReg(": Theme", options.theme, L["Theme"])
    self:OptReg(": Fonts", options.fonts, L["Fonts"])
    self.optionsEnd = self:OptReg(": Profiles", options.profiles, L["Profiles"])
 end
@@ -442,4 +590,5 @@ end
 function mod:NotifyOptionsChanged()
    AceConfigRegistry:NotifyChange(APP_NAME)
    AceConfigRegistry:NotifyChange(APP_NAME .. ": Layout")
+   AceConfigRegistry:NotifyChange(APP_NAME .. ": Theme")
 end

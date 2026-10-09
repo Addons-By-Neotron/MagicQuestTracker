@@ -165,9 +165,28 @@ function mod:SetupEditMode()
       SizeSetting("width", L["Width"], 150, 600, 1),
       SizeSetting("maxHeight", L["Maximum height"], 100, 1200, 10),
       SizeSetting("scale", L["Scale"], 0.5, 2.0, 0.05, FormatPercent),
+      SizeSetting("padding", L["Padding"], 0, 30, 1),
+      {
+         kind = LEM.SettingType.Dropdown,
+         name = L["Theme"],
+         default = mod.defaults.profile.theme,
+         values = {
+            { text = L["Blizzard"], value = "blizzard" },
+            { text = L["Custom"], value = "custom" },
+         },
+         get = function()
+            return mod.db.profile.theme
+         end,
+         set = function(_, value)
+            mod.db.profile.theme = value
+            mod:ApplyLayout()
+            mod:NotifyOptionsChanged()
+         end,
+      },
    })
    LEM:AddFrameSettingsButtons(frame, {
       { text = L["Match Blizzard tracker"], click = function() mod:MatchBlizzardTracker() end },
+      { text = L["Open settings"], click = function() mod:OpenConfig() end },
    })
 
    LEM:RegisterCallback("layout", function()

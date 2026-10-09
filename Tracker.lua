@@ -32,15 +32,7 @@ local InCombatLockdown = InCombatLockdown
 -- Layout constants
 ----------------------------------------------------------------
 
-local TITLE_PADDING = 6
--- Header art as in Blizzard's tracker: drawn at the atlas' natural height,
--- full alpha, in a header block at least this tall with the text centered.
-local TITLE_ATLAS = "ui-questtracker-primary-objective-header"
-local HEADER_ATLAS = "UI-QuestTracker-Secondary-Objective-Header"
-local TITLE_MIN_HEIGHT = 30
-local BLIZZARD_TRACKER_WIDTH = 260
-local HEADER_MIN_HEIGHT = 24
-local HEADER_TEXT_INDENT = 7
+-- Header art, heights and text insets come from the theme (Themes.lua).
 local SCROLLBAR_WIDTH = 4
 local SCROLL_STEP = 40
 local FADE_IN = 0.15   -- seconds (scrollbar and background hover fade)
@@ -127,14 +119,15 @@ function mod:CreateTracker()
    self.frame = frame
 
    frame.bg = frame:CreateTexture(nil, "BACKGROUND")
-   frame.bg:SetAllPoints()
-   frame.bg:SetColorTexture(0, 0, 0, 1)
    frame.bg:SetAlpha(0)
+   -- Below the title and scroll area (they are one frame level higher).
+   frame.border = CreateFrame("Frame", nil, frame, "BackdropTemplate")
+   frame.border:SetAllPoints()
+   frame.border:SetAlpha(0)
 
    -- Title bar: quest count, minimize button. Moved and sized in Edit Mode.
+   -- Anchored to the frame edges (with padding) in ApplyLayout.
    local title = CreateFrame("Button", nil, frame)
-   title:SetPoint("TOPLEFT")
-   title:SetPoint("TOPRIGHT")
    title:RegisterForClicks("LeftButtonUp", "RightButtonUp", "MiddleButtonUp")
    title:SetScript("OnClick", function(_, button)
       if button == "RightButton" then
@@ -164,20 +157,11 @@ function mod:CreateTracker()
    minimize:SetHighlightAtlas("ui-questtrackerbutton-red-highlight", "ADD")
    minimize:SetScript("OnClick", function() mod:ToggleMinimized() end)
    title.minimize = minimize
-   title.text:SetPoint("LEFT", HEADER_TEXT_INDENT, 0)
-   title.text:SetPoint("RIGHT", minimize, "LEFT", -4, 0)
-
    title.bg = title:CreateTexture(nil, "BACKGROUND")
-   -- Natural size, centered: on Blizzard's 260 px header the art overhangs
-   -- both ends (the swirl left of the text). ApplyLayout keeps that overhang.
-   title.bg:SetAtlas(TITLE_ATLAS, true)
-   title.bg:SetPoint("CENTER")
-   title.bg.naturalWidth = title.bg:GetWidth()
 
    -- Scroll area
    local scroll = CreateFrame("ScrollFrame", nil, frame)
    scroll:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -4)
-   scroll:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -SCROLLBAR_WIDTH - 2, 0)
    scroll:EnableMouseWheel(true)
    scroll:SetScript("OnMouseWheel", OnScrollWheel)
    scroll.contentHeight = 0
@@ -212,6 +196,7 @@ function mod:CreateTracker()
       local hovered = self:IsMouseOver()
       local profile = mod.db.profile
       FadeToward(self.bg, hovered and profile.backgroundHoverAlpha or profile.backgroundAlpha, elapsed, hovered)
+      self.border:SetAlpha(self.bg:GetAlpha())
       if bar:IsShown() then
          FadeToward(bar, hovered and 1 or 0, elapsed, hovered)
       end
@@ -240,22 +225,63 @@ function mod:ApplyLayout()
    frame:SetScale(profile.scale)
    frame:SetWidth(profile.width)
    self:ApplyPosition()
-   local c = profile.backgroundColor
-   frame.bg:SetColorTexture(c.r, c.g, c.b, 1)
-   frame.bg:SetAlpha(frame:IsMouseOver() and profile.backgroundHoverAlpha or profile.backgroundAlpha)
+   self:ApplyBackground()
 
-   local titleHeight = math.max(TITLE_MIN_HEIGHT, profile.fonts.title.size + TITLE_PADDING)
+   self:RefreshTheme()
+   local title = frame.title
+   local titleHeight, textIndent = self:GetTheme().StyleTitle(title, profile)
+   title.text:ClearAllPoints()
+   title.text:SetPoint("LEFT", textIndent, 0)
+   title.text:SetPoint("RIGHT", title.minimize, "LEFT", -4, 0)
    frame.title:SetHeight(titleHeight)
-   frame.title.bg:SetWidth(frame.title.bg.naturalWidth + profile.width - BLIZZARD_TRACKER_WIDTH)
+
+   -- Padding keeps the content clear of the background border.
+   local padding = profile.padding
+   title:ClearAllPoints()
+   title:SetPoint("TOPLEFT", padding, -padding)
+   title:SetPoint("TOPRIGHT", -padding, -padding)
+   frame.scroll:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -SCROLLBAR_WIDTH - 2 - padding, padding)
    frame.title:EnableMouse(true)
    self:UpdateMinimizeButton()
    self:RequestUpdate()
 end
 
+-- Background texture and optional border; the border fades with the background.
+function mod:ApplyBackground()
+   local frame = self.frame
+   local profile = self.db.profile
+   local edge = profile.backgroundBorder ~= "None" and media:Fetch("border", profile.backgroundBorder)
+   if edge == "" then edge = nil end
+   local inset = 0
+   local border = frame.border
+   if edge then
+      -- SetBackdrop ignores the table it already has, so pass a new one.
+      border:SetBackdrop({ edgeFile = edge, edgeSize = profile.backgroundBorderSize })
+      local bc = profile.backgroundBorderColor
+      border:SetBackdropBorderColor(bc.r, bc.g, bc.b, 1)
+      border:SetFrameLevel(frame:GetFrameLevel())
+      border:Show()
+      inset = math.floor(profile.backgroundBorderSize / 4 + 0.5)
+   else
+      border:Hide()
+   end
+
+   local bg = frame.bg
+   local path = media:Fetch("background", profile.backgroundTexture)
+   bg:SetTexture(path ~= "" and path or nil)
+   local c = profile.backgroundColor
+   bg:SetVertexColor(c.r, c.g, c.b, 1)
+   bg:ClearAllPoints()
+   bg:SetPoint("TOPLEFT", inset, -inset)
+   bg:SetPoint("BOTTOMRIGHT", -inset, inset)
+   bg:SetAlpha(frame:IsMouseOver() and profile.backgroundHoverAlpha or profile.backgroundAlpha)
+   border:SetAlpha(bg:GetAlpha())
+end
+
 function mod:UpdateMinimizeButton()
    local button = self.frame.title.minimize
    local minimized = self.db.char.minimized
-   local atlas = minimized and "ui-questtrackerbutton-expand-all" or "ui-questtrackerbutton-collapse-all"
+   local atlas = self:GetTheme().MinimizeAtlas(minimized)
    button:SetNormalAtlas(atlas)
    button:SetPushedAtlas(atlas .. "-pressed")
 end
@@ -343,9 +369,6 @@ local function AcquireLine()
       line.collapseIcon:SetSize(16, 16)
       line.collapseIcon:SetPoint("RIGHT", -2, 0)
       line.bg = line:CreateTexture(nil, "BACKGROUND")
-      line.bg:SetAtlas(HEADER_ATLAS, true)
-      line.bg:SetPoint("LEFT")
-      line.bg:SetPoint("RIGHT")
       mod.lines[mod.numLinesUsed] = line
    end
    line:Show()
@@ -368,8 +391,23 @@ end
 
 local layout = {}  -- reused render state
 
-local function AddLine(kind, data, text, role, indent, spacing, color, highlightColor, showHeaderBg, rightText, arrowTarget)
+-- headerKind: nil, "section" or "zone"; the theme decides how headers look.
+local function AddLine(kind, data, text, role, indent, spacing, color, highlightColor, headerKind, rightText, arrowTarget)
    local line = AcquireLine()
+   local theme = mod:GetTheme()
+   local isBar, minHeight, textIndent, padding
+   if headerKind then
+      isBar, minHeight, textIndent, padding = theme.HeaderLayout(headerKind, mod.db.profile)
+   end
+   if isBar then
+      if line.styleVersion ~= mod.themeVersion or line.styleKind ~= headerKind then
+         theme.StyleHeader(line, headerKind, indent)
+         line.styleVersion, line.styleKind = mod.themeVersion, headerKind
+      end
+   else
+      line.styleKind = nil
+      if line.border then line.border:Hide() end
+   end
    line.kind = kind
    line.data = data
    line.color = color
@@ -408,20 +446,20 @@ local function AddLine(kind, data, text, role, indent, spacing, color, highlight
    end
    line.text:SetFontObject(fontObjects[role])
    line.text:ClearAllPoints()
-   if showHeaderBg then
-      line.text:SetPoint("LEFT", indent + HEADER_TEXT_INDENT, 0)
-      width = width - HEADER_TEXT_INDENT
+   if isBar then
+      line.text:SetPoint("LEFT", indent + textIndent, 0)
+      width = width - textIndent
    else
       line.text:SetPoint("TOPLEFT", indent, 0)
    end
    line.text:SetWidth(width)
    line.text:SetText(text)
    line.text:SetTextColor(unpack(color))
-   line.bg:SetShown(showHeaderBg or false)
+   line.bg:SetShown(isBar or false)
 
    local height = math.ceil(line.text:GetStringHeight())
-   if showHeaderBg then
-      height = math.max(HEADER_MIN_HEIGHT, height + 6)
+   if isBar then
+      height = math.max(minHeight, height + padding)
    end
    -- A header can override the gap before the next line (layout.nextSpacing).
    if layout.y > 0 then
@@ -647,7 +685,7 @@ end
 -- Returns true when the section is expanded.
 function mod:RenderSectionHeader(key, text, profile)
    local collapsed = self.db.char.collapsedSections[key]
-   local line = AddLine("section", SECTION_DATA[key], text, "module", 0, profile.sectionSpacing, COLOR_ZONE, Brighten(COLOR_ZONE), true)
+   local line = AddLine("section", SECTION_DATA[key], text, "module", 0, profile.sectionSpacing, COLOR_ZONE, Brighten(COLOR_ZONE), "section")
    local icon = line.collapseIcon
    icon:SetAtlas(collapsed and "ui-questtrackerbutton-secondary-expand" or "ui-questtrackerbutton-secondary-collapse")
    icon:Show()
@@ -714,9 +752,10 @@ function mod:Render(sections, numQuests, numShown, recipes, tasks)
    layout.y = 0
    layout.nextSpacing = nil
    layout.rightInset = 0
-   layout.width = profile.width - SCROLLBAR_WIDTH - 4
+   layout.width = profile.width - SCROLLBAR_WIDTH - 4 - 2 * profile.padding
 
-   local titleHeight = frame.title:GetHeight() + 4
+   -- Title, gap below it and the padding on both ends.
+   local titleHeight = frame.title:GetHeight() + 4 + 2 * profile.padding
    if self.db.char.minimized then
       ReleaseUnusedLines(0)
       frame.scroll:Hide()
@@ -744,7 +783,7 @@ function mod:Render(sections, numQuests, numShown, recipes, tasks)
             local collapsed = collapsedZones[section.name]
             local text = format("%s %s (%d)", collapsed and "+" or "-", section.name, #section.quests)
             local color = section.isCurrent and currentZoneColor or zoneColor
-            AddLine("zone", section, text, "zone", ZONE_INDENT, profile.zoneSpacing, color, Brighten(color))
+            AddLine("zone", section, text, "zone", ZONE_INDENT, profile.zoneSpacing, color, Brighten(color), "zone")
             if not collapsed then
                layout.nextSpacing = profile.zoneHeaderSpacing
                for _, quest in ipairs(section.quests) do

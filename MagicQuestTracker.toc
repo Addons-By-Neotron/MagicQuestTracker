@@ -19,6 +19,7 @@ ItemButtons.lua
 Direction.lua
 Waypoint.lua
 Data.lua
+Themes.lua
 Tracker.lua
 EditMode.lua
 Options.lua

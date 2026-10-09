@@ -36,6 +36,18 @@ local function FontDefaults(size, outline)
    return { face = "Friz Quadrata TT", size = size, outline = outline or "" }
 end
 
+-- Bar settings for one header kind of the Custom theme.
+local function CustomDefaults(texture, a, borderedButton)
+   return {
+      borderedButton = borderedButton,  -- title only: Blizzard's bordered minimize button
+      texture = texture,   -- LibSharedMedia statusbar or Blizzard art (Themes.lua)
+      color = { r = 1, g = 1, b = 1, a = a },
+      border = "None",     -- LibSharedMedia border
+      borderSize = 12,
+      borderColor = { r = 0.5, g = 0.5, b = 0.5, a = 1 },
+   }
+end
+
 mod.defaults = {
    profile = {
       -- Behaviour
@@ -69,9 +81,23 @@ mod.defaults = {
       width = 260,
       maxHeight = 450,
       scale = 1.0,
+      padding = 0,                   -- between the frame edges (border) and the content
       backgroundColor = { r = 0, g = 0, b = 0 },
+      backgroundTexture = "Solid",   -- LibSharedMedia background
+      backgroundBorder = "None",     -- LibSharedMedia border
+      backgroundBorderSize = 12,
+      backgroundBorderColor = { r = 0.6, g = 0.6, b = 0.6 },  -- opacity follows the background
       backgroundAlpha = 0.0,
       backgroundHoverAlpha = 0.4,
+
+      -- Theme: blizzard | custom
+      theme = "blizzard",
+      custom = {
+         -- Starts out like the Blizzard theme.
+         title = CustomDefaults("Blizzard Tracker Title", 1, true),
+         section = CustomDefaults("Blizzard Tracker Header", 1),
+         zone = CustomDefaults("Solid", 0),  -- alpha 0 and no border = plain text
+      },
 
       -- Spacing (pixels)
       sectionSpacing = 10,      -- above each section header (Quests, World Quests, ...)
@@ -143,6 +169,9 @@ function mod:ApplyProfile()
    local profile = self.db.profile
    if profile.zoneSort ~= "name" and profile.zoneSort ~= "distance" then profile.zoneSort = "level" end
    if profile.questSort ~= "name" and profile.questSort ~= "distance" then profile.questSort = "level" end
+   -- "simple" theme was renamed to "custom".
+   if profile.theme ~= "blizzard" and profile.theme ~= "custom" then profile.theme = "custom" end
+   profile.simple = nil
    self:UpdateDistanceTimer()
    self:ApplyLayout()
    self:SetBlizzardTrackerHidden(self.db.profile.hideBlizzardTracker)
