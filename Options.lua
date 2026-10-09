@@ -41,11 +41,6 @@ local function SetAndUpdate(info, val)
    mod:RequestUpdate()
 end
 
-local function SetAndLayout(info, val)
-   mod.db.profile[info[#info]] = val
-   mod:ApplyLayout()
-end
-
 local SORT_VALUES = {
    level = L["Level"],
    name = L["Name"],
@@ -457,36 +452,53 @@ local function BuildOptions()
             },
          },
       },
+      -- Size and position are set in Edit Mode, per layout; shown here read-only.
       layout = {
          type = "group",
          name = L["Layout"],
-         get = Get,
-         set = SetAndLayout,
+         get = function(info) return mod:GetLayoutSettings()[info[#info]] end,
+         set = function() end,
          args = {
-            editModeDesc = {
+            desc = {
                type = "description",
-               name = L["Move the tracker in Edit Mode. Width, height and scale can also be changed there."],
+               name = L["Move and size the tracker in Edit Mode. Position and size are saved per Edit Mode layout."],
                fontSize = "medium",
                order = 1,
+            },
+            openEditMode = {
+               type = "execute",
+               name = L["Open Edit Mode"],
+               order = 2,
+               disabled = function() return not EditModeManagerFrame or InCombatLockdown() end,
+               func = function() mod:OpenEditMode() end,
+            },
+            layoutName = {
+               type = "description",
+               name = function()
+                  return format(L["Current layout: %s"], mod:GetEditModeLayoutName() or UNKNOWN or "?")
+               end,
+               order = 3,
             },
             width = {
                type = "range",
                name = L["Width"],
-               min = 150, max = 600, step = 1, bigStep = 10,
-               order = 2,
+               min = 150, max = 600, step = 1,
+               disabled = true,
+               order = 4,
             },
             maxHeight = {
                type = "range",
                name = L["Maximum height"],
-               desc = L["The tracker grows with its contents up to this height, then becomes scrollable."],
-               min = 100, max = 1200, step = 1, bigStep = 10,
-               order = 3,
+               min = 100, max = 1200, step = 1,
+               disabled = true,
+               order = 5,
             },
             scale = {
                type = "range",
                name = L["Scale"],
-               min = 0.5, max = 2.0, step = 0.01, bigStep = 0.05, isPercent = true,
-               order = 4,
+               min = 0.5, max = 2.0, step = 0.01, isPercent = true,
+               disabled = true,
+               order = 6,
             },
          },
       },

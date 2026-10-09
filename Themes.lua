@@ -98,7 +98,7 @@ function blizzard.StyleTitle(title, profile)
    bg:SetAtlas(TITLE_ATLAS, true)
    bg.naturalWidth = bg.naturalWidth or bg:GetWidth()
    bg:SetPoint("CENTER")
-   bg:SetWidth(bg.naturalWidth + profile.width - BLIZZARD_TRACKER_WIDTH)
+   bg:SetWidth(bg.naturalWidth + mod:GetLayoutSettings().width - BLIZZARD_TRACKER_WIDTH)
    bg:Show()
    HideBorder(title)
    title.minimize:GetHighlightTexture():SetAlpha(1)
@@ -160,7 +160,7 @@ local function StyleBar(owner, kind, left)
       -- Placed like the Blizzard theme does.
       bg:SetAtlas(art.atlas, true)
       if art.centered then
-         bg:SetWidth(bg:GetWidth() + profile.width - BLIZZARD_TRACKER_WIDTH)
+         bg:SetWidth(bg:GetWidth() + mod:GetLayoutSettings().width - BLIZZARD_TRACKER_WIDTH)
          bg:SetPoint("CENTER")
       else
          bg:SetPoint("LEFT", left, 0)

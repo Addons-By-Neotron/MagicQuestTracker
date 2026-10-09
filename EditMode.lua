@@ -37,47 +37,52 @@ local LEM = LibStub("LibEditMode", true)
 -- re-anchored to the top edge to make it grow downward.
 ----------------------------------------------------------------
 
-local DEFAULT_POSITION = { point = "TOPRIGHT", x = -80, y = -260 }
+-- Position and size of the tracker in one Edit Mode layout.
+local DEFAULT_LAYOUT = { point = "TOPRIGHT", x = -80, y = -260, width = 260, maxHeight = 450, scale = 1 }
+mod.DEFAULT_LAYOUT = DEFAULT_LAYOUT
 
 local function GetLayoutName()
    return LEM and LEM:GetActiveLayoutName()
 end
 
---- Returns the stored { point, x, y } for the active layout.
-function mod:GetPosition()
-   local layouts = self.db.profile.layouts
+-- Position and size saved before Edit Mode support, or nil.
+local function GetLegacyLayout(profile)
+   local legacy = profile.point
+   if not (legacy or profile.width or profile.maxHeight or profile.scale) then return nil end
+   -- AceDB stripped values that matched the old defaults; filled in below.
+   return {
+      point = legacy and legacy[1],
+      x = legacy and legacy[4],
+      y = legacy and legacy[5],
+      width = profile.width,
+      maxHeight = profile.maxHeight,
+      scale = profile.scale,
+   }
+end
+
+--- Returns the { point, x, y, width, maxHeight, scale } of the active layout.
+function mod:GetLayoutSettings()
+   local profile = self.db.profile
+   local layouts = profile.layouts
    local name = GetLayoutName()
-   local pos = name and layouts[name]
-   if not pos then
+   local settings = name and layouts[name]
+   if not settings then
       -- Unknown layout: start from where the tracker was last placed.
-      pos = layouts[self.db.profile.lastLayout]
-      local legacy = self.db.profile.point -- position saved before Edit Mode support
-      if not pos and legacy then
-         -- AceDB stripped values that matched the old default from this table.
-         pos = {
-            point = legacy[1] or DEFAULT_POSITION.point,
-            x = legacy[4] or DEFAULT_POSITION.x,
-            y = legacy[5] or DEFAULT_POSITION.y,
-         }
-      end
-      pos = pos or DEFAULT_POSITION
+      local source = layouts[profile.lastLayout] or GetLegacyLayout(profile) or DEFAULT_LAYOUT
+      settings = CopyTable(source)
       if name then
-         pos = CopyTable(pos)
-         layouts[name] = pos
+         layouts[name] = settings
       end
    end
-   if not (pos.point and pos.x and pos.y) then
-      -- Repair entries saved from an incomplete legacy position.
-      pos.point = pos.point or DEFAULT_POSITION.point
-      pos.x = pos.x or DEFAULT_POSITION.x
-      pos.y = pos.y or DEFAULT_POSITION.y
+   for key, value in pairs(DEFAULT_LAYOUT) do
+      if settings[key] == nil then settings[key] = value end
    end
-   return pos
+   return settings
 end
 
 function mod:ApplyPosition()
    local frame = self.frame
-   local pos = self:GetPosition()
+   local pos = self:GetLayoutSettings()
    frame:ClearAllPoints()
    frame:SetPoint(pos.point, UIParent, pos.point, pos.x, pos.y)
 end
@@ -87,13 +92,12 @@ local function SaveTopAnchoredPosition(frame, layoutName)
    local scale = frame:GetEffectiveScale() / UIParent:GetEffectiveScale()
    local top = frame:GetTop() * scale - UIParent:GetTop()
    local left, right = frame:GetLeft() * scale, frame:GetRight() * scale
-   local pos
+   local pos = mod:GetLayoutSettings()
    if (left + right) / 2 < UIParent:GetWidth() / 2 then
-      pos = { point = "TOPLEFT", x = left / scale, y = top / scale }
+      pos.point, pos.x, pos.y = "TOPLEFT", left / scale, top / scale
    else
-      pos = { point = "TOPRIGHT", x = (right - UIParent:GetRight()) / scale, y = top / scale }
+      pos.point, pos.x, pos.y = "TOPRIGHT", (right - UIParent:GetRight()) / scale, top / scale
    end
-   mod.db.profile.layouts[layoutName] = pos
    mod.db.profile.lastLayout = layoutName
    mod:ApplyPosition()
 end
@@ -104,20 +108,22 @@ local function OnPositionChanged(frame, layoutName)
    end
 end
 
-local function SizeSetting(key, name, minValue, maxValue, valueStep, formatter)
+-- Size settings are saved per Edit Mode layout, like the position.
+local function SizeSetting(key, name, minValue, maxValue, valueStep, formatter, desc)
    return {
       kind = LEM.SettingType.Slider,
       name = name,
-      default = mod.defaults.profile[key],
+      desc = desc,
+      default = DEFAULT_LAYOUT[key],
       minValue = minValue,
       maxValue = maxValue,
       valueStep = valueStep,
       formatter = formatter,
       get = function()
-         return mod.db.profile[key]
+         return mod:GetLayoutSettings()[key]
       end,
       set = function(_, value)
-         mod.db.profile[key] = value
+         mod:GetLayoutSettings()[key] = value
          mod:ApplyLayout()
          mod:NotifyOptionsChanged()
       end,
@@ -135,16 +141,14 @@ function mod:MatchBlizzardTracker()
    -- Convert Blizzard's edges to UIParent units, then to our scaled units.
    local uiScale = UIParent:GetEffectiveScale()
    local blizzardScale = blizzard:GetEffectiveScale() / uiScale
-   local profile = self.db.profile
-   local scale = profile.scale * self.frame:GetParent():GetEffectiveScale() / uiScale
+   local settings = self:GetLayoutSettings()
+   local scale = settings.scale * self.frame:GetParent():GetEffectiveScale() / uiScale
    local height = math.floor(blizzard:GetHeight() * blizzardScale / scale + 0.5)
-   profile.maxHeight = math.max(100, math.min(1200, height))
-   profile.layouts[layoutName] = {
-      point = "TOPRIGHT",
-      x = (right * blizzardScale - UIParent:GetRight()) / scale,
-      y = (top * blizzardScale - UIParent:GetTop()) / scale,
-   }
-   profile.lastLayout = layoutName
+   settings.maxHeight = math.max(100, math.min(1200, height))
+   settings.point = "TOPRIGHT"
+   settings.x = (right * blizzardScale - UIParent:GetRight()) / scale
+   settings.y = (top * blizzardScale - UIParent:GetTop()) / scale
+   self.db.profile.lastLayout = layoutName
    self:ApplyLayout()
    self:NotifyOptionsChanged()
    LEM:RefreshFrameSettings(self.frame)
@@ -160,10 +164,11 @@ function mod:SetupEditMode()
    self.editModeRegistered = true
 
    frame.editModeName = "Magic Quest Tracker"
-   LEM:AddFrame(frame, OnPositionChanged, DEFAULT_POSITION)
+   LEM:AddFrame(frame, OnPositionChanged, DEFAULT_LAYOUT)
    LEM:AddFrameSettings(frame, {
       SizeSetting("width", L["Width"], 150, 600, 1),
-      SizeSetting("maxHeight", L["Maximum height"], 100, 1200, 10),
+      SizeSetting("maxHeight", L["Maximum height"], 100, 1200, 10, nil,
+         L["The tracker grows with its contents up to this height, then becomes scrollable."]),
       SizeSetting("scale", L["Scale"], 0.5, 2.0, 0.05, FormatPercent),
       {
          kind = LEM.SettingType.Dropdown,
@@ -192,6 +197,7 @@ function mod:SetupEditMode()
 
    LEM:RegisterCallback("layout", function()
       mod:ApplyLayout()
+      mod:NotifyOptionsChanged()
    end)
    LEM:RegisterCallback("create", function(layoutName, _, sourceName)
       local layouts = mod.db.profile.layouts
@@ -223,6 +229,19 @@ function mod:SetupEditMode()
       mod.inEditMode = nil
       mod:RequestUpdate()
    end)
+end
+
+function mod:GetEditModeLayoutName()
+   return GetLayoutName()
+end
+
+--- Closes the settings window and opens Edit Mode.
+function mod:OpenEditMode()
+   if InCombatLockdown() or not EditModeManagerFrame then return end
+   if SettingsPanel and SettingsPanel:IsShown() then
+      HideUIPanel(SettingsPanel)
+   end
+   ShowUIPanel(EditModeManagerFrame)
 end
 
 function mod:IsInEditMode()

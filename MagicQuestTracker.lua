@@ -109,11 +109,8 @@ mod.defaults = {
       showFindGroupButton = true,
 
       -- Layout (position is per Edit Mode layout)
-      layouts = {},           -- [layoutName] = { point, x, y }
+      layouts = {},           -- [layoutName] = { point, x, y, width, maxHeight, scale }
       lastLayout = nil,       -- layout last moved in, seeds new layouts
-      width = 260,
-      maxHeight = 450,
-      scale = 1.0,
 
       -- Theme: "blizzard" or the name of a custom theme in global.themes
       theme = "blizzard",

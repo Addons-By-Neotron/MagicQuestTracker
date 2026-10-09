@@ -212,7 +212,7 @@ function mod:LayoutItemButtons()
 
    local frame = self.frame
    local profile = self.db.profile
-   holder:SetScale(profile.scale)
+   holder:SetScale(self:GetLayoutSettings().scale)
    holder:SetFrameLevel(frame:GetFrameLevel() + 20)
 
    local used = 0

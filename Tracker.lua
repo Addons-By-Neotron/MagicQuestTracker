@@ -222,8 +222,9 @@ function mod:ApplyLayout()
    local profile = self.db.profile
    self:UpdateFonts()
 
-   frame:SetScale(profile.scale)
-   frame:SetWidth(profile.width)
+   local size = self:GetLayoutSettings()
+   frame:SetScale(size.scale)
+   frame:SetWidth(size.width)
    self:ApplyPosition()
    self:ApplyBackground()
 
@@ -754,7 +755,8 @@ function mod:Render(sections, numQuests, numShown, recipes, tasks)
    layout.nextSpacing = nil
    layout.rightInset = 0
    spacing = self:GetContentLayout()
-   layout.width = profile.width - SCROLLBAR_WIDTH - 4 - 2 * spacing.padding
+   local size = self:GetLayoutSettings()
+   layout.width = size.width - SCROLLBAR_WIDTH - 4 - 2 * spacing.padding
 
    -- Title, gap below it and the padding on both ends.
    local titleHeight = frame.title:GetHeight() + 4 + 2 * spacing.padding
@@ -811,7 +813,7 @@ function mod:Render(sections, numQuests, numShown, recipes, tasks)
    local child = frame.child
    child:SetSize(layout.width, math.max(1, contentHeight))
 
-   local maxContent = math.max(20, profile.maxHeight - titleHeight)
+   local maxContent = math.max(20, size.maxHeight - titleHeight)
    local viewHeight = math.min(contentHeight, maxContent)
    frame:SetHeight(titleHeight + viewHeight)
    frame.scroll.contentHeight = contentHeight
