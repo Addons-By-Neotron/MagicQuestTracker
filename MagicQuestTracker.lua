@@ -63,8 +63,9 @@ mod.defaults = {
       showPOIButtons = true,
       showFindGroupButton = true,
 
-      -- Layout
-      locked = false,
+      -- Layout (position is per Edit Mode layout)
+      layouts = {},           -- [layoutName] = { point, x, y }
+      lastLayout = nil,       -- layout last moved in, seeds new layouts
       width = 260,
       maxHeight = 450,
       scale = 1.0,
@@ -78,7 +79,6 @@ mod.defaults = {
       zoneHeaderSpacing = 2,    -- between a zone header and its first quest
       questSpacing = 6,         -- above each quest title
       objectiveSpacing = 1,     -- between objective lines
-      point = { "TOPRIGHT", "UIParent", "TOPRIGHT", -80, -260 },
 
       -- Fonts
       fonts = {
@@ -304,8 +304,6 @@ end
 function mod:PrintHelp()
    self:info(L["Available commands:"])
    self:info(L["/mqt toggle  - show/hide the tracker"])
-   self:info(L["/mqt lock  - lock/unlock the tracker position"])
-   self:info(L["/mqt reset  - reset the tracker position"])
    self:info(L["/mqt config  - open settings"])
 end
 
@@ -313,13 +311,6 @@ function mod:ChatCommand(input)
    local cmd = strtrim(input or ""):lower()
    if cmd == "toggle" then
       self:ToggleMinimized()
-   elseif cmd == "lock" then
-      self.db.profile.locked = not self.db.profile.locked
-      self:ApplyLayout()
-      self:NotifyOptionsChanged()
-   elseif cmd == "reset" then
-      self.db.profile.point = CopyTable(self.defaults.profile.point)
-      self:ApplyLayout()
    elseif cmd == "config" then
       self:OpenConfig()
    else

@@ -301,8 +301,6 @@ local function BuildOptions()
             cmdDesc = {
                type = "description",
                name = L["/mqt toggle  - show/hide the tracker"] .. "\n"
-                  .. L["/mqt lock  - lock/unlock the tracker position"] .. "\n"
-                  .. L["/mqt reset  - reset the tracker position"] .. "\n"
                   .. L["/mqt config  - open settings"],
                order = 91,
                fontSize = "medium",
@@ -315,11 +313,10 @@ local function BuildOptions()
          get = Get,
          set = SetAndLayout,
          args = {
-            locked = {
-               type = "toggle",
-               name = L["Lock tracker"],
-               desc = L["Prevent the tracker from being moved. An unlocked tracker stays visible even when empty."],
-               width = "full",
+            editModeDesc = {
+               type = "description",
+               name = L["Move the tracker in Edit Mode. Width, height and scale can also be changed there."],
+               fontSize = "medium",
                order = 1,
             },
             width = {

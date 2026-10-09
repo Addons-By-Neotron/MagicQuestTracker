@@ -218,7 +218,8 @@ function mod:LayoutItemButtons()
    local used = 0
    local scroll = frame.scroll
    local top, bottom = scroll:GetTop(), scroll:GetBottom()
-   if entries and frame:IsShown() and scroll:IsShown() and profile.showItemButtons and top and bottom then
+   if entries and frame:IsShown() and scroll:IsShown() and profile.showItemButtons and top and bottom
+      and not self:IsInEditMode() then
       for _, entry in ipairs(entries) do
          local lineTop, lineRight = entry.line:GetTop(), entry.line:GetRight()
          -- Only show buttons that are fully inside the visible scroll area.

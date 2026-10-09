@@ -22,17 +22,18 @@ A replacement for the built-in objective tracker for WoW Retail and Classic Fore
 - Clicks behave like the built-in tracker: left-click opens the quest on the map, shift-click links, right-click opens a menu.
 - Ctrl-click a quest to navigate to its next location (objective area, or turn-in when complete) with a TomTom waypoint, Blizzard's navigation (focusing the quest), or both. Without TomTom, Blizzard's navigation is used.
 
+## Position and size
+
+The tracker is moved in Blizzard's Edit Mode, with its position saved per Edit Mode layout. Width, maximum height and scale can be set in the Edit Mode dialog or in the settings. The Edit Mode dialog's "Match Blizzard tracker" button moves it to where the built-in objective tracker sits in the current layout and copies its height. Outside Edit Mode the tracker hides when there is nothing to track.
+
 ## Tracker title
 
-- Drag to move (when unlocked)
 - Middle-click toggles "only show quests in current zone"
 - Right-click opens settings
 
 ## Commands
 
 - `/mqt toggle` - show/hide the tracker contents
-- `/mqt lock` - lock/unlock the tracker position
-- `/mqt reset` - reset the tracker position
 - `/mqt config` - open settings
 
 ## Quest item buttons

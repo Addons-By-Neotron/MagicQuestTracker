@@ -16,3 +16,4 @@ externals:
     Libs/AceGUI-3.0-SharedMediaWidgets: https://repos.wowace.com/wow/ace-gui-3-0-shared-media-widgets/trunk/AceGUI-3.0-SharedMediaWidgets
     Libs/LibLogger: https://github.com/neotron/WoW-LibLogger.git
     Libs/LibMagicUtil-1.0: https://github.com/neotron/WoW-libMagicUtil.git
+    Libs/LibEditMode: https://github.com/p3lim-wow/LibEditMode.git

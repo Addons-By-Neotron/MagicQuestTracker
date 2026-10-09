@@ -131,25 +131,11 @@ function mod:CreateTracker()
    frame.bg:SetColorTexture(0, 0, 0, 1)
    frame.bg:SetAlpha(0)
 
-   -- Title bar: drag handle, quest count, minimize button
+   -- Title bar: quest count, minimize button. Moved and sized in Edit Mode.
    local title = CreateFrame("Button", nil, frame)
    title:SetPoint("TOPLEFT")
    title:SetPoint("TOPRIGHT")
-   title:RegisterForDrag("LeftButton")
    title:RegisterForClicks("LeftButtonUp", "RightButtonUp", "MiddleButtonUp")
-   title:SetScript("OnDragStart", function()
-      if mod.db.profile.locked or mod:IsItemLayoutLocked() then return end
-      mod:HideItemButtons()
-      frame:StartMoving()
-      frame.isMoving = true
-   end)
-   title:SetScript("OnDragStop", function()
-      if not frame.isMoving then return end
-      frame.isMoving = nil
-      frame:StopMovingOrSizing()
-      mod:SavePosition()
-      mod:RequestItemButtonLayout()
-   end)
    title:SetScript("OnClick", function(_, button)
       if button == "RightButton" then
          mod:OpenConfig()
@@ -161,9 +147,6 @@ function mod:CreateTracker()
       GameTooltip:SetOwner(self, "ANCHOR_LEFT")
       GameTooltip:AddLine(L["Middle-click: Toggle current zone only"], 1, 1, 1)
       GameTooltip:AddLine(L["Right-click: Options"], 1, 1, 1)
-      if not mod.db.profile.locked then
-         GameTooltip:AddLine(L["Drag to move"], 1, 1, 1)
-      end
       GameTooltip:Show()
    end)
    title:SetScript("OnLeave", GameTooltip_Hide)
@@ -236,28 +219,12 @@ function mod:CreateTracker()
 
    self.lines = {}
    self.numLinesUsed = 0
+   self:SetupEditMode()
 end
 
 ----------------------------------------------------------------
 -- Position / layout
 ----------------------------------------------------------------
-
--- Always store a top-based anchor so the tracker grows downward as content changes.
--- Offsets are in the frame's own (scaled) coordinate space.
-function mod:SavePosition()
-   local frame = self.frame
-   local scale = frame:GetEffectiveScale() / UIParent:GetEffectiveScale()
-   local top = frame:GetTop() * scale - UIParent:GetTop()
-   local left, right = frame:GetLeft() * scale, frame:GetRight() * scale
-   if (left + right) / 2 < UIParent:GetWidth() / 2 then
-      self.db.profile.point = { "TOPLEFT", "UIParent", "TOPLEFT", left / scale, top / scale }
-   else
-      self.db.profile.point = { "TOPRIGHT", "UIParent", "TOPRIGHT", (right - UIParent:GetRight()) / scale, top / scale }
-   end
-   frame:ClearAllPoints()
-   local p = self.db.profile.point
-   frame:SetPoint(p[1], UIParent, p[3], p[4], p[5])
-end
 
 function mod:ApplyLayout()
    local frame = self.frame
@@ -272,9 +239,7 @@ function mod:ApplyLayout()
 
    frame:SetScale(profile.scale)
    frame:SetWidth(profile.width)
-   frame:ClearAllPoints()
-   local p = profile.point
-   frame:SetPoint(p[1], UIParent, p[3], p[4], p[5])
+   self:ApplyPosition()
    local c = profile.backgroundColor
    frame.bg:SetColorTexture(c.r, c.g, c.b, 1)
    frame.bg:SetAlpha(frame:IsMouseOver() and profile.backgroundHoverAlpha or profile.backgroundAlpha)
@@ -736,7 +701,7 @@ function mod:Render(sections, numQuests, numShown, recipes, tasks)
 
    local hasContent = numQuests > 0 or (recipes and #recipes > 0)
       or (tasks and (#tasks.worldQuests > 0 or #tasks.bonus > 0))
-   if not hasContent and profile.locked then
+   if not hasContent and not self:IsInEditMode() then
       frame:Hide()
       self.numLinesUsed = 0
       ReleaseUnusedLines(0)
