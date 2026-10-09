@@ -519,6 +519,21 @@ local function BuildOptions()
                validate = function(_, val) return mod:ValidateThemeName(val) or true end,
                set = function(_, val) mod:CreateTheme(val) end,
             },
+            renameTheme = {
+               type = "input",
+               name = L["Rename theme"],
+               desc = L["Enter a new name for the selected theme. Profiles using it keep using it."],
+               order = 2.5,
+               hidden = IsNotCustom,
+               get = function() return mod.db.profile.theme end,
+               validate = function(_, val)
+                  if strtrim(val or "") == mod.db.profile.theme then return true end
+                  return mod:ValidateThemeName(val) or true
+               end,
+               set = function(_, val)
+                  if strtrim(val) ~= mod.db.profile.theme then mod:RenameTheme(val) end
+               end,
+            },
             resetTheme = {
                type = "execute",
                name = L["Reset to Blizzard"],
@@ -537,6 +552,22 @@ local function BuildOptions()
                order = 4,
                hidden = IsNotCustom,
                func = function() mod:DeleteTheme() end,
+            },
+            importTheme = {
+               type = "execute",
+               name = L["Import theme"],
+               desc = L["Paste a theme export string. The theme is added under its own name and selected."],
+               order = 5,
+               hidden = function() return not mod:CanImportExportThemes() end,
+               func = function() mod:ShowThemeImport() end,
+            },
+            exportTheme = {
+               type = "execute",
+               name = L["Export theme"],
+               desc = L["Show the selected theme as a string to copy and share."],
+               order = 6,
+               hidden = function() return IsNotCustom() or not mod:CanImportExportThemes() end,
+               func = function() mod:ShowThemeExport() end,
             },
             headers = {
                type = "group",
@@ -624,6 +655,89 @@ local function BuildOptions()
       },
    }
    options.profiles = LibStub("AceDBOptions-3.0"):GetOptionsTable(mod.db)
+end
+
+----------------------------------------------------------------
+-- Theme import / export windows
+----------------------------------------------------------------
+
+local AceGUI = LibStub("AceGUI-3.0")
+local ioFrame
+
+-- One window, reused for import and export; returns its edit box.
+local function ShowThemeWindow(title, status)
+   if ioFrame then ioFrame:Hide() end  -- OnClose releases it
+   local frame = AceGUI:Create("Frame")
+   frame:SetTitle(title)
+   frame:SetStatusText(status)
+   frame:SetLayout("Fill")
+   frame:SetWidth(500)
+   frame:SetHeight(300)
+   local box = AceGUI:Create("MultiLineEditBox")
+   frame:SetCallback("OnClose", function(widget)
+      if ioFrame == widget then ioFrame = nil end
+      -- Widgets are pooled; restore the default button label.
+      box.button:SetText(ACCEPT)
+      if box.themeName then box.themeName:Hide() end
+      widget:Release()
+   end)
+   box:SetLabel("")
+   frame:AddChild(box)
+   ioFrame = frame
+   return frame, box
+end
+
+function mod:ShowThemeExport()
+   local _, box = ShowThemeWindow(L["Export theme"], L["Press Ctrl-C to copy."])
+   box:DisableButton(true)
+   box:SetText(self:ExportTheme())
+   box:SetFocus()
+   box:HighlightText()
+end
+
+function mod:ShowThemeImport()
+   local frame, box = ShowThemeWindow(L["Import theme"], L["Paste a theme export string and click Import."])
+   box.button:SetText(L["Import"])
+
+   -- Name of the pasted theme, right of the button.
+   local label = box.themeName
+   if not label then
+      label = box.frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+      box.themeName = label
+   end
+   label:ClearAllPoints()
+   label:SetPoint("LEFT", box.button, "RIGHT", 8, 0)
+   label:SetPoint("RIGHT", box.frame, "RIGHT")
+   label:SetJustifyH("LEFT")
+   label:SetText("")
+   label:Show()
+   box:SetCallback("OnTextChanged", function(_, _, text)
+      if strtrim(text) == "" then
+         label:SetText("")
+         return
+      end
+      local name, err = self:ParseThemeImport(text)
+      if not name then
+         label:SetText("|cffff4040" .. err .. "|r")
+         return
+      end
+      local freeName = self:GetFreeThemeName(name)
+      if freeName == name then
+         label:SetFormattedText(L["Theme: %s"], name)
+      else
+         label:SetFormattedText(L["Theme: %s (imported as %s)"], name, freeName)
+      end
+   end)
+   box:SetCallback("OnEnterPressed", function(_, _, text)
+      local name, err = self:ParseThemeImport(text)
+      if not name then
+         frame:SetStatusText("|cffff4040" .. err .. "|r")
+         return
+      end
+      self:ImportTheme(text)
+      frame:Hide()
+   end)
+   box:SetFocus()
 end
 
 function mod:OptReg(optname, tbl, dispname)

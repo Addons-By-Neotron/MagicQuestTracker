@@ -288,6 +288,21 @@ function mod:CreateTheme(name)
    self:SelectTheme(name)
 end
 
+--- Renames the selected theme; profiles using it follow the new name.
+function mod:RenameTheme(name)
+   local old = self.db.profile.theme
+   local themes = self.db.global.themes
+   if not themes[old] then return end
+   name = strtrim(name)
+   themes[name], themes[old] = themes[old], nil
+   for _, profile in pairs(self.db.profiles) do
+      if profile.theme == old then
+         profile.theme = name
+      end
+   end
+   self:SelectTheme(name)
+end
+
 function mod:DeleteTheme()
    local name = self.db.profile.theme
    if not self:GetCustomTheme() then return end
@@ -345,6 +360,79 @@ local OLD_SETTINGS = {
       { "objectiveSpacing", "objectiveSpacing", 1 },
    },
 }
+
+----------------------------------------------------------------
+-- Import / export: "MQT1:" followed by { name = ..., theme = ... } as
+-- CBOR, deflate compressed and Base64 encoded (C_EncodingUtil, the same
+-- format Blizzard uses for cooldown manager layouts). Imported settings
+-- are checked against the theme defaults, so unknown keys and wrong types
+-- are dropped.
+----------------------------------------------------------------
+
+local EXPORT_PREFIX = "MQT1:"
+local Encoding = C_EncodingUtil
+
+function mod:CanImportExportThemes()
+   return Encoding ~= nil and Encoding.SerializeCBOR ~= nil
+end
+
+--- Export string for the selected theme, or "" for the Blizzard theme.
+function mod:ExportTheme()
+   local theme = self:GetCustomTheme()
+   if not (theme and self:CanImportExportThemes()) then return "" end
+   local data = Encoding.SerializeCBOR({ name = self.db.profile.theme, theme = theme })
+   return EXPORT_PREFIX .. Encoding.EncodeBase64(Encoding.CompressString(data))
+end
+
+local function Decode(text)
+   local compressed = Encoding.DecodeBase64(text)
+   return Encoding.DeserializeCBOR(Encoding.DecompressString(compressed))
+end
+
+-- Copies the values whose keys and types match the defaults.
+local function Sanitize(data, defaults)
+   local result = {}
+   for key, default in pairs(defaults) do
+      local value = data[key]
+      if type(value) == type(default) then
+         result[key] = type(value) == "table" and Sanitize(value, default) or value
+      end
+   end
+   return FillDefaults(result, defaults)
+end
+
+--- Returns the theme name and settings from an export string, or nil and an error.
+function mod:ParseThemeImport(text)
+   text = (text or ""):gsub("%s", "")
+   if not self:CanImportExportThemes() or text:sub(1, #EXPORT_PREFIX) ~= EXPORT_PREFIX then
+      return nil, L["This is not a theme export string."]
+   end
+   local ok, data = pcall(Decode, text:sub(#EXPORT_PREFIX + 1))
+   if not ok or type(data) ~= "table" or type(data.theme) ~= "table" then
+      return nil, L["This theme export string is damaged."]
+   end
+   local name = type(data.name) == "string" and strtrim(data.name) or ""
+   return name ~= "" and name or L["Imported"], data.theme
+end
+
+--- Returns name, or name with a number added if a theme with it exists.
+function mod:GetFreeThemeName(name)
+   local base, count = name, 1
+   while self:ValidateThemeName(name) do
+      count = count + 1
+      name = format("%s (%d)", base, count)
+   end
+   return name
+end
+
+--- Imports a theme under a free name and selects it.
+function mod:ImportTheme(text)
+   local name, theme = self:ParseThemeImport(text)
+   if not name then return end
+   name = self:GetFreeThemeName(name)
+   self.db.global.themes[name] = Sanitize(theme, self.themeDefaults)
+   self:SelectTheme(name)
+end
 
 --- Moves the old per-profile "custom" (earlier "simple") theme and the
 --- profile's background, spacing and font settings to a named theme.
