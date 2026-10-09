@@ -208,3 +208,4 @@ L["Completed objective"] = true
 L["Time left"] = true
 L["Direction arrow"] = true
 L["Scrollbar"] = true
+L["Time left: %s"] = true

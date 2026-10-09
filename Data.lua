@@ -154,6 +154,11 @@ local function BuildQuest(info)
    quest.distance = GetQuestDistance(questID)
    quest.isForeverQuest = IS_FOREVER and questID > MAX_VANILLA_QUEST_ID
    quest.objectives = BuildObjectives(questID)
+   -- Time limit (escort and other timed quests): absolute GetTime() it runs out.
+   local timeTotal, timeElapsed = C_QuestLog.GetTimeAllowed and C_QuestLog.GetTimeAllowed(questID)
+   if timeTotal and timeElapsed and timeElapsed < timeTotal and not quest.isFailed then
+      quest.timerEnd = GetTime() - timeElapsed + timeTotal
+   end
    -- Quest tag: tag ID 1 is "Elite" in classic content ("Group" in the retail enum).
    local tagInfo = C_QuestLog.GetQuestTagInfo and C_QuestLog.GetQuestTagInfo(questID)
    if tagInfo then

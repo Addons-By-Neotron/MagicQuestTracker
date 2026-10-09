@@ -48,6 +48,43 @@ local GROUP_BUTTON_SIZE = 24
 -- Text colors come from the theme (mod:GetTextColors()); set by Render.
 local colors
 
+----------------------------------------------------------------
+-- Quest timers: lines showing the time left on timed quests, updated
+-- every second without a full render.
+----------------------------------------------------------------
+
+local TIMER_INTERVAL = 1
+local TIMER_WARNING = 60  -- seconds; shown in the failed color from here
+local timerLines = {}
+
+local function FormatTimeLeft(seconds)
+   local clock = SecondsToClock and SecondsToClock(seconds)
+      or format("%d:%02d", math.floor(seconds / 60), seconds % 60)
+   return format(L["Time left: %s"], clock)
+end
+
+-- Returns false once the timer has run out.
+local function UpdateTimerLine(line)
+   local remaining = math.max(0, math.floor(line.timerEnd - GetTime()))
+   line.text:SetText(FormatTimeLeft(remaining))
+   line.color = remaining < TIMER_WARNING and colors.failed or colors.timeLeft
+   line.text:SetTextColor(unpack(line.color))
+   return remaining > 0
+end
+
+function mod:TickTimers(elapsed)
+   if #timerLines == 0 then return end
+   self.timerElapsed = (self.timerElapsed or 0) + elapsed
+   if self.timerElapsed < TIMER_INTERVAL then return end
+   self.timerElapsed = 0
+   for _, line in ipairs(timerLines) do
+      if line.timerEnd and not UpdateTimerLine(line) then
+         -- The quest fails now; let the quest log catch up.
+         self:RequestUpdate()
+      end
+   end
+end
+
 -- Line data for section headers (constant per section key).
 local SECTION_DATA = setmetatable({}, { __index = function(t, key)
    local data = { key = key }
@@ -180,6 +217,7 @@ function mod:CreateTracker()
 
    frame:SetScript("OnUpdate", function(self, elapsed)
       mod:TickArrows(elapsed)
+      mod:TickTimers(elapsed)
       local hovered = self:IsMouseOver()
       local background = mod:GetBackground()
       FadeToward(self.bg, hovered and background.hoverAlpha or background.alpha, elapsed, hovered)
@@ -372,6 +410,7 @@ local function ReleaseUnusedLines(numUsed)
       line.data = nil
       line.kind = nil
       line.arrowTarget = nil
+      line.timerEnd = nil
    end
 end
 
@@ -419,6 +458,7 @@ local function AddLine(kind, data, text, role, indent, spacing, color, highlight
       line.rightText:Hide()
    end
    line.arrowTarget = arrowTarget
+   line.timerEnd = nil
    line.collapseIcon:Hide()
    if line.poiButton then line.poiButton:Hide() end
    if line.groupButton then line.groupButton:Hide() end
@@ -667,6 +707,13 @@ function mod:RenderQuest(quest, profile)
          end
       end
    end
+   if quest.timerEnd then
+      local line = AddLine("objective", quest, FormatTimeLeft(math.max(0, quest.timerEnd - GetTime())), "objective",
+         objectiveIndent, spacing.objectiveSpacing, colors.timeLeft)
+      line.timerEnd = quest.timerEnd
+      UpdateTimerLine(line)
+      tinsert(timerLines, line)
+   end
    if quest.timeLeftText then
       AddLine("objective", quest, quest.timeLeftText, "objective", objectiveIndent, spacing.objectiveSpacing,
          colors.timeLeft)
@@ -735,6 +782,7 @@ function mod:Render(sections, numQuests, numShown, recipes, tasks)
    self.itemEntries = entries
 
    frame.title.text:SetText(profile.onlyCurrentZone and L["Zone Objectives"] or L["All Objectives"])
+   wipe(timerLines)
 
    local hasContent = numQuests > 0 or (recipes and #recipes > 0)
       or (tasks and (#tasks.worldQuests > 0 or #tasks.bonus > 0))
