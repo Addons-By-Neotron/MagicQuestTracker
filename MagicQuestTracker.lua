@@ -192,9 +192,9 @@ function mod:RunUpdate()
    self.updateTimer = nil
    if not self.frame then return end
    local sections, numQuests, numShown = self:CollectQuests()
-   self:AutoFoldZones(sections)
    local recipes = self.db.profile.showRecipes and self:CollectRecipes() or nil
    local tasks = self:CollectTasks()
+   self:AutoFoldZones(sections, tasks)
 
    -- The rendered lines reference the data they show, so the previous data
    -- is only recycled once a render has replaced it. A deferred render (item
@@ -215,11 +215,19 @@ end
 
 ----------------------------------------------------------------
 -- Auto-fold: when all objectives are shown, fold zones other than the
--- current one, but only when the player changes zone, so zones unfolded
--- by hand stay open until the next zone change.
+-- current one and unfold the sections with objectives here, but only when
+-- the player changes zone, so folding done by hand stays until the next
+-- zone change.
 ----------------------------------------------------------------
 
-function mod:AutoFoldZones(sections)
+local function HasLocalTask(list)
+   for _, task in ipairs(list) do
+      if task.inCurrentZone then return true end
+   end
+   return false
+end
+
+function mod:AutoFoldZones(sections, tasks)
    local profile = self.db.profile
    if not profile.autoFoldZones or profile.onlyCurrentZone then return end
    local zone = GetRealZoneText()
@@ -227,9 +235,19 @@ function mod:AutoFoldZones(sections)
    self.db.char.autoFoldZone = zone
 
    local collapsed = self.db.char.collapsedZones
+   local hasLocal = false
    for _, section in ipairs(sections) do
       -- Keep zones open that have quests here, even if filed elsewhere.
-      collapsed[section.name] = not (section.isCurrent or section.hasLocalQuests) or nil
+      local isLocal = section.isCurrent or section.hasLocalQuests
+      collapsed[section.name] = not isLocal or nil
+      hasLocal = hasLocal or isLocal
+   end
+
+   local collapsedSections = self.db.char.collapsedSections
+   if hasLocal then collapsedSections.quests = nil end
+   if tasks then
+      if HasLocalTask(tasks.worldQuests) then collapsedSections.worldQuests = nil end
+      if HasLocalTask(tasks.bonus) then collapsedSections.bonus = nil end
    end
 end
 
