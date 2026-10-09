@@ -76,7 +76,7 @@ local fontObjects = {}
 
 function mod:UpdateFonts()
    for _, role in ipairs(FONT_ROLES) do
-      local cfg = self.db.profile.fonts[role]
+      local cfg = self:GetFonts()[role]
       local font = fontObjects[role]
       if not font then
          font = CreateFont("MagicQuestTrackerFont_" .. role)
@@ -194,8 +194,8 @@ function mod:CreateTracker()
    frame:SetScript("OnUpdate", function(self, elapsed)
       mod:TickArrows(elapsed)
       local hovered = self:IsMouseOver()
-      local profile = mod.db.profile
-      FadeToward(self.bg, hovered and profile.backgroundHoverAlpha or profile.backgroundAlpha, elapsed, hovered)
+      local background = mod:GetBackground()
+      FadeToward(self.bg, hovered and background.hoverAlpha or background.alpha, elapsed, hovered)
       self.border:SetAlpha(self.bg:GetAlpha())
       if bar:IsShown() then
          FadeToward(bar, hovered and 1 or 0, elapsed, hovered)
@@ -236,7 +236,7 @@ function mod:ApplyLayout()
    frame.title:SetHeight(titleHeight)
 
    -- Padding keeps the content clear of the background border.
-   local padding = profile.padding
+   local padding = self:GetContentLayout().padding
    title:ClearAllPoints()
    title:SetPoint("TOPLEFT", padding, -padding)
    title:SetPoint("TOPRIGHT", -padding, -padding)
@@ -249,32 +249,32 @@ end
 -- Background texture and optional border; the border fades with the background.
 function mod:ApplyBackground()
    local frame = self.frame
-   local profile = self.db.profile
-   local edge = profile.backgroundBorder ~= "None" and media:Fetch("border", profile.backgroundBorder)
+   local settings = self:GetBackground()
+   local edge = settings.border ~= "None" and media:Fetch("border", settings.border)
    if edge == "" then edge = nil end
    local inset = 0
    local border = frame.border
    if edge then
       -- SetBackdrop ignores the table it already has, so pass a new one.
-      border:SetBackdrop({ edgeFile = edge, edgeSize = profile.backgroundBorderSize })
-      local bc = profile.backgroundBorderColor
+      border:SetBackdrop({ edgeFile = edge, edgeSize = settings.borderSize })
+      local bc = settings.borderColor
       border:SetBackdropBorderColor(bc.r, bc.g, bc.b, 1)
       border:SetFrameLevel(frame:GetFrameLevel())
       border:Show()
-      inset = math.floor(profile.backgroundBorderSize / 4 + 0.5)
+      inset = math.floor(settings.borderSize / 4 + 0.5)
    else
       border:Hide()
    end
 
    local bg = frame.bg
-   local path = media:Fetch("background", profile.backgroundTexture)
+   local path = media:Fetch("background", settings.texture)
    bg:SetTexture(path ~= "" and path or nil)
-   local c = profile.backgroundColor
+   local c = settings.color
    bg:SetVertexColor(c.r, c.g, c.b, 1)
    bg:ClearAllPoints()
    bg:SetPoint("TOPLEFT", inset, -inset)
    bg:SetPoint("BOTTOMRIGHT", -inset, inset)
-   bg:SetAlpha(frame:IsMouseOver() and profile.backgroundHoverAlpha or profile.backgroundAlpha)
+   bg:SetAlpha(frame:IsMouseOver() and settings.hoverAlpha or settings.alpha)
    border:SetAlpha(bg:GetAlpha())
 end
 
@@ -390,6 +390,7 @@ end
 ----------------------------------------------------------------
 
 local layout = {}  -- reused render state
+local spacing      -- content spacing of the theme, set by Render
 
 -- headerKind: nil, "section" or "zone"; the theme decides how headers look.
 local function AddLine(kind, data, text, role, indent, spacing, color, highlightColor, headerKind, rightText, arrowTarget)
@@ -436,7 +437,7 @@ local function AddLine(kind, data, text, role, indent, spacing, color, highlight
       -- line (it may be taller than the text); rotated by mod:UpdateArrows().
       local size = mod.db.profile.arrowSize
       local offset = (layout.rightInset or 0) + (rightText and line.rightText:GetStringWidth() + 3 or 0)
-      local lineHeight = mod.db.profile.fonts[role].size
+      local lineHeight = mod:GetFonts()[role].size
       line.arrow:SetSize(size, size)
       line.arrow:ClearAllPoints()
       line.arrow:SetPoint("CENTER", line, "TOPRIGHT", -offset - size / 2, -lineHeight / 2)
@@ -513,7 +514,7 @@ local INFINITY_PATH = "Interface\\AddOns\\MagicQuestTracker\\Textures\\Infinity"
 local INFINITY_L, INFINITY_R, INFINITY_T, INFINITY_B = 1, 63, 12, 51
 
 local function ForeverMarker(profile)
-   local size = profile.fonts.quest.size
+   local size = mod:GetFonts().quest.size
    local h = math.max(6, math.floor(size * 0.65 + 0.5))
    local w = math.floor(h * (INFINITY_R - INFINITY_L) / (INFINITY_B - INFINITY_T) + 0.5)
    -- Inline textures are centered on the line; drop it toward the text baseline.
@@ -637,7 +638,7 @@ function mod:RenderQuest(quest, profile)
          arrowTarget = nil
       end
    end
-   local titleLine = AddLine("quest", quest, FormatQuestTitle(quest, profile), "quest", questIndent, profile.questSpacing,
+   local titleLine = AddLine("quest", quest, FormatQuestTitle(quest, profile), "quest", questIndent, spacing.questSpacing,
       titleColor, Brighten(titleColor), nil, distanceText, arrowTarget)
    local questTop = layout.y - titleLine:GetHeight()
    if showPOI then
@@ -651,25 +652,25 @@ function mod:RenderQuest(quest, profile)
    end
 
    if quest.isFailed then
-      AddLine("objective", quest, FAILED or L["Failed"], "objective", objectiveIndent, profile.objectiveSpacing,
+      AddLine("objective", quest, FAILED or L["Failed"], "objective", objectiveIndent, spacing.objectiveSpacing,
          COLOR_FAILED)
    elseif quest.isComplete then
       local text = quest.completionText
       if not text or text == "" then
          text = QUEST_WATCH_QUEST_READY or L["Ready for turn-in"]
       end
-      AddLine("objective", quest, text, "objective", objectiveIndent, profile.objectiveSpacing, normal)
+      AddLine("objective", quest, text, "objective", objectiveIndent, spacing.objectiveSpacing, normal)
    else
       for _, objective in ipairs(quest.objectives) do
          if not objective.finished then
-            AddLine("objective", quest, "- " .. objective.text, "objective", objectiveIndent, profile.objectiveSpacing, normal)
+            AddLine("objective", quest, "- " .. objective.text, "objective", objectiveIndent, spacing.objectiveSpacing, normal)
          elseif profile.showCompletedObjectives then
-            AddLine("objective", quest, "- " .. objective.text, "objective", objectiveIndent, profile.objectiveSpacing, complete)
+            AddLine("objective", quest, "- " .. objective.text, "objective", objectiveIndent, spacing.objectiveSpacing, complete)
          end
       end
    end
    if quest.timeLeftText then
-      AddLine("objective", quest, quest.timeLeftText, "objective", objectiveIndent, profile.objectiveSpacing,
+      AddLine("objective", quest, quest.timeLeftText, "objective", objectiveIndent, spacing.objectiveSpacing,
          COLOR_TIME_LEFT)
    end
    -- Make room for the whole item / group button before the next quest.
@@ -685,12 +686,12 @@ end
 -- Returns true when the section is expanded.
 function mod:RenderSectionHeader(key, text, profile)
    local collapsed = self.db.char.collapsedSections[key]
-   local line = AddLine("section", SECTION_DATA[key], text, "module", 0, profile.sectionSpacing, COLOR_ZONE, Brighten(COLOR_ZONE), "section")
+   local line = AddLine("section", SECTION_DATA[key], text, "module", 0, spacing.sectionSpacing, COLOR_ZONE, Brighten(COLOR_ZONE), "section")
    local icon = line.collapseIcon
    icon:SetAtlas(collapsed and "ui-questtrackerbutton-secondary-expand" or "ui-questtrackerbutton-secondary-collapse")
    icon:Show()
    if not collapsed then
-      layout.nextSpacing = profile.zoneHeaderSpacing
+      layout.nextSpacing = spacing.zoneHeaderSpacing
    end
    return not collapsed
 end
@@ -710,9 +711,9 @@ function mod:RenderRecipes(recipes, profile)
 
    local titleColor, normal, complete = COLOR_HEADER, COLOR_NORMAL, COLOR_COMPLETE
    for _, recipe in ipairs(recipes) do
-      AddLine("recipe", recipe, recipe.name, "quest", QUEST_INDENT, profile.questSpacing, titleColor, Brighten(titleColor))
+      AddLine("recipe", recipe, recipe.name, "quest", QUEST_INDENT, spacing.questSpacing, titleColor, Brighten(titleColor))
       for _, reagent in ipairs(recipe.reagents) do
-         AddLine("objective", recipe, "- " .. reagent.text, "objective", OBJECTIVE_INDENT, profile.objectiveSpacing,
+         AddLine("objective", recipe, "- " .. reagent.text, "objective", OBJECTIVE_INDENT, spacing.objectiveSpacing,
             reagent.finished and complete or normal)
       end
    end
@@ -752,10 +753,11 @@ function mod:Render(sections, numQuests, numShown, recipes, tasks)
    layout.y = 0
    layout.nextSpacing = nil
    layout.rightInset = 0
-   layout.width = profile.width - SCROLLBAR_WIDTH - 4 - 2 * profile.padding
+   spacing = self:GetContentLayout()
+   layout.width = profile.width - SCROLLBAR_WIDTH - 4 - 2 * spacing.padding
 
    -- Title, gap below it and the padding on both ends.
-   local titleHeight = frame.title:GetHeight() + 4 + 2 * profile.padding
+   local titleHeight = frame.title:GetHeight() + 4 + 2 * spacing.padding
    if self.db.char.minimized then
       ReleaseUnusedLines(0)
       frame.scroll:Hide()
@@ -783,9 +785,9 @@ function mod:Render(sections, numQuests, numShown, recipes, tasks)
             local collapsed = collapsedZones[section.name]
             local text = format("%s %s (%d)", collapsed and "+" or "-", section.name, #section.quests)
             local color = section.isCurrent and currentZoneColor or zoneColor
-            AddLine("zone", section, text, "zone", ZONE_INDENT, profile.zoneSpacing, color, Brighten(color), "zone")
+            AddLine("zone", section, text, "zone", ZONE_INDENT, spacing.zoneSpacing, color, Brighten(color), "zone")
             if not collapsed then
-               layout.nextSpacing = profile.zoneHeaderSpacing
+               layout.nextSpacing = spacing.zoneHeaderSpacing
                for _, quest in ipairs(section.quests) do
                   self:RenderQuest(quest, profile)
                end

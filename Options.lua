@@ -70,9 +70,9 @@ local function FontGroup(role, name, order)
       name = name,
       inline = true,
       order = order,
-      get = function(info) return mod.db.profile.fonts[role][info[#info]] end,
+      get = function(info) return mod:GetCustomTheme().fonts[role][info[#info]] end,
       set = function(info, val)
-         mod.db.profile.fonts[role][info[#info]] = val
+         mod:GetCustomTheme().fonts[role][info[#info]] = val
          mod:ApplyLayout()
       end,
       args = {
@@ -99,16 +99,11 @@ local function FontGroup(role, name, order)
    }
 end
 
-local THEME_VALUES = {
-   blizzard = L["Blizzard"],
-   custom = L["Custom"],
-}
-
 local function IsNotCustom()
-   return mod.db.profile.theme ~= "custom"
+   return not mod:GetCustomTheme()
 end
 
--- Color with opacity in a Custom theme settings table.
+-- Color with opacity in the selected custom theme.
 local function ColorOption(name, order)
    return {
       type = "color",
@@ -116,18 +111,18 @@ local function ColorOption(name, order)
       hasAlpha = true,
       order = order,
       get = function(info)
-         local c = mod.db.profile.custom[info[#info - 1]][info[#info]]
+         local c = mod:GetCustomTheme()[info[#info - 1]][info[#info]]
          return c.r, c.g, c.b, c.a
       end,
       set = function(info, r, g, b, a)
-         local c = mod.db.profile.custom[info[#info - 1]][info[#info]]
+         local c = mod:GetCustomTheme()[info[#info - 1]][info[#info]]
          c.r, c.g, c.b, c.a = r, g, b, a
          mod:ApplyLayout()
       end,
    }
 end
 
--- Bar texture, color and border for one header kind of the Custom theme.
+-- Bar texture, color and border for one header kind of the selected custom theme.
 local function CustomGroup(kind, name, order, desc)
    return {
       type = "group",
@@ -135,9 +130,9 @@ local function CustomGroup(kind, name, order, desc)
       inline = true,
       order = order,
       hidden = IsNotCustom,
-      get = function(info) return mod.db.profile.custom[kind][info[#info]] end,
+      get = function(info) return mod:GetCustomTheme()[kind][info[#info]] end,
       set = function(info, val)
-         mod.db.profile.custom[kind][info[#info]] = val
+         mod:GetCustomTheme()[kind][info[#info]] = val
          mod:ApplyLayout()
       end,
       args = {
@@ -169,6 +164,77 @@ local function CustomGroup(kind, name, order, desc)
             order = 4,
          },
          borderColor = ColorOption(L["Border color"], 5),
+      },
+   }
+end
+
+-- Tracker background tab of the selected custom theme.
+local function BackgroundGroup(order)
+   local function Settings() return mod:GetCustomTheme().background end
+   local function RGBOption(name, order, desc)
+      return {
+         type = "color",
+         name = name,
+         desc = desc,
+         order = order,
+         get = function(info)
+            local c = Settings()[info[#info]]
+            return c.r, c.g, c.b
+         end,
+         set = function(info, r, g, b)
+            local c = Settings()[info[#info]]
+            c.r, c.g, c.b = r, g, b
+            mod:ApplyLayout()
+         end,
+      }
+   end
+   return {
+      type = "group",
+      name = L["Background"],
+      order = order,
+      hidden = IsNotCustom,
+      get = function(info) return Settings()[info[#info]] end,
+      set = function(info, val)
+         Settings()[info[#info]] = val
+         mod:ApplyLayout()
+      end,
+      args = {
+         texture = {
+            type = "select",
+            dialogControl = "LSM30_Background",
+            name = L["Background texture"],
+            values = AceGUIWidgetLSMlists.background,
+            order = 1,
+         },
+         color = RGBOption(L["Background color"], 2),
+         alpha = {
+            type = "range",
+            name = L["Background opacity"],
+            desc = L["Background opacity when the mouse is not over the tracker."],
+            min = 0, max = 1, step = 0.01, bigStep = 0.05, isPercent = true,
+            order = 3,
+         },
+         hoverAlpha = {
+            type = "range",
+            name = L["Mouseover opacity"],
+            desc = L["Background opacity when the mouse is over the tracker."],
+            min = 0, max = 1, step = 0.01, bigStep = 0.05, isPercent = true,
+            order = 4,
+         },
+         border = {
+            type = "select",
+            dialogControl = "LSM30_Border",
+            name = L["Border"],
+            values = AceGUIWidgetLSMlists.border,
+            order = 5,
+         },
+         borderSize = {
+            type = "range",
+            name = L["Border size"],
+            min = 1, max = 32, step = 1,
+            order = 6,
+         },
+         borderColor = RGBOption(L["Border color"], 7, L["The border fades in and out with the background opacity."]),
       },
    }
 end
@@ -422,145 +488,138 @@ local function BuildOptions()
                min = 0.5, max = 2.0, step = 0.01, bigStep = 0.05, isPercent = true,
                order = 4,
             },
-            backgroundHeader = { type = "header", name = L["Background"], order = 10 },
-            backgroundColor = {
-               type = "color",
-               name = L["Background color"],
-               order = 11,
-               get = function()
-                  local c = mod.db.profile.backgroundColor
-                  return c.r, c.g, c.b
-               end,
-               set = function(_, r, g, b)
-                  local c = mod.db.profile.backgroundColor
-                  c.r, c.g, c.b = r, g, b
-                  mod:ApplyLayout()
-               end,
-            },
-            backgroundTexture = {
-               type = "select",
-               dialogControl = "LSM30_Background",
-               name = L["Background texture"],
-               values = AceGUIWidgetLSMlists.background,
-               order = 10.5,
-            },
-            backgroundBorder = {
-               type = "select",
-               dialogControl = "LSM30_Border",
-               name = L["Border"],
-               values = AceGUIWidgetLSMlists.border,
-               order = 14,
-            },
-            backgroundBorderSize = {
-               type = "range",
-               name = L["Border size"],
-               min = 1, max = 32, step = 1,
-               order = 15,
-            },
-            padding = {
-               type = "range",
-               name = L["Padding"],
-               desc = L["Space between the tracker's edges and its content, for example to keep it clear of the border."],
-               min = 0, max = 30, step = 1,
-               order = 17,
-            },
-            backgroundBorderColor = {
-               type = "color",
-               name = L["Border color"],
-               desc = L["The border fades in and out with the background opacity."],
-               order = 16,
-               get = function()
-                  local c = mod.db.profile.backgroundBorderColor
-                  return c.r, c.g, c.b
-               end,
-               set = function(_, r, g, b)
-                  local c = mod.db.profile.backgroundBorderColor
-                  c.r, c.g, c.b = r, g, b
-                  mod:ApplyLayout()
-               end,
-            },
-            backgroundAlpha = {
-               type = "range",
-               name = L["Background opacity"],
-               desc = L["Background opacity when the mouse is not over the tracker."],
-               min = 0, max = 1, step = 0.01, bigStep = 0.05, isPercent = true,
-               order = 12,
-            },
-            backgroundHoverAlpha = {
-               type = "range",
-               name = L["Mouseover opacity"],
-               desc = L["Background opacity when the mouse is over the tracker."],
-               min = 0, max = 1, step = 0.01, bigStep = 0.05, isPercent = true,
-               order = 13,
-            },
-            spacingHeader = { type = "header", name = L["Spacing"], order = 20 },
-            sectionSpacing = {
-               type = "range",
-               name = L["Section spacing"],
-               desc = L["Space above each section header (Quests, World Quests, Professions)."],
-               min = 0, max = 40, step = 1,
-               order = 20.5,
-            },
-            zoneSpacing = {
-               type = "range",
-               name = L["Zone spacing"],
-               desc = L["Space above each zone header."],
-               min = 0, max = 40, step = 1,
-               order = 21,
-            },
-            zoneHeaderSpacing = {
-               type = "range",
-               name = L["Zone header spacing"],
-               desc = L["Space between a zone header and its first quest."],
-               min = 0, max = 30, step = 1,
-               order = 22,
-            },
-            questSpacing = {
-               type = "range",
-               name = L["Quest spacing"],
-               desc = L["Space above each quest title."],
-               min = 0, max = 30, step = 1,
-               order = 23,
-            },
-            objectiveSpacing = {
-               type = "range",
-               name = L["Objective spacing"],
-               desc = L["Space between objective lines."],
-               min = 0, max = 20, step = 1,
-               order = 24,
-            },
          },
       },
       theme = {
          type = "group",
          name = L["Theme"],
+         childGroups = "tab",
          args = {
+            desc = {
+               type = "description",
+               name = L["Themes are shared by all profiles. A new theme starts as a copy of the selected one."],
+               order = 0,
+            },
             theme = {
                type = "select",
                name = L["Theme"],
-               values = THEME_VALUES,
+               values = function() return mod:GetThemeList() end,
                order = 1,
-               get = function() return mod.db.profile.theme end,
-               set = function(_, val)
-                  mod.db.profile.theme = val
+               get = function()
+                  return mod:GetCustomTheme() and mod.db.profile.theme or "blizzard"
+               end,
+               set = function(_, val) mod:SelectTheme(val) end,
+            },
+            newTheme = {
+               type = "input",
+               name = L["New theme"],
+               desc = L["Enter a name to create a new theme from the selected one."],
+               order = 2,
+               get = function() return "" end,
+               validate = function(_, val) return mod:ValidateThemeName(val) or true end,
+               set = function(_, val) mod:CreateTheme(val) end,
+            },
+            resetTheme = {
+               type = "execute",
+               name = L["Reset to Blizzard"],
+               desc = L["Change the selected theme to look like the Blizzard theme."],
+               confirm = true,
+               confirmText = L["Reset the selected theme to look like the Blizzard theme?"],
+               order = 3,
+               hidden = IsNotCustom,
+               func = function() mod:ResetThemeToBlizzard() end,
+            },
+            deleteTheme = {
+               type = "execute",
+               name = L["Delete theme"],
+               confirm = true,
+               confirmText = L["Delete the selected theme? Profiles using it switch to the Blizzard theme."],
+               order = 4,
+               hidden = IsNotCustom,
+               func = function() mod:DeleteTheme() end,
+            },
+            headers = {
+               type = "group",
+               name = L["Headers"],
+               order = 10,
+               hidden = IsNotCustom,
+               args = {
+                  title = CustomGroup("title", L["Tracker title"], 1),
+                  section = CustomGroup("section", L["Section headers"], 2),
+                  zone = CustomGroup("zone", L["Zone headers"], 3,
+                     L["With zero opacity and no border, zone headers are shown as plain text."]),
+               },
+            },
+            background = BackgroundGroup(11),
+            fonts = {
+               type = "group",
+               name = L["Fonts"],
+               order = 13,
+               hidden = IsNotCustom,
+               args = {
+                  title = FontGroup("title", L["Tracker title"], 1),
+                  module = FontGroup("module", L["Section headers"], 1.5),
+                  zone = FontGroup("zone", L["Zone headers"], 2),
+                  quest = FontGroup("quest", L["Quest titles"], 3),
+                  objective = FontGroup("objective", L["Objectives"], 4),
+               },
+            },
+            contentLayout = {
+               type = "group",
+               name = L["Layout"],
+               desc = L["Spacing of the tracker contents."],
+               order = 12,
+               hidden = IsNotCustom,
+               get = function(info) return mod:GetCustomTheme().layout[info[#info]] end,
+               set = function(info, val)
+                  mod:GetCustomTheme().layout[info[#info]] = val
                   mod:ApplyLayout()
                end,
+               args = {
+               padding = {
+                  type = "range",
+                  name = L["Padding"],
+                  desc = L["Space between the tracker's edges and its content, for example to keep it clear of the border."],
+                  min = 0, max = 30, step = 1,
+                  order = 1,
+               },
+               sectionSpacing = {
+                  type = "range",
+                  name = L["Section spacing"],
+                  desc = L["Space above each section header (Quests, World Quests, Professions)."],
+                  min = 0, max = 40, step = 1,
+                  order = 20.5,
+               },
+               zoneSpacing = {
+                  type = "range",
+                  name = L["Zone spacing"],
+                  desc = L["Space above each zone header."],
+                  min = 0, max = 40, step = 1,
+                  order = 21,
+               },
+               zoneHeaderSpacing = {
+                  type = "range",
+                  name = L["Zone header spacing"],
+                  desc = L["Space between a zone header and its first quest."],
+                  min = 0, max = 30, step = 1,
+                  order = 22,
+               },
+               questSpacing = {
+                  type = "range",
+                  name = L["Quest spacing"],
+                  desc = L["Space above each quest title."],
+                  min = 0, max = 30, step = 1,
+                  order = 23,
+               },
+               objectiveSpacing = {
+                  type = "range",
+                  name = L["Objective spacing"],
+                  desc = L["Space between objective lines."],
+                  min = 0, max = 20, step = 1,
+                  order = 24,
+               },
+               },
             },
-            title = CustomGroup("title", L["Tracker title"], 10),
-            section = CustomGroup("section", L["Section headers"], 11),
-            zone = CustomGroup("zone", L["Zone headers"], 12,
-               L["With zero opacity and no border, zone headers are shown as plain text."]),
-         },
-      },
-      fonts = {
-         type = "group",
-         name = L["Fonts"],
-         args = {
-            title = FontGroup("title", L["Tracker title"], 1),
-            module = FontGroup("module", L["Section headers"], 1.5),
-            zone = FontGroup("zone", L["Zone headers"], 2),
-            quest = FontGroup("quest", L["Quest titles"], 3),
-            objective = FontGroup("objective", L["Objectives"], 4),
          },
       },
    }
@@ -583,7 +642,6 @@ function mod:SetupOptions()
    self.optionsMain = self:OptReg(APP_NAME, options.general)
    self:OptReg(": Layout", options.layout, L["Layout"])
    self:OptReg(": Theme", options.theme, L["Theme"])
-   self:OptReg(": Fonts", options.fonts, L["Fonts"])
    self.optionsEnd = self:OptReg(": Profiles", options.profiles, L["Profiles"])
 end
 

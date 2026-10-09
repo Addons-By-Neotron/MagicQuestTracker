@@ -165,22 +165,23 @@ function mod:SetupEditMode()
       SizeSetting("width", L["Width"], 150, 600, 1),
       SizeSetting("maxHeight", L["Maximum height"], 100, 1200, 10),
       SizeSetting("scale", L["Scale"], 0.5, 2.0, 0.05, FormatPercent),
-      SizeSetting("padding", L["Padding"], 0, 30, 1),
       {
          kind = LEM.SettingType.Dropdown,
          name = L["Theme"],
          default = mod.defaults.profile.theme,
-         values = {
-            { text = L["Blizzard"], value = "blizzard" },
-            { text = L["Custom"], value = "custom" },
-         },
+         values = function()
+            local values = {}
+            for key, name in pairs(mod:GetThemeList()) do
+               tinsert(values, { text = name, value = key })
+            end
+            table.sort(values, function(a, b) return a.text < b.text end)
+            return values
+         end,
          get = function()
-            return mod.db.profile.theme
+            return mod:GetCustomTheme() and mod.db.profile.theme or "blizzard"
          end,
          set = function(_, value)
-            mod.db.profile.theme = value
-            mod:ApplyLayout()
-            mod:NotifyOptionsChanged()
+            mod:SelectTheme(value)
          end,
       },
    })

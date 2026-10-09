@@ -16,10 +16,10 @@ A replacement for the built-in objective tracker for WoW Retail and Classic Fore
 - Retail: world quests (in the current area and tracked) and bonus objectives in their own sections.
 - Tracked profession recipes are shown in a separate section.
 - Scrollable, with a configurable max height, width and scale.
-- Configurable background color, with separate opacity for normal and mouseover.
+- Tracker background (texture, color, border) as part of custom themes, with separate opacity for normal and mouseover.
 - Configurable spacing between zones, zone header and quests, quests and objectives.
-- Themes: "Blizzard" (the built-in tracker's header art) or "Custom" (colored title, section and zone bars, each with its own SharedMedia texture, color and optional border).
-- Configurable fonts (face, size, outline) for the title, zone headers, quest titles and objectives.
+- Themes: "Blizzard" (the built-in tracker's header art) or your own named themes (colored title, section and zone bars, each with its own SharedMedia texture or Blizzard header art, color and optional border). Themes are shared by all profiles; a new theme starts as a copy of the selected one.
+- Configurable fonts (face, size, outline) for the title, section and zone headers, quest titles and objectives, as part of custom themes.
 - Clicks behave like the built-in tracker: left-click opens the quest on the map, shift-click links, right-click opens a menu.
 - Ctrl-click a quest to navigate to its next location (objective area, or turn-in when complete) with a TomTom waypoint, Blizzard's navigation (focusing the quest), or both. Without TomTom, Blizzard's navigation is used.
 

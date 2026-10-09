@@ -21,6 +21,7 @@ along with MagicQuestTracker.  If not, see <https://www.gnu.org/licenses/>.
 
 **********************************************************************
 ]]
+local L = LibStub("AceLocale-3.0"):GetLocale("MagicQuestTracker")
 local mod = LibStub("AceAddon-3.0"):GetAddon("MagicQuestTracker")
 local media = LibStub("LibSharedMedia-3.0")
 
@@ -39,6 +40,7 @@ local media = LibStub("LibSharedMedia-3.0")
 ----------------------------------------------------------------
 
 local WHITE = "Interface\\Buttons\\WHITE8X8"
+local HEADER_KINDS = { "title", "section", "zone" }
 local TITLE_ATLAS = "ui-questtracker-primary-objective-header"
 local HEADER_ATLAS = "UI-QuestTracker-Secondary-Objective-Header"
 local BLIZZARD_TRACKER_WIDTH = 260
@@ -102,7 +104,7 @@ function blizzard.StyleTitle(title, profile)
    title.minimize:GetHighlightTexture():SetAlpha(1)
    title.minimize:ClearAllPoints()
    title.minimize:SetPoint("RIGHT", -2, 0)
-   return math.max(30, profile.fonts.title.size + TITLE_PADDING), 7
+   return math.max(30, mod:GetFonts().title.size + TITLE_PADDING), 7
 end
 
 function blizzard.MinimizeAtlas(minimized)
@@ -129,8 +131,9 @@ end
 
 ----------------------------------------------------------------
 -- Custom: colored bars with a SharedMedia texture and optional border,
--- set separately for the title, section headers and zone headers
--- (profile.custom[kind]).
+-- set separately for the title, section headers and zone headers.
+-- Custom themes are named and stored in global.themes, shared by all
+-- profiles; profile.theme selects one (or "blizzard").
 ----------------------------------------------------------------
 
 local custom = {}
@@ -147,7 +150,7 @@ end
 
 local function StyleBar(owner, kind, left)
    local profile = mod.db.profile
-   local settings = profile.custom[kind]
+   local settings = mod:GetCustomTheme()[kind]
    local inset = BorderInset(kind)
    local bg = owner.bg
    local color = settings.color
@@ -196,17 +199,17 @@ local function ArtMetrics(settings)
 end
 
 function custom.StyleTitle(title, profile)
-   local settings = profile.custom.title
+   local settings = mod:GetCustomTheme().title
    local inset = StyleBar(title, "title", 0)
    title.minimize:GetHighlightTexture():SetAlpha(settings.borderedButton and 1 or 0)
    title.minimize:ClearAllPoints()
    title.minimize:SetPoint("RIGHT", -2 - inset, 0)
    local minHeight, textIndent = ArtMetrics(settings)
-   return math.max(minHeight, profile.fonts.title.size + TITLE_PADDING) + 2 * inset, textIndent + inset
+   return math.max(minHeight, mod:GetFonts().title.size + TITLE_PADDING) + 2 * inset, textIndent + inset
 end
 
 function custom.MinimizeAtlas(minimized)
-   if mod.db.profile.custom.title.borderedButton then
+   if mod:GetCustomTheme().title.borderedButton then
       return blizzard.MinimizeAtlas(minimized)
    end
    return minimized and "ui-questtrackerbutton-secondary-expand" or "ui-questtrackerbutton-secondary-collapse"
@@ -214,11 +217,12 @@ end
 
 function custom.HeaderLayout(kind, profile)
    -- Headers without a visible bar or border stay plain text.
-   if profile.custom[kind].color.a == 0 and not backdrops[kind] then
+   local settings = mod:GetCustomTheme()[kind]
+   if settings.color.a == 0 and not backdrops[kind] then
       return false
    end
    local inset = BorderInset(kind)
-   local minHeight, textIndent = ArtMetrics(profile.custom[kind])
+   local minHeight, textIndent = ArtMetrics(settings)
    return true, minHeight + 2 * inset, textIndent + inset, 6 + 2 * inset
 end
 
@@ -229,20 +233,163 @@ end
 
 ----------------------------------------------------------------
 
-local themes = {
-   blizzard = blizzard,
-   custom = custom,
-}
+local BLIZZARD = "blizzard"
+
+--- Settings of the selected custom theme, or nil for the Blizzard theme.
+function mod:GetCustomTheme()
+   return self.db.global.themes[self.db.profile.theme]
+end
+
+--- Tracker background settings of the selected theme.
+function mod:GetBackground()
+   local theme = self:GetCustomTheme()
+   return theme and theme.background or self.themeDefaults.background
+end
+
+--- Font settings ([role] = { face, size, outline }) of the selected theme.
+function mod:GetFonts()
+   local theme = self:GetCustomTheme()
+   return theme and theme.fonts or self.themeDefaults.fonts
+end
+
+--- Content spacing (padding, line spacing) of the selected theme.
+function mod:GetContentLayout()
+   local theme = self:GetCustomTheme()
+   return theme and theme.layout or self.themeDefaults.layout
+end
 
 function mod:GetTheme()
-   return themes[self.db.profile.theme] or blizzard
+   return self:GetCustomTheme() and custom or blizzard
+end
+
+--- Theme names for dropdowns: [key] = display name.
+function mod:GetThemeList()
+   local list = { [BLIZZARD] = L["Blizzard"] }
+   for name in pairs(self.db.global.themes) do
+      list[name] = name
+   end
+   return list
+end
+
+--- Returns an error message if name can't be used for a new theme.
+function mod:ValidateThemeName(name)
+   name = strtrim(name or "")
+   if name == "" then
+      return L["Enter a theme name."]
+   elseif name:lower() == BLIZZARD or self.db.global.themes[name] then
+      return L["A theme with that name already exists."]
+   end
+end
+
+--- Creates a theme from the selected one (a Blizzard look for the Blizzard theme) and selects it.
+function mod:CreateTheme(name)
+   name = strtrim(name)
+   self.db.global.themes[name] = CopyTable(self:GetCustomTheme() or self.themeDefaults)
+   self:SelectTheme(name)
+end
+
+function mod:DeleteTheme()
+   local name = self.db.profile.theme
+   if not self:GetCustomTheme() then return end
+   self.db.global.themes[name] = nil
+   self:SelectTheme(BLIZZARD)
+end
+
+--- Makes the selected custom theme look like the Blizzard theme.
+function mod:ResetThemeToBlizzard()
+   local settings = self:GetCustomTheme()
+   if not settings then return end
+   for kind, defaults in pairs(self.themeDefaults) do
+      settings[kind] = CopyTable(defaults)
+   end
+   self:ApplyLayout()
+end
+
+function mod:SelectTheme(name)
+   self.db.profile.theme = name
+   self:ApplyLayout()
+   self:NotifyOptionsChanged()
+end
+
+-- Fills in settings missing from a saved theme (AceDB drops values equal to
+-- the defaults they had when saved).
+local function FillDefaults(settings, defaults)
+   for key, value in pairs(defaults) do
+      if settings[key] == nil then
+         settings[key] = type(value) == "table" and CopyTable(value) or value
+      elseif type(value) == "table" and type(settings[key]) == "table" then
+         FillDefaults(settings[key], value)
+      end
+   end
+   return settings
+end
+
+-- Settings that used to be per profile, by theme table:
+-- { old profile key, theme key, old default }.
+local OLD_SETTINGS = {
+   background = {
+      { "backgroundTexture", "texture", "Solid" },
+      { "backgroundColor", "color", { r = 0, g = 0, b = 0 } },
+      { "backgroundAlpha", "alpha", 0 },
+      { "backgroundHoverAlpha", "hoverAlpha", 0.4 },
+      { "backgroundBorder", "border", "None" },
+      { "backgroundBorderSize", "borderSize", 12 },
+      { "backgroundBorderColor", "borderColor", { r = 0.6, g = 0.6, b = 0.6 } },
+   },
+   layout = {
+      { "padding", "padding", 0 },
+      { "sectionSpacing", "sectionSpacing", 10 },
+      { "zoneSpacing", "zoneSpacing", 8 },
+      { "zoneHeaderSpacing", "zoneHeaderSpacing", 2 },
+      { "questSpacing", "questSpacing", 6 },
+      { "objectiveSpacing", "objectiveSpacing", 1 },
+   },
+}
+
+--- Moves the old per-profile "custom" (earlier "simple") theme and the
+--- profile's background, spacing and font settings to a named theme.
+function mod:MigrateCustomTheme()
+   local profile = self.db.profile
+   local old = profile.custom
+   profile.custom, profile.simple = nil, nil
+   local themes = self.db.global.themes
+   if profile.theme == "custom" or profile.theme == "simple" then
+      local name = L["Custom"]
+      themes[name] = themes[name] or old or {}
+      profile.theme = name
+   end
+   local selected = themes[profile.theme]
+   for key, entries in pairs(OLD_SETTINGS) do
+      if selected and not selected[key] then
+         local settings = {}
+         for _, entry in ipairs(entries) do
+            local value = profile[entry[1]]
+            if value == nil then value = entry[3] end
+            settings[entry[2]] = type(value) == "table" and CopyTable(value) or value
+         end
+         selected[key] = settings
+      end
+      for _, entry in ipairs(entries) do
+         profile[entry[1]] = nil
+      end
+   end
+   if selected and not selected.fonts and profile.fonts then
+      selected.fonts = profile.fonts  -- missing values are filled in below
+   end
+   profile.fonts = nil
+   for _, settings in pairs(self.db.global.themes) do
+      FillDefaults(settings, self.themeDefaults)
+   end
 end
 
 --- Call when theme settings change; header lines restyle on next render.
 function mod:RefreshTheme()
    self.themeVersion = self.themeVersion + 1
-   for kind, settings in pairs(self.db.profile.custom) do
-      local edge = settings.border ~= "None" and media:Fetch("border", settings.border)
+   wipe(backdrops)
+   local theme = self:GetCustomTheme()
+   for _, kind in ipairs(HEADER_KINDS) do
+      local settings = theme and theme[kind]
+      local edge = settings and settings.border ~= "None" and media:Fetch("border", settings.border)
       backdrops[kind] = edge and edge ~= "" and { edgeFile = edge, edgeSize = settings.borderSize } or false
    end
 end
