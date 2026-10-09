@@ -78,6 +78,7 @@ mod.GetCurrentZoneNames = GetCurrentZoneNames
 
 -- 2 = header is the current zone, 1 = header is a sub-area of it
 -- (e.g. "Excavation Site: Wetlands" while in Wetlands), 0 = elsewhere.
+-- CollectQuests raises 0 to 0.5 for zones that have quests here.
 local function GetZoneRank(header, zoneNames)
    if zoneNames[header] then
       return 2
@@ -315,6 +316,10 @@ function mod:CollectQuests()
                end
                quest.zoneName = header
                quest.inCurrentZone = isCurrentZone or (useOnMap and info.isOnMap) or false
+               if quest.inCurrentZone then
+                  -- e.g. a Stormwind quest with objectives in this zone
+                  section.hasLocalQuests = true
+               end
                tinsert(section.quests, quest)
                if quest.level < section.minLevel then
                   section.minLevel = quest.level
@@ -322,6 +327,14 @@ function mod:CollectQuests()
                numShown = numShown + 1
             end
          end
+      end
+   end
+
+   -- Zones with quests in the current zone (filed elsewhere) sort right
+   -- after the current zone and its sub-areas.
+   for _, section in ipairs(sections) do
+      if section.zoneRank == 0 and section.hasLocalQuests then
+         section.zoneRank = 0.5
       end
    end
 
@@ -352,7 +365,7 @@ function mod:CollectQuests()
          -- Current zone (and its sub-areas) first, then the rest by distance.
          local current, others = new(), new()
          for _, section in ipairs(sections) do
-            tinsert(section.isCurrent and current or others, section)
+            tinsert(section.zoneRank > 0 and current or others, section)
          end
          sort(current, CurrentZoneFirstByLevel)
          SortByDistance(others, ZoneKey, zoneRanks, zoneSorters.level)

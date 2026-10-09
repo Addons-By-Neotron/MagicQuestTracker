@@ -228,7 +228,8 @@ function mod:AutoFoldZones(sections)
 
    local collapsed = self.db.char.collapsedZones
    for _, section in ipairs(sections) do
-      collapsed[section.name] = (not section.isCurrent) or nil
+      -- Keep zones open that have quests here, even if filed elsewhere.
+      collapsed[section.name] = not (section.isCurrent or section.hasLocalQuests) or nil
    end
 end
 
