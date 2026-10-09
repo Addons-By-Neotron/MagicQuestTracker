@@ -252,6 +252,15 @@ function mod:GetFonts()
    return theme and theme.fonts or self.themeDefaults.fonts
 end
 
+-- Text colors of the selected theme as { r, g, b } arrays (for unpack),
+-- rebuilt by RefreshTheme.
+local textColors = {}
+
+--- Text colors ([key] = { r, g, b }) of the selected theme; see themeDefaults.colors.
+function mod:GetTextColors()
+   return textColors
+end
+
 --- Content spacing (padding, line spacing) of the selected theme.
 function mod:GetContentLayout()
    local theme = self:GetCustomTheme()
@@ -473,8 +482,16 @@ end
 --- Call when theme settings change; header lines restyle on next render.
 function mod:RefreshTheme()
    self.themeVersion = self.themeVersion + 1
-   wipe(backdrops)
    local theme = self:GetCustomTheme()
+   local colors = theme and theme.colors or self.themeDefaults.colors
+   -- New tables, so cached highlight colors don't go stale.
+   textColors = {}
+   for key, c in pairs(colors) do
+      textColors[key] = { c.r, c.g, c.b }
+   end
+   local tag = colors.questTag
+   textColors.questTagCode = format("|cff%02x%02x%02x", tag.r * 255 + 0.5, tag.g * 255 + 0.5, tag.b * 255 + 0.5)
+   wipe(backdrops)
    for _, kind in ipairs(HEADER_KINDS) do
       local settings = theme and theme[kind]
       local edge = settings and settings.border ~= "None" and media:Fetch("border", settings.border)

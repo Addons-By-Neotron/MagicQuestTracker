@@ -234,6 +234,29 @@ local function BackgroundGroup(order)
    }
 end
 
+-- Text color of the selected custom theme (theme.colors[key]).
+local function TextColor(name, order, desc)
+   return {
+      type = "color",
+      name = name,
+      desc = desc,
+      order = order,
+      get = function(info)
+         local c = mod:GetCustomTheme().colors[info[#info]]
+         return c.r, c.g, c.b
+      end,
+      set = function(info, r, g, b)
+         local c = mod:GetCustomTheme().colors[info[#info]]
+         c.r, c.g, c.b = r, g, b
+         mod:ApplyLayout()
+      end,
+   }
+end
+
+local function ColorGroup(name, order, args)
+   return { type = "group", name = name, inline = true, order = order, args = args }
+end
+
 local function BuildOptions()
    options = {
       general = {
@@ -573,6 +596,41 @@ local function BuildOptions()
                   zone = FontGroup("zone", L["Zone headers"], 2),
                   quest = FontGroup("quest", L["Quest titles"], 3),
                   objective = FontGroup("objective", L["Objectives"], 4),
+               },
+            },
+            colors = {
+               type = "group",
+               name = L["Colors"],
+               order = 14,
+               hidden = IsNotCustom,
+               args = {
+                  headers = ColorGroup(L["Headers"], 1, {
+                     title = TextColor(L["Tracker title"], 1),
+                     section = TextColor(L["Section headers"], 2),
+                     zone = TextColor(L["Zone headers"], 3),
+                     currentZone = TextColor(L["Current zone"], 4),
+                  }),
+                  quests = ColorGroup(L["Quest titles"], 2, {
+                     quest = TextColor(L["Quest title"], 1,
+                        L["Quest titles when not colored by difficulty, and tracked recipes."]),
+                     questTag = TextColor(L["Quest type"], 2),
+                     trivial = TextColor(L["Trivial"], 3),
+                     standard = TextColor(L["Standard"], 4),
+                     difficult = TextColor(L["Difficult"], 5),
+                     verydifficult = TextColor(L["Very difficult"], 6),
+                     impossible = TextColor(L["Impossible"], 7),
+                  }),
+                  objectives = ColorGroup(L["Objectives"], 3, {
+                     objective = TextColor(L["Objective"], 1),
+                     complete = TextColor(L["Completed objective"], 2),
+                     failed = TextColor(L["Failed"], 3),
+                     timeLeft = TextColor(L["Time left"], 4),
+                  }),
+                  other = ColorGroup(L["Other"], 4, {
+                     distance = TextColor(L["Distance"], 1),
+                     arrow = TextColor(L["Direction arrow"], 2),
+                     scrollbar = TextColor(L["Scrollbar"], 3),
+                  }),
                },
             },
             contentLayout = {

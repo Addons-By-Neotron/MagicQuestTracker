@@ -48,6 +48,10 @@ local function CustomDefaults(texture, a, borderedButton)
    }
 end
 
+local function RGB(r, g, b)
+   return { r = r, g = g, b = b }
+end
+
 -- New custom themes start out like the Blizzard theme.
 mod.themeDefaults = {
    title = CustomDefaults("Blizzard Tracker Title", 1, true),
@@ -78,6 +82,28 @@ mod.themeDefaults = {
       zone = FontDefaults(12),
       quest = FontDefaults(12),
       objective = FontDefaults(11),
+   },
+   -- Text colors (Blizzard's objective tracker colors)
+   colors = {
+      title = RGB(1, 0.82, 0),
+      section = RGB(1, 0.82, 0),
+      zone = RGB(1, 0.82, 0),
+      currentZone = RGB(1, 1, 1),
+      quest = RGB(0.75, 0.61, 0),        -- quest titles when not colored by difficulty
+      objective = RGB(0.8, 0.8, 0.8),
+      complete = RGB(0.6, 0.6, 0.6),     -- completed objectives
+      failed = RGB(1, 0.1, 0.1),
+      timeLeft = RGB(0.75, 0.1, 0.1),
+      questTag = RGB(1, 0.5, 0.25),      -- "(Elite, Daily)" after the title
+      distance = RGB(0.6, 0.6, 0.6),
+      arrow = RGB(1, 0.82, 0),
+      scrollbar = RGB(1, 0.82, 0),
+      -- Quest titles by difficulty (QuestDifficultyColors keys)
+      trivial = RGB(0.5, 0.5, 0.5),
+      standard = RGB(0.25, 0.75, 0.25),
+      difficult = RGB(1, 0.82, 0),
+      verydifficult = RGB(1, 0.5, 0.25),
+      impossible = RGB(1, 0.1, 0.1),
    },
 }
 

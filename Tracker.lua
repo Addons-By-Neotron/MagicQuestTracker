@@ -45,20 +45,8 @@ local POI_QUEST_INDENT = 26
 local POI_OBJECTIVE_INDENT = 30
 local GROUP_BUTTON_SIZE = 24
 
-local function Color(key, r, g, b)
-   local c = OBJECTIVE_TRACKER_COLOR and OBJECTIVE_TRACKER_COLOR[key]
-   if c then return c.r, c.g, c.b end
-   return r, g, b
-end
-
--- Shared color tables (never modified), so rendering doesn't allocate them.
-local COLOR_NORMAL = { Color("Normal", 0.8, 0.8, 0.8) }
-local COLOR_COMPLETE = { Color("Complete", 0.6, 0.6, 0.6) }
-local COLOR_HEADER = { Color("Header", 0.75, 0.61, 0) }
-local COLOR_FAILED = { Color("Failed", 1, 0.1, 0.1) }
-local COLOR_TIME_LEFT = { Color("TimeLeft", 0.75, 0.1, 0.1) }
-local COLOR_ZONE = { NORMAL_FONT_COLOR:GetRGB() }
-local COLOR_WHITE = { 1, 1, 1 }
+-- Text colors come from the theme (mod:GetTextColors()); set by Render.
+local colors
 
 -- Line data for section headers (constant per section key).
 local SECTION_DATA = setmetatable({}, { __index = function(t, key)
@@ -149,7 +137,6 @@ function mod:CreateTracker()
    title.text:SetFontObject(fontObjects.title)
    title.text:SetJustifyH("LEFT")
    title.text:SetWordWrap(false)
-   title.text:SetTextColor(NORMAL_FONT_COLOR:GetRGB())
 
    local minimize = CreateFrame("Button", nil, title)
    minimize:SetSize(20, 20)
@@ -174,7 +161,7 @@ function mod:CreateTracker()
    frame.child = child
 
    local bar = frame:CreateTexture(nil, "OVERLAY")
-   bar:SetColorTexture(1, 0.82, 0, 0.5)
+   bar:SetColorTexture(1, 1, 1, 1)  -- tinted with the theme color in ApplyLayout
    bar:SetWidth(SCROLLBAR_WIDTH)
    bar:SetAlpha(0)
    frame.scrollThumb = bar
@@ -231,6 +218,9 @@ function mod:ApplyLayout()
    self:RefreshTheme()
    local title = frame.title
    local titleHeight, textIndent = self:GetTheme().StyleTitle(title, profile)
+   local textColors = self:GetTextColors()
+   title.text:SetTextColor(unpack(textColors.title))
+   frame.scrollThumb:SetVertexColor(textColors.scrollbar[1], textColors.scrollbar[2], textColors.scrollbar[3], 0.5)
    title.text:ClearAllPoints()
    title.text:SetPoint("LEFT", textIndent, 0)
    title.text:SetPoint("RIGHT", title.minimize, "LEFT", -4, 0)
@@ -365,7 +355,6 @@ local function AcquireLine()
       line.rightText:SetWordWrap(false)
       line.arrow = line:CreateTexture(nil, "OVERLAY")
       line.arrow:SetTexture("Interface\\AddOns\\MagicQuestTracker\\Textures\\Arrow")
-      line.arrow:SetVertexColor(1, 0.82, 0)
       line.collapseIcon = line:CreateTexture(nil, "OVERLAY")
       line.collapseIcon:SetSize(16, 16)
       line.collapseIcon:SetPoint("RIGHT", -2, 0)
@@ -421,7 +410,7 @@ local function AddLine(kind, data, text, role, indent, spacing, color, highlight
       local right = line.rightText
       right:SetFontObject(fontObjects.objective)
       right:SetText(rightText)
-      right:SetTextColor(0.6, 0.6, 0.6)
+      right:SetTextColor(unpack(colors.distance))
       right:ClearAllPoints()
       right:SetPoint("TOPRIGHT", -(layout.rightInset or 0), 0)
       right:Show()
@@ -440,6 +429,7 @@ local function AddLine(kind, data, text, role, indent, spacing, color, highlight
       local offset = (layout.rightInset or 0) + (rightText and line.rightText:GetStringWidth() + 3 or 0)
       local lineHeight = mod:GetFonts()[role].size
       line.arrow:SetSize(size, size)
+      line.arrow:SetVertexColor(unpack(colors.arrow))
       line.arrow:ClearAllPoints()
       line.arrow:SetPoint("CENTER", line, "TOPRIGHT", -offset - size / 2, -lineHeight / 2)
       width = width - size - 3
@@ -475,19 +465,26 @@ local function AddLine(kind, data, text, role, indent, spacing, color, highlight
    return line
 end
 
--- Difficulty colors depend on the player's level; cached per (quest, player) level.
-local difficultyColors = {}
+-- Difficulty (a QuestDifficultyColors key) depends on the player's level;
+-- cached per (quest, player) level. The theme supplies the color.
+local difficulties = {}
+local difficultyByColor
 local function DifficultyColor(level)
    -- World quests / bonus objectives have no level.
-   if not (level and GetQuestDifficultyColor) then return COLOR_HEADER end
+   if not (level and GetQuestDifficultyColor) then return colors.quest end
    local key = level * 1000 + UnitLevel("player")
-   local color = difficultyColors[key]
-   if not color then
-      local c = GetQuestDifficultyColor(level)
-      color = c and { c.r, c.g, c.b } or COLOR_HEADER
-      difficultyColors[key] = color
+   local difficulty = difficulties[key]
+   if difficulty == nil then
+      if not difficultyByColor then
+         difficultyByColor = {}
+         for name, c in pairs(QuestDifficultyColors or {}) do
+            difficultyByColor[c] = name
+         end
+      end
+      difficulty = difficultyByColor[GetQuestDifficultyColor(level)] or false
+      difficulties[key] = difficulty
    end
-   return color
+   return difficulty and colors[difficulty] or colors.quest
 end
 
 -- Level suffix by quest tag ID (Enum.QuestTag values).
@@ -549,7 +546,7 @@ local function FormatQuestTitle(quest, profile)
          end
       end
       if #labels > 0 then
-         title = format("%s |cffff8040(%s)|r", title, table.concat(labels, ", "))
+         title = format("%s %s(%s)|r", title, colors.questTagCode, table.concat(labels, ", "))
       end
    end
    return title
@@ -621,8 +618,8 @@ local function AttachGroupButton(line, quest, rightOffset)
 end
 
 function mod:RenderQuest(quest, profile)
-   local normal, complete = COLOR_NORMAL, COLOR_COMPLETE
-   local titleColor = profile.colorByDifficulty and DifficultyColor(quest.difficultyLevel) or COLOR_HEADER
+   local normal, complete = colors.objective, colors.complete
+   local titleColor = profile.colorByDifficulty and DifficultyColor(quest.difficultyLevel) or colors.quest
    local itemSize = (profile.showItemButtons and quest.hasItem) and self.ITEM_BUTTON_SIZE or 0
    local groupSize = (profile.showFindGroupButton and CanFindGroup(quest)) and GROUP_BUTTON_SIZE or 0
    layout.rightInset = itemSize + groupSize
@@ -654,7 +651,7 @@ function mod:RenderQuest(quest, profile)
 
    if quest.isFailed then
       AddLine("objective", quest, FAILED or L["Failed"], "objective", objectiveIndent, spacing.objectiveSpacing,
-         COLOR_FAILED)
+         colors.failed)
    elseif quest.isComplete then
       local text = quest.completionText
       if not text or text == "" then
@@ -672,7 +669,7 @@ function mod:RenderQuest(quest, profile)
    end
    if quest.timeLeftText then
       AddLine("objective", quest, quest.timeLeftText, "objective", objectiveIndent, spacing.objectiveSpacing,
-         COLOR_TIME_LEFT)
+         colors.timeLeft)
    end
    -- Make room for the whole item / group button before the next quest.
    local buttonSize = math.max(itemSize, groupSize)
@@ -687,7 +684,7 @@ end
 -- Returns true when the section is expanded.
 function mod:RenderSectionHeader(key, text, profile)
    local collapsed = self.db.char.collapsedSections[key]
-   local line = AddLine("section", SECTION_DATA[key], text, "module", 0, spacing.sectionSpacing, COLOR_ZONE, Brighten(COLOR_ZONE), "section")
+   local line = AddLine("section", SECTION_DATA[key], text, "module", 0, spacing.sectionSpacing, colors.section, Brighten(colors.section), "section")
    local icon = line.collapseIcon
    icon:SetAtlas(collapsed and "ui-questtrackerbutton-secondary-expand" or "ui-questtrackerbutton-secondary-collapse")
    icon:Show()
@@ -710,7 +707,7 @@ function mod:RenderRecipes(recipes, profile)
    local header = format("%s (%d)", PROFESSIONS_TRACKER_HEADER_PROFESSION or L["Professions"], #recipes)
    if not self:RenderSectionHeader("recipes", header, profile) then return end
 
-   local titleColor, normal, complete = COLOR_HEADER, COLOR_NORMAL, COLOR_COMPLETE
+   local titleColor, normal, complete = colors.quest, colors.objective, colors.complete
    for _, recipe in ipairs(recipes) do
       AddLine("recipe", recipe, recipe.name, "quest", QUEST_INDENT, spacing.questSpacing, titleColor, Brighten(titleColor))
       for _, reagent in ipairs(recipe.reagents) do
@@ -755,6 +752,7 @@ function mod:Render(sections, numQuests, numShown, recipes, tasks)
    layout.nextSpacing = nil
    layout.rightInset = 0
    spacing = self:GetContentLayout()
+   colors = self:GetTextColors()
    local size = self:GetLayoutSettings()
    layout.width = size.width - SCROLLBAR_WIDTH - 4 - 2 * spacing.padding
 
@@ -782,7 +780,7 @@ function mod:Render(sections, numQuests, numShown, recipes, tasks)
       if self:RenderSectionHeader("quests", header, profile) then
          -- Zone headers: plain text under the section bar.
          local collapsedZones = self.db.char.collapsedZones
-         local zoneColor, currentZoneColor = COLOR_ZONE, COLOR_WHITE
+         local zoneColor, currentZoneColor = colors.zone, colors.currentZone
          for _, section in ipairs(sections) do
             local collapsed = collapsedZones[section.name]
             local text = format("%s %s (%d)", collapsed and "+" or "-", section.name, #section.quests)

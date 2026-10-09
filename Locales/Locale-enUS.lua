@@ -193,3 +193,18 @@ L["LAYOUT_SUMMARY"] = [[
 The tracker's position and size are set in Edit Mode and saved separately for each Edit Mode layout. In the current layout (%s) it is %d pixels wide at %d%% scale, and grows with its contents up to %d pixels tall before it scrolls.
 
 To change this, open Edit Mode from the game menu (or type /editmode) and click the tracker. Its dialog has sliders for width, maximum height and scale, a button to match Blizzard's tracker, and a reset button.]]
+L["Colors"] = true
+L["Current zone"] = true
+L["Quest title"] = true
+L["Quest titles when not colored by difficulty, and tracked recipes."] = true
+L["Quest type"] = true
+L["Trivial"] = true
+L["Standard"] = true
+L["Difficult"] = true
+L["Very difficult"] = true
+L["Impossible"] = true
+L["Objective"] = true
+L["Completed objective"] = true
+L["Time left"] = true
+L["Direction arrow"] = true
+L["Scrollbar"] = true
