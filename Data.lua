@@ -500,7 +500,8 @@ end
 --- the client has no tasks (e.g. Forever). Entries are quest records
 --- (as from BuildQuest) without a level, flagged with isTask.
 function mod:CollectTasks()
-   if not (GetTasksTable and GetTaskInfo and C_TaskQuest and QuestUtils_IsQuestWorldQuest) then
+   -- Forever has the task API but no world quests or bonus objectives.
+   if IS_FOREVER or not (GetTasksTable and GetTaskInfo and C_TaskQuest and QuestUtils_IsQuestWorldQuest) then
       return nil
    end
    local profile = self.db.profile

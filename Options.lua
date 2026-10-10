@@ -29,6 +29,11 @@ local AceConfig = LibStub("AceConfig-3.0")
 
 local APP_NAME = "Magic Quest Tracker"
 
+-- Control width (x 170px): two columns in the settings panel.
+local COLUMN_WIDTH = 1.6
+-- Narrower dropdowns, so the three sort/section choices share a row.
+local DROPDOWN_WIDTH = 1.0
+
 local options
 
 local function Get(info)
@@ -337,7 +342,7 @@ local function BuildOptions()
                },
                sorting = { "none", "focused", "tracked" },
                order = 17,
-               width = COLUMN_WIDTH,
+               width = DROPDOWN_WIDTH,
             },
             zoneSort = {
                type = "select",
@@ -345,7 +350,7 @@ local function BuildOptions()
                desc = L["How zones are ordered. Level sorts zones by their lowest level quest, distance by their nearest quest."],
                values = SORT_VALUES,
                order = 15,
-               width = COLUMN_WIDTH,
+               width = DROPDOWN_WIDTH,
                set = SetAndUpdateDistance,
             },
             questSort = {
@@ -354,7 +359,7 @@ local function BuildOptions()
                desc = L["How quests are ordered within each zone. Distance sorts by straight-line distance to the quest's next location on the map; quests without one are listed last."],
                values = SORT_VALUES,
                order = 16,
-               width = COLUMN_WIDTH,
+               width = DROPDOWN_WIDTH,
                set = SetAndUpdateDistance,
             },
             showDistance = {
@@ -506,7 +511,7 @@ local function BuildOptions()
                desc = L["Show bonus objectives in the current area in a separate section."],
                order = 43,
                width = COLUMN_WIDTH,
-               hidden = function() return not GetTasksTable end,
+               hidden = function() return mod.IS_FOREVER or not GetTasksTable end,
             },
             showItemButtons = {
                type = "toggle",
@@ -534,7 +539,7 @@ local function BuildOptions()
                type = "toggle",
                name = L["Hide Blizzard tracker"],
                desc = L["Hide the built-in objective tracker. Note that this hides all of its sections, including scenarios and bonus objectives."],
-               order = 61,
+               order = 64,
                width = COLUMN_WIDTH,
                set = function(_, val)
                   mod.db.profile.hideBlizzardTracker = val
