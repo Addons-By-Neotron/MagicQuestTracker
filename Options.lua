@@ -326,6 +326,19 @@ local function BuildOptions()
                   mod:RequestUpdate()
                end,
             },
+            focusedSection = {
+               type = "select",
+               name = L["Section on top"],
+               desc = L["Show a section above the zones: Focused holds the focused quest, Tracked also holds the quests on the built-in watch list. Those quests move out of their zones, and the focused quest is shown even when other settings would hide it. When only watched quests are shown, Tracked holds just the focused quest."],
+               values = {
+                  none = L["None"],
+                  focused = L["Focused"],
+                  tracked = L["Tracked"],
+               },
+               sorting = { "none", "focused", "tracked" },
+               order = 17,
+               width = COLUMN_WIDTH,
+            },
             zoneSort = {
                type = "select",
                name = L["Zone sort order"],
@@ -442,6 +455,14 @@ local function BuildOptions()
                order = 25,
                width = COLUMN_WIDTH,
                hidden = function() return not mod.IS_FOREVER end,
+            },
+            markWatchedQuests = {
+               type = "toggle",
+               name = L["Mark tracked quests"],
+               desc = L["Show a check mark after quests on the built-in watch list. Not shown in the section on top, or when only watched quests are shown."],
+               order = 26,
+               width = COLUMN_WIDTH,
+               disabled = function() return not mod.db.profile.showAllQuests end,
             },
             showQuestTags = {
                type = "toggle",

@@ -275,6 +275,66 @@ end
 --- Returns a sorted list of zone sections:
 --- { name, isCurrent, zoneRank, minLevel, quests = { quest, ... } }
 --- plus the number of quests in the log and the number displayed.
+-- Fold key of the pinned section, kept apart from zone names.
+mod.FOCUSED_FOLD_KEY = "\001focused"
+
+-- Moves the focused (super tracked) quest, and with includeWatched the
+-- quests on the built-in watch list, out of their zones into one section
+-- placed on top: focused quest first, the rest in the order they were
+-- listed. Zones left empty are dropped. Returns the new section list.
+local function PinFocusedQuests(sections, includeWatched)
+   local pinned, focused = new(), nil
+   local kept = new()
+   for _, section in ipairs(sections) do
+      local quests = new()
+      local hasLocal = false
+      for _, quest in ipairs(section.quests) do
+         if quest.isSuperTracked then
+            focused = quest
+         elseif includeWatched and quest.isWatched then
+            tinsert(pinned, quest)
+         else
+            tinsert(quests, quest)
+            hasLocal = hasLocal or quest.inCurrentZone
+         end
+      end
+      del(section.quests)
+      section.quests = quests
+      section.hasLocalQuests = hasLocal or nil
+      if #quests > 0 then
+         tinsert(kept, section)
+      else
+         mod.deepDel(section)
+      end
+   end
+   del(sections)
+   if focused then
+      tinsert(pinned, 1, focused)
+   end
+   if #pinned == 0 then
+      del(pinned)
+      return kept
+   end
+
+   local section = new()
+   section.name = includeWatched and L["Tracked"] or L["Focused"]
+   section.foldKey = mod.FOCUSED_FOLD_KEY
+   section.isPinned = true
+   section.zoneRank = 0
+   section.minLevel = math.huge
+   section.quests = pinned
+   for _, quest in ipairs(pinned) do
+      quest.isPinned = true
+      if quest.inCurrentZone then section.hasLocalQuests = true end
+      if quest.level < section.minLevel then section.minLevel = quest.level end
+      if quest.distance and (not section.distance or quest.distance < section.distance) then
+         section.distance = quest.distance
+      end
+   end
+   tinsert(kept, 1, section)
+   return kept
+end
+
 function mod:CollectQuests()
    local profile = self.db.profile
    local zoneNames = GetCurrentZoneNames()
@@ -284,6 +344,9 @@ function mod:CollectQuests()
    local sections, byName = new(), new()
    local header = L["Miscellaneous"]
    local numQuests, numShown = 0, 0
+   -- With a section on top, the focused quest is always shown (in it).
+   local pinMode = profile.focusedSection == "focused" or profile.focusedSection == "tracked"
+   local focusedID = pinMode and C_SuperTrack and C_SuperTrack.GetSuperTrackedQuestID() or nil
 
    for i = 1, C_QuestLog.GetNumQuestLogEntries() do
       local info = C_QuestLog.GetInfo(i)
@@ -300,6 +363,9 @@ function mod:CollectQuests()
             end
             if visible and not profile.showAllQuests and C_QuestLog.GetQuestWatchType(info.questID) == nil then
                visible = false
+            end
+            if info.questID == focusedID then
+               visible = true
             end
             if visible then
                local section = byName[header]
@@ -388,6 +454,13 @@ function mod:CollectQuests()
       sort(sections, CurrentZoneFirst)
    else
       sort(sections, zoneSorter)
+   end
+
+   if pinMode then
+      -- Showing only watched quests, Tracked would take every quest out of
+      -- its zone: only the focused quest goes on top then.
+      local includeWatched = profile.focusedSection == "tracked" and profile.showAllQuests
+      sections = PinFocusedQuests(sections, includeWatched)
    end
 
    del(byName)

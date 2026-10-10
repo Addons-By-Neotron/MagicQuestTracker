@@ -10,6 +10,8 @@ A replacement for the built-in objective tracker for WoW Retail and Classic Fore
 - Option to hide quests that aren't in the current zone.
 - Option to auto-fold every zone except the current one when you change zones.
 - Shows all quests by default, or only those on the built-in watch list.
+- Quests on the built-in watch list get a check mark when all quests are shown.
+- Optional section on top of the zones with the focused quest (Focused), or the focused quest plus the quests on the built-in watch list (Tracked). The focused quest is always shown there, even when filtered out; when only watched quests are shown, only the focused quest moves up.
 - The level is suffixed by quest type: `+` elite/group, `D` dungeon, `R` raid, `H` heroic (e.g. `[33D]`, `[60R]`), and the quest type (Elite, Dungeon, Raid, Daily, ...) is appended to the title.
 - Quest item buttons for quests with a usable item.
 - On WoW Forever, quests that were not in original Classic are marked with an infinity sign.

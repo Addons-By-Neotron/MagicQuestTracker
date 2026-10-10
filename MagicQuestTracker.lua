@@ -117,6 +117,7 @@ mod.defaults = {
       currentZoneFirst = true,
       onlyCurrentZone = false,
       autoFoldZones = false,
+      focusedSection = "none",       -- section pinned on top: none | focused | tracked
       zoneSort = "level",            -- level | name | distance
       questSort = "level",           -- level | name | distance
       showDistance = false,
@@ -129,6 +130,7 @@ mod.defaults = {
       showLevel = true,
       showQuestTags = true,
       markForeverQuests = true,
+      markWatchedQuests = true,      -- check mark on quests on the built-in watch list
       colorByDifficulty = true,
       showCompletedObjectives = true,
       showRecipes = true,
@@ -350,7 +352,9 @@ function mod:AutoFoldZones(sections, tasks)
    for _, section in ipairs(sections) do
       -- Keep zones open that have quests here, even if filed elsewhere.
       local isLocal = section.isCurrent or section.hasLocalQuests
-      collapsed[section.name] = not isLocal or nil
+      if not section.isPinned then
+         collapsed[section.name] = not isLocal or nil
+      end
       hasLocal = hasLocal or isLocal
    end
 

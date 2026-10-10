@@ -562,6 +562,20 @@ local function ForeverMarker(profile)
       INFINITY_PATH, h, w, offY, INFINITY_L, INFINITY_R, INFINITY_T, INFINITY_B)
 end
 
+-- Check mark for quests on the built-in watch list.
+local WATCHED_PATH = "Interface\\Buttons\\UI-CheckBox-Check"
+
+local function WatchedMarker()
+   local size = mod:GetFonts().quest.size
+   local h = math.max(8, math.floor(size * 0.9 + 0.5))
+   return format("|T%s:%d:%d:0:%d|t", WATCHED_PATH, h, h, -math.floor(size * 0.1 + 0.5))
+end
+
+-- Not needed when only watched quests are listed, nor in the section on top.
+local function ShowWatchedMarker(quest, profile)
+   return quest.isWatched and profile.markWatchedQuests and profile.showAllQuests and not quest.isPinned
+end
+
 local titleLabels = {}
 
 local function FormatQuestTitle(quest, profile)
@@ -571,6 +585,9 @@ local function FormatQuestTitle(quest, profile)
    end
    if quest.isForeverQuest and profile.markForeverQuests then
       title = title .. " " .. ForeverMarker(profile)
+   end
+   if ShowWatchedMarker(quest, profile) then
+      title = title .. " " .. WatchedMarker()
    end
    if profile.showQuestTags then
       local labels = titleLabels
@@ -869,7 +886,7 @@ function mod:Render(sections, numQuests, numShown, recipes, tasks)
          local collapsedZones = self.db.char.collapsedZones
          local zoneColor, currentZoneColor = colors.zone, colors.currentZone
          for _, section in ipairs(sections) do
-            local collapsed = collapsedZones[section.name]
+            local collapsed = collapsedZones[section.foldKey or section.name]
             local text = format("%s %s (%d)", collapsed and "+" or "-", section.name, #section.quests)
             local color = section.isCurrent and currentZoneColor or zoneColor
             AddLine("zone", section, text, "zone", ZONE_INDENT, spacing.zoneSpacing, color, Brighten(color), "zone")
@@ -1094,7 +1111,8 @@ end
 mod.lineClickHandlers = {
    zone = function(self, _, section)
       local collapsed = self.db.char.collapsedZones
-      collapsed[section.name] = not collapsed[section.name] or nil
+      local key = section.foldKey or section.name
+      collapsed[key] = not collapsed[key] or nil
       self:RequestUpdate()
    end,
 
