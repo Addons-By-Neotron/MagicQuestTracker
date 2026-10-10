@@ -10,6 +10,8 @@
 ## X-Date: @project-date-integer@
 ## OptionalDeps: Ace3, LibSharedMedia-3.0, AceGUI-3.0-SharedMediaWidgets, LibMagicUtil-1.0, LibLogger, LibEditMode
 ## SavedVariables: MagicQuestTrackerDB
+## X-Curse-Project-ID: 1736971
+## X-Wago-ID: nGv9VjKx
 
 embeds.xml
 Locales.xml
