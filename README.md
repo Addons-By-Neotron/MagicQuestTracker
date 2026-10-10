@@ -24,6 +24,7 @@ A replacement for the built-in objective tracker for WoW Retail and Classic Fore
 - Configurable text colors in custom themes: headers, current zone, quest titles (single color or per difficulty), quest type, objectives, completed/failed objectives, time left, distance, direction arrow and scrollbar.
 - Clicks behave like the built-in tracker: left-click opens the quest on the map, shift-click links, right-click opens a menu.
 - Ctrl-click a quest to navigate to its next location (objective area, or turn-in when complete) with a TomTom waypoint, Blizzard's navigation (focusing the quest), or both. Without TomTom, Blizzard's navigation is used.
+- Blizzard quest focus (ctrl-click, the right-click menu and the quest POI buttons) can be turned off. Focusing quests from an addon can cause harmless taint errors in Blizzard's UI; with it off, ctrl-click only sets a TomTom waypoint.
 
 ## Position and size
 

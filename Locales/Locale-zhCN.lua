@@ -228,3 +228,5 @@ L["Built-in themes can't be changed. Make an editable copy under a new name."] =
 L["Make a copy of the selected theme under a new name."] = "以新名称创建所选主题的副本。"
 L["Name for the copy of %s:"] = "%s 副本的名称："
 L["%s (copy)"] = "%s（副本）"
+L["Use Blizzard quest focus"] = "使用暴雪任务焦点"
+L["Let the tracker focus (super track) quests for Blizzard's navigation, and show the quest POI buttons. Focusing quests from an addon can cause harmless errors about blocked or tainted actions in Blizzard's UI; turn this off to avoid them."] = "允许追踪器为暴雪导航聚焦（超级追踪）任务，并显示任务兴趣点按钮。由插件聚焦任务可能会在暴雪界面中引发关于被阻止或被污染（taint）操作的无害错误；关闭此选项可避免这些错误。"

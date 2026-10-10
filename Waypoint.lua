@@ -123,6 +123,10 @@ end
 --- auras. That can't be avoided, but in combat it is deferred until combat
 --- ends, where secret auras make it fail.
 function mod:SetSuperTrackedQuest(questID)
+   if not self.db.profile.blizzardFocus then
+      self.pendingSuperTrack = nil
+      return
+   end
    if InCombatLockdown() then
       self.pendingSuperTrack = questID
       return
@@ -139,11 +143,13 @@ end
 
 --- Navigates to the quest using the configured method: a TomTom waypoint,
 --- Blizzard's navigation (focusing / super tracking the quest), or both.
---- Without TomTom, Blizzard's navigation is always used.
+--- Without TomTom, Blizzard's navigation is always used. With Blizzard
+--- quest focus turned off, only TomTom is used (if present).
 function mod:SetQuestWaypoint(quest, mode)
    mode = mode or self.db.profile.waypointMode
-   local useTomTom = self:HasTomTom() and mode ~= "blizzard"
-   if mode ~= "tomtom" or not useTomTom then
+   local focus = self.db.profile.blizzardFocus
+   local useTomTom = self:HasTomTom() and (mode ~= "blizzard" or not focus)
+   if focus and (mode ~= "tomtom" or not useTomTom) then
       self:SetSuperTrackedQuest(quest.questID)
    end
    if useTomTom then

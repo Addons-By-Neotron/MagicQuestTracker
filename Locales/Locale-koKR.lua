@@ -228,3 +228,5 @@ L["Built-in themes can't be changed. Make an editable copy under a new name."] =
 L["Make a copy of the selected theme under a new name."] = "선택한 테마의 사본을 새 이름으로 만듭니다."
 L["Name for the copy of %s:"] = "%s의 사본 이름:"
 L["%s (copy)"] = "%s (사본)"
+L["Use Blizzard quest focus"] = "블리자드 퀘스트 집중 사용"
+L["Let the tracker focus (super track) quests for Blizzard's navigation, and show the quest POI buttons. Focusing quests from an addon can cause harmless errors about blocked or tainted actions in Blizzard's UI; turn this off to avoid them."] = "추적기가 블리자드 길찾기를 위해 퀘스트에 집중(추적)하고 퀘스트 POI 버튼을 표시합니다. 애드온에서 퀘스트에 집중하면 블리자드 UI에서 차단되거나 오염된(taint) 동작에 대한 무해한 오류가 발생할 수 있으니, 이를 피하려면 끄세요."

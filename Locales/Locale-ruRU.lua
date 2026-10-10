@@ -228,3 +228,5 @@ L["Built-in themes can't be changed. Make an editable copy under a new name."] =
 L["Make a copy of the selected theme under a new name."] = "Создает копию выбранной темы под новым названием."
 L["Name for the copy of %s:"] = "Название копии темы «%s»:"
 L["%s (copy)"] = "%s (копия)"
+L["Use Blizzard quest focus"] = "Использовать фокус заданий Blizzard"
+L["Let the tracker focus (super track) quests for Blizzard's navigation, and show the quest POI buttons. Focusing quests from an addon can cause harmless errors about blocked or tainted actions in Blizzard's UI; turn this off to avoid them."] = "Позволяет трекеру фокусировать задания для навигации Blizzard и показывает кнопки точек интереса заданий. Фокусировка заданий из модификации может вызывать безвредные ошибки о заблокированных или «заражённых» (taint) действиях в интерфейсе Blizzard; отключите, чтобы избежать их."

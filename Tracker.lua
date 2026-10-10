@@ -604,7 +604,7 @@ local function Brighten(color)
 end
 
 local function POIButtonsEnabled(profile)
-   if not (profile.showPOIButtons and POIButtonUtil) then return false end
+   if not (profile.showPOIButtons and profile.blizzardFocus and POIButtonUtil) then return false end
    -- Blizzard's tracker hides POI buttons when the questPOI CVar is off.
    local cvar = GetCVar("questPOI")
    return cvar == nil or cvar == "1"
@@ -981,6 +981,20 @@ local function SnapshotQuest(quest)
    }
 end
 
+-- "Focus quest" / "Stop focusing quest", unless Blizzard quest focus is off.
+local function AddFocusButton(root, questID)
+   if not mod.db.profile.blizzardFocus then return end
+   if C_SuperTrack.GetSuperTrackedQuestID() ~= questID then
+      root:CreateButton(SUPER_TRACK_QUEST or L["Focus quest"], function()
+         mod:SetSuperTrackedQuest(questID)
+      end)
+   else
+      root:CreateButton(STOP_SUPER_TRACK_QUEST or L["Stop focusing quest"], function()
+         mod:SetSuperTrackedQuest(0)
+      end)
+   end
+end
+
 local function ShowTaskMenu(owner, quest)
    local questID = quest.questID
    MenuUtil.CreateContextMenu(owner, function(_, root)
@@ -990,15 +1004,7 @@ local function ShowTaskMenu(owner, quest)
             mod:SetQuestWaypoint(quest, "tomtom")
          end)
       end
-      if C_SuperTrack.GetSuperTrackedQuestID() ~= questID then
-         root:CreateButton(SUPER_TRACK_QUEST or L["Focus quest"], function()
-            mod:SetSuperTrackedQuest(questID)
-         end)
-      else
-         root:CreateButton(STOP_SUPER_TRACK_QUEST or L["Stop focusing quest"], function()
-            mod:SetSuperTrackedQuest(0)
-         end)
-      end
+      AddFocusButton(root, questID)
       root:CreateButton(OBJECTIVES_SHOW_QUEST_MAP or L["Show on map"], function()
          OpenTaskOnMap(questID)
       end)
@@ -1026,15 +1032,7 @@ local function ShowQuestMenu(owner, quest)
          end)
       end
 
-      if C_SuperTrack.GetSuperTrackedQuestID() ~= questID then
-         root:CreateButton(SUPER_TRACK_QUEST or L["Focus quest"], function()
-            mod:SetSuperTrackedQuest(questID)
-         end)
-      else
-         root:CreateButton(STOP_SUPER_TRACK_QUEST or L["Stop focusing quest"], function()
-            mod:SetSuperTrackedQuest(0)
-         end)
-      end
+      AddFocusButton(root, questID)
 
       if QuestUtil and QuestUtil.OpenQuestDetails then
          root:CreateButton(OBJECTIVES_VIEW_IN_QUESTLOG or L["Open quest details"], function()

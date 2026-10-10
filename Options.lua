@@ -425,6 +425,14 @@ local function BuildOptions()
                order = 35,
                -- Without TomTom, ctrl-click always uses Blizzard's navigation.
                hidden = function() return not mod:HasTomTom() end,
+               disabled = function() return not mod.db.profile.blizzardFocus end,
+               width = COLUMN_WIDTH,
+            },
+            blizzardFocus = {
+               type = "toggle",
+               name = L["Use Blizzard quest focus"],
+               desc = L["Let the tracker focus (super track) quests for Blizzard's navigation, and show the quest POI buttons. Focusing quests from an addon can cause harmless errors about blocked or tainted actions in Blizzard's UI; turn this off to avoid them."],
+               order = 36,
                width = COLUMN_WIDTH,
             },
             markForeverQuests = {
@@ -492,6 +500,7 @@ local function BuildOptions()
                desc = L["Show the quest map icon next to each quest, like the built-in tracker. Click it to focus the quest. Follows the game's quest POI setting."],
                order = 52,
                width = COLUMN_WIDTH,
+               disabled = function() return not mod.db.profile.blizzardFocus end,
             },
             showFindGroupButton = {
                type = "toggle",
