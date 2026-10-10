@@ -615,12 +615,27 @@ local function CanFindGroup(quest)
       and QuestUtil.CanCreateQuestGroup(quest.questID) or false
 end
 
+-- Blizzard's click handler super tracks right away; in combat, defer the
+-- focus change instead (see mod:SetSuperTrackedQuest).
+local function POIButton_OnClick(button, mouseButton)
+   -- Shift-click (chat link / untrack) goes to Blizzard as usual.
+   if mouseButton == "LeftButton" and InCombatLockdown() and not IsShiftKeyDown() then
+      local questID = button:GetQuestID()
+      if questID then
+         mod:SetSuperTrackedQuest(button:IsSelected() and 0 or questID)
+      end
+      return
+   end
+   POIButtonMixin.OnClick(button, mouseButton)
+end
+
 -- Quest POI button (same as Blizzard's tracker): shows in progress / complete,
 -- highlighted when focused; clicking it focuses (super tracks) the quest.
 local function AttachPOIButton(line, quest)
    local button = line.poiButton
    if not button then
       button = CreateFrame("Button", nil, line, "POIButtonTemplate")
+      button:SetScript("OnClick", POIButton_OnClick)
       line.poiButton = button
    end
    button:SetQuestID(quest.questID)
@@ -977,11 +992,11 @@ local function ShowTaskMenu(owner, quest)
       end
       if C_SuperTrack.GetSuperTrackedQuestID() ~= questID then
          root:CreateButton(SUPER_TRACK_QUEST or L["Focus quest"], function()
-            C_SuperTrack.SetSuperTrackedQuestID(questID)
+            mod:SetSuperTrackedQuest(questID)
          end)
       else
          root:CreateButton(STOP_SUPER_TRACK_QUEST or L["Stop focusing quest"], function()
-            C_SuperTrack.SetSuperTrackedQuestID(0)
+            mod:SetSuperTrackedQuest(0)
          end)
       end
       root:CreateButton(OBJECTIVES_SHOW_QUEST_MAP or L["Show on map"], function()
@@ -1013,11 +1028,11 @@ local function ShowQuestMenu(owner, quest)
 
       if C_SuperTrack.GetSuperTrackedQuestID() ~= questID then
          root:CreateButton(SUPER_TRACK_QUEST or L["Focus quest"], function()
-            C_SuperTrack.SetSuperTrackedQuestID(questID)
+            mod:SetSuperTrackedQuest(questID)
          end)
       else
          root:CreateButton(STOP_SUPER_TRACK_QUEST or L["Stop focusing quest"], function()
-            C_SuperTrack.SetSuperTrackedQuestID(0)
+            mod:SetSuperTrackedQuest(0)
          end)
       end
 

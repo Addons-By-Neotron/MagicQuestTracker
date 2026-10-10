@@ -117,6 +117,26 @@ local function SetTomTomWaypoint(self, quest)
    })
 end
 
+--- Focuses (super tracks) a quest; 0 stops focusing. Called from addon
+--- code, this fires SUPER_TRACKING_CHANGED tainted, and Blizzard's handlers
+--- (map pins, objective tracker) then trip over protected calls and secret
+--- auras. That can't be avoided, but in combat it is deferred until combat
+--- ends, where secret auras make it fail.
+function mod:SetSuperTrackedQuest(questID)
+   if InCombatLockdown() then
+      self.pendingSuperTrack = questID
+      return
+   end
+   self.pendingSuperTrack = nil
+   C_SuperTrack.SetSuperTrackedQuestID(questID)
+end
+
+function mod:ApplyPendingSuperTrack()
+   if self.pendingSuperTrack then
+      self:SetSuperTrackedQuest(self.pendingSuperTrack)
+   end
+end
+
 --- Navigates to the quest using the configured method: a TomTom waypoint,
 --- Blizzard's navigation (focusing / super tracking the quest), or both.
 --- Without TomTom, Blizzard's navigation is always used.
@@ -124,7 +144,7 @@ function mod:SetQuestWaypoint(quest, mode)
    mode = mode or self.db.profile.waypointMode
    local useTomTom = self:HasTomTom() and mode ~= "blizzard"
    if mode ~= "tomtom" or not useTomTom then
-      C_SuperTrack.SetSuperTrackedQuestID(quest.questID)
+      self:SetSuperTrackedQuest(quest.questID)
    end
    if useTomTom then
       SetTomTomWaypoint(self, quest)

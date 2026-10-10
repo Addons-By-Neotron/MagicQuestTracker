@@ -275,9 +275,8 @@ function mod:PLAYER_REGEN_ENABLED()
       self.combatHidden = nil
       self.layoutDeferred = true  -- render (and show) below
    end
-   if self.pendingBlizzardVisibility ~= nil then
-      self:SetBlizzardTrackerHidden(self.pendingBlizzardVisibility)
-   end
+   self:ApplyPendingSuperTrack()
+   self:UpdateBlizzardTrackerMouse()
    if self.applyLayoutDeferred then
       self.applyLayoutDeferred = nil
       self:ApplyLayout()
@@ -389,36 +388,92 @@ end
 
 ----------------------------------------------------------------
 -- Blizzard objective tracker visibility
--- Hides the whole ObjectiveTrackerFrame (same approach as Questie on Forever).
--- Protected state changes wait for combat to end.
+-- Hide(), Show() or Update() on ObjectiveTrackerFrame from addon code runs
+-- its managed-frame and Edit Mode layout code tainted, which later breaks
+-- secret aura reads in the tracker's own updates (Forever and retail). So
+-- the tracker is made invisible with alpha only: no Blizzard script runs,
+-- and SetAlpha is allowed in combat. A secure hook keeps it at 0 if
+-- Blizzard restores the alpha.
 ----------------------------------------------------------------
+
+-- Frames whose mouse we turned off, so un-hiding can turn it back on.
+local mouseDisabled = setmetatable({}, { __mode = "k" })
+
+-- An invisible tracker would still take hovers and clicks (its quest item
+-- buttons are secure and would even fire), so its frames stop receiving the
+-- mouse. EnableMouse writes no Lua state, so it taints nothing. Protected
+-- frames can't be changed in combat; they are caught when combat ends.
+local function SetTrackerMouse(enabled, inCombat, ...)
+   for i = 1, select("#", ...) do
+      local frame = select(i, ...)
+      if inCombat and frame:IsProtected() then
+         mod.trackerMousePending = true
+      else
+         if enabled then
+            if mouseDisabled[frame] then
+               mouseDisabled[frame] = nil
+               frame:EnableMouse(true)
+            end
+         elseif frame:IsMouseEnabled() then
+            mouseDisabled[frame] = true
+            frame:EnableMouse(false)
+         end
+      end
+      SetTrackerMouse(enabled, inCombat, frame:GetChildren())
+   end
+end
+
+-- Blocks are (re)filled as quests change and handed to their module's
+-- AddBlock during layout: only that block's frames need the mouse turned
+-- off, and only when Blizzard actually lays the tracker out.
+local hookedModules = {}
+
+local function OnAddBlock(_, block)
+   if mod.blizzardHidden then
+      SetTrackerMouse(false, InCombatLockdown(), block)
+   end
+end
+
+local function HookModule(_, module)
+   if module and module.AddBlock and not hookedModules[module] then
+      hookedModules[module] = true
+      hooksecurefunc(module, "AddBlock", OnAddBlock)
+   end
+end
+
+-- Catches protected frames skipped during combat.
+function mod:UpdateBlizzardTrackerMouse()
+   local tracker = ObjectiveTrackerFrame
+   if tracker and self.trackerMousePending then
+      self.trackerMousePending = nil
+      SetTrackerMouse(not self.blizzardHidden, false, tracker)
+   end
+end
 
 function mod:SetBlizzardTrackerHidden(hide)
    local tracker = ObjectiveTrackerFrame
    if not tracker then return end
 
+   -- Never hidden by us: leave it alone.
+   if not hide and not self.blizzardHidden then return end
+
    self.blizzardHidden = hide
-   if not self.blizzardHooked then
+   if hide and not self.blizzardHooked then
       self.blizzardHooked = true
-      tracker:HookScript("OnShow", function()
-         if mod.blizzardHidden then
-            mod:SetBlizzardTrackerHidden(true)
+      hooksecurefunc(tracker, "SetAlpha", function(frame, alpha)
+         if mod.blizzardHidden and alpha ~= 0 then
+            frame:SetAlpha(0)
          end
       end)
+      for _, module in ipairs(tracker.modules or {}) do
+         HookModule(nil, module)
+      end
+      if tracker.AddModule then
+         hooksecurefunc(tracker, "AddModule", HookModule)
+      end
    end
-
-   if InCombatLockdown() and (not hide or tracker:IsProtected()) then
-      self.pendingBlizzardVisibility = hide
-      return
-   end
-   self.pendingBlizzardVisibility = nil
-
-   if hide then
-      tracker:Hide()
-   elseif tracker.Update then
-      -- Let Blizzard decide whether it should be visible.
-      tracker:Update()
-   end
+   tracker:SetAlpha(hide and 0 or 1)
+   SetTrackerMouse(not hide, InCombatLockdown(), tracker)
 end
 
 ----------------------------------------------------------------

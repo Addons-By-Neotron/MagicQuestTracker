@@ -23,7 +23,7 @@ read_globals = {
     "GetQuestDifficultyColor", "GetQuestLogCompletionText", "GetQuestLogSpecialItemInfo",
     "GetQuestProgressBarPercent", "QuestMapFrame_OpenToQuestDetails", "QuestMapQuestOptions_AbandonQuest",
     "ToggleQuestLog", "GameTooltip_Hide", "C_Timer", "CooldownFrame_Set", "GetQuestLogSpecialItemCooldown",
-    "IsQuestLogSpecialItemInRange", "GetPlayerFacing", "GetBuildInfo", "IsControlKeyDown", "POIButtonUtil", "GetCVar", "C_LFGList", "GetTasksTable", "GetTaskInfo", "C_TaskQuest", "QuestUtils_IsQuestWorldQuest",
+    "IsQuestLogSpecialItemInRange", "GetPlayerFacing", "GetBuildInfo", "IsControlKeyDown", "IsShiftKeyDown", "POIButtonUtil", "POIButtonMixin", "hooksecurefunc", "GetCVar", "C_LFGList", "GetTasksTable", "GetTaskInfo", "C_TaskQuest", "QuestUtils_IsQuestWorldQuest",
     "QuestUtils_IsQuestWatched", "QuestUtils_ShouldDisplayExpirationWarning", "BONUS_OBJECTIVE_TIME_LEFT",
     "SecondsToTime", "OpenQuestLog", "EventRegistry", "TRACKER_HEADER_WORLD_QUESTS", "TRACKER_HEADER_BONUS_OBJECTIVES", "TomTom", "CreateVector2D", "wipe", "UnitLevel", "RANGE_INDICATOR", "tonumber", "ShowQuestComplete", "ProfessionsFrame_LoadUI", "ChatEdit_InsertLink",
 
