@@ -1116,7 +1116,12 @@ mod.lineClickHandlers = {
       self:RequestUpdate()
    end,
 
-   section = function(self, _, section)
+   section = function(self, _, section, button)
+      -- Right-click on the Quests header opens the quest log.
+      if button == "RightButton" and section.key == "quests" and ToggleQuestLog then
+         ToggleQuestLog()
+         return
+      end
       local collapsed = self.db.char.collapsedSections
       collapsed[section.key] = not collapsed[section.key] or nil
       self:RequestUpdate()
