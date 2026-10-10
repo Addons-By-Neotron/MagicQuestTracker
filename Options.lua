@@ -65,9 +65,9 @@ local function FontGroup(role, name, order)
       name = name,
       inline = true,
       order = order,
-      get = function(info) return mod:GetCustomTheme().fonts[role][info[#info]] end,
+      get = function(info) return mod:GetDisplayTheme().fonts[role][info[#info]] end,
       set = function(info, val)
-         mod:GetCustomTheme().fonts[role][info[#info]] = val
+         mod:GetDisplayTheme().fonts[role][info[#info]] = val
          mod:ApplyLayout()
       end,
       args = {
@@ -106,11 +106,11 @@ local function ColorOption(name, order)
       hasAlpha = true,
       order = order,
       get = function(info)
-         local c = mod:GetCustomTheme()[info[#info - 1]][info[#info]]
+         local c = mod:GetDisplayTheme()[info[#info - 1]][info[#info]]
          return c.r, c.g, c.b, c.a
       end,
       set = function(info, r, g, b, a)
-         local c = mod:GetCustomTheme()[info[#info - 1]][info[#info]]
+         local c = mod:GetDisplayTheme()[info[#info - 1]][info[#info]]
          c.r, c.g, c.b, c.a = r, g, b, a
          mod:ApplyLayout()
       end,
@@ -124,10 +124,9 @@ local function CustomGroup(kind, name, order, desc)
       name = name,
       inline = true,
       order = order,
-      hidden = IsNotCustom,
-      get = function(info) return mod:GetCustomTheme()[kind][info[#info]] end,
+      get = function(info) return mod:GetDisplayTheme()[kind][info[#info]] end,
       set = function(info, val)
-         mod:GetCustomTheme()[kind][info[#info]] = val
+         mod:GetDisplayTheme()[kind][info[#info]] = val
          mod:ApplyLayout()
       end,
       args = {
@@ -165,7 +164,7 @@ end
 
 -- Tracker background tab of the selected custom theme.
 local function BackgroundGroup(order)
-   local function Settings() return mod:GetCustomTheme().background end
+   local function Settings() return mod:GetDisplayTheme().background end
    local function RGBOption(name, order, desc)
       return {
          type = "color",
@@ -187,7 +186,6 @@ local function BackgroundGroup(order)
       type = "group",
       name = L["Background"],
       order = order,
-      hidden = IsNotCustom,
       get = function(info) return Settings()[info[#info]] end,
       set = function(info, val)
          Settings()[info[#info]] = val
@@ -242,11 +240,11 @@ local function TextColor(name, order, desc)
       desc = desc,
       order = order,
       get = function(info)
-         local c = mod:GetCustomTheme().colors[info[#info]]
+         local c = mod:GetDisplayTheme().colors[info[#info]]
          return c.r, c.g, c.b
       end,
       set = function(info, r, g, b)
-         local c = mod:GetCustomTheme().colors[info[#info]]
+         local c = mod:GetDisplayTheme().colors[info[#info]]
          c.r, c.g, c.b = r, g, b
          mod:ApplyLayout()
       end,
@@ -262,6 +260,16 @@ local METERS_PER_YARD = 0.9144
 local function UsesMeters()
    local units = mod.db.profile.distanceUnits
    return units == "meters" or units == "metric"
+end
+
+local function DisableForBuiltIn(group)
+   for _, option in pairs(group.args) do
+      if option.type == "group" then
+         DisableForBuiltIn(option)
+      elseif option.type ~= "description" and option.type ~= "header" then
+         option.disabled = IsNotCustom
+      end
+   end
 end
 
 local function BuildOptions()
@@ -566,7 +574,7 @@ local function BuildOptions()
          args = {
             desc = {
                type = "description",
-               name = L["Themes are shared by all profiles. A new theme starts as a copy of the selected one."],
+               name = L["Themes are shared by all profiles. Built-in themes can't be changed; use Edit theme to make an editable copy."],
                order = 0,
             },
             theme = {
@@ -575,18 +583,19 @@ local function BuildOptions()
                values = function() return mod:GetThemeList() end,
                order = 1,
                get = function()
-                  return mod:GetCustomTheme() and mod.db.profile.theme or "blizzard"
+                  return mod:GetThemeSettings() and mod.db.profile.theme or "blizzard"
                end,
                set = function(_, val) mod:SelectTheme(val) end,
             },
-            newTheme = {
-               type = "input",
-               name = L["New theme"],
-               desc = L["Enter a name to create a new theme from the selected one."],
+            copyTheme = {
+               type = "execute",
+               name = function() return IsNotCustom() and L["Edit theme"] or L["Copy theme"] end,
+               desc = function()
+                  return IsNotCustom() and L["Built-in themes can't be changed. Make an editable copy under a new name."]
+                     or L["Make a copy of the selected theme under a new name."]
+               end,
                order = 2,
-               get = function() return "" end,
-               validate = function(_, val) return mod:ValidateThemeName(val) or true end,
-               set = function(_, val) mod:CreateTheme(val) end,
+               func = function() mod:ShowNewThemePopup() end,
             },
             renameTheme = {
                type = "input",
@@ -642,7 +651,6 @@ local function BuildOptions()
                type = "group",
                name = L["Headers"],
                order = 10,
-               hidden = IsNotCustom,
                args = {
                   title = CustomGroup("title", L["Tracker title"], 1),
                   section = CustomGroup("section", L["Section headers"], 2),
@@ -655,7 +663,6 @@ local function BuildOptions()
                type = "group",
                name = L["Fonts"],
                order = 13,
-               hidden = IsNotCustom,
                args = {
                   title = FontGroup("title", L["Tracker title"], 1),
                   module = FontGroup("module", L["Section headers"], 1.5),
@@ -668,7 +675,6 @@ local function BuildOptions()
                type = "group",
                name = L["Colors"],
                order = 14,
-               hidden = IsNotCustom,
                args = {
                   headers = ColorGroup(L["Headers"], 1, {
                      title = TextColor(L["Tracker title"], 1),
@@ -704,10 +710,9 @@ local function BuildOptions()
                name = L["Layout"],
                desc = L["Spacing of the tracker contents."],
                order = 12,
-               hidden = IsNotCustom,
-               get = function(info) return mod:GetCustomTheme().layout[info[#info]] end,
+               get = function(info) return mod:GetDisplayTheme().layout[info[#info]] end,
                set = function(info, val)
-                  mod:GetCustomTheme().layout[info[#info]] = val
+                  mod:GetDisplayTheme().layout[info[#info]] = val
                   mod:ApplyLayout()
                end,
                args = {
@@ -758,7 +763,64 @@ local function BuildOptions()
          },
       },
    }
+   -- Built-in themes show their settings greyed out. (Disabling a tab group
+   -- would disable the tab itself, so disable the settings inside.)
+   for _, key in ipairs({ "headers", "background", "contentLayout", "fonts", "colors" }) do
+      DisableForBuiltIn(options.theme.args[key])
+   end
    options.profiles = LibStub("AceDBOptions-3.0"):GetOptionsTable(mod.db)
+end
+
+----------------------------------------------------------------
+-- New theme name popup (copy of the selected theme)
+----------------------------------------------------------------
+
+local NEW_THEME_POPUP = "MAGICQUESTTRACKER_NEW_THEME"
+
+local function PopupEditBox(dialog)
+   return dialog.GetEditBox and dialog:GetEditBox() or dialog.editBox
+end
+
+local function PopupButton1(dialog)
+   return dialog.GetButton1 and dialog:GetButton1() or dialog.button1
+end
+
+StaticPopupDialogs[NEW_THEME_POPUP] = {
+   text = L["Name for the copy of %s:"],
+   button1 = ACCEPT,
+   button2 = CANCEL,
+   hasEditBox = 1,
+   OnShow = function(dialog, data)
+      local editBox = PopupEditBox(dialog)
+      editBox:SetText(mod:GetFreeThemeName(format(L["%s (copy)"], data.sourceName)))
+      editBox:HighlightText()
+      editBox:SetFocus()
+   end,
+   OnAccept = function(dialog)
+      mod:CreateTheme(PopupEditBox(dialog):GetText())
+   end,
+   EditBoxOnTextChanged = function(editBox)
+      PopupButton1(editBox:GetParent()):SetEnabled(not mod:ValidateThemeName(editBox:GetText()))
+   end,
+   EditBoxOnEnterPressed = function(editBox)
+      local dialog = editBox:GetParent()
+      if PopupButton1(dialog):IsEnabled() then
+         mod:CreateTheme(editBox:GetText())
+         dialog:Hide()
+      end
+   end,
+   EditBoxOnEscapePressed = function(editBox)
+      editBox:GetParent():Hide()
+   end,
+   hideOnEscape = 1,
+   timeout = 0,
+   whileDead = 1,
+}
+
+--- Asks for a name and creates an editable copy of the selected theme.
+function mod:ShowNewThemePopup()
+   local sourceName = self:GetThemeList()[self:GetThemeSettings() and self.db.profile.theme or "blizzard"]
+   StaticPopup_Show(NEW_THEME_POPUP, sourceName, nil, { sourceName = sourceName })
 end
 
 ----------------------------------------------------------------

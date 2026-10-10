@@ -150,7 +150,7 @@ end
 
 local function StyleBar(owner, kind, left)
    local profile = mod.db.profile
-   local settings = mod:GetCustomTheme()[kind]
+   local settings = mod:GetThemeSettings()[kind]
    local inset = BorderInset(kind)
    local bg = owner.bg
    local color = settings.color
@@ -199,7 +199,7 @@ local function ArtMetrics(settings)
 end
 
 function custom.StyleTitle(title, profile)
-   local settings = mod:GetCustomTheme().title
+   local settings = mod:GetThemeSettings().title
    local inset = StyleBar(title, "title", 0)
    title.minimize:GetHighlightTexture():SetAlpha(settings.borderedButton and 1 or 0)
    title.minimize:ClearAllPoints()
@@ -209,7 +209,7 @@ function custom.StyleTitle(title, profile)
 end
 
 function custom.MinimizeAtlas(minimized)
-   if mod:GetCustomTheme().title.borderedButton then
+   if mod:GetThemeSettings().title.borderedButton then
       return blizzard.MinimizeAtlas(minimized)
    end
    return minimized and "ui-questtrackerbutton-secondary-expand" or "ui-questtrackerbutton-secondary-collapse"
@@ -217,7 +217,7 @@ end
 
 function custom.HeaderLayout(kind, profile)
    -- Headers without a visible bar or border stay plain text.
-   local settings = mod:GetCustomTheme()[kind]
+   local settings = mod:GetThemeSettings()[kind]
    if settings.color.a == 0 and not backdrops[kind] then
       return false
    end
@@ -235,20 +235,169 @@ end
 
 local BLIZZARD = "blizzard"
 
---- Settings of the selected custom theme, or nil for the Blizzard theme.
+--- Settings of the selected custom theme, or nil for a built-in theme.
 function mod:GetCustomTheme()
    return self.db.global.themes[self.db.profile.theme]
 end
 
+----------------------------------------------------------------
+-- Built-in presets: read-only dark themes drawn by the Custom renderer.
+-- They only change colors, bars and background; fonts and spacing are
+-- standard.
+-- "New theme" copies one to customize it.
+----------------------------------------------------------------
+
+local function Hex(hex)
+   return {
+      r = tonumber(hex:sub(1, 2), 16) / 255,
+      g = tonumber(hex:sub(3, 4), 16) / 255,
+      b = tonumber(hex:sub(5, 6), 16) / 255,
+   }
+end
+
+-- A dark preset from a palette (hex colors):
+--   bg, bar        background and title/section bars
+--   body, emphasis, secondary   objectives, current zone, dimmed text
+--   title, section, zone, quest, tag, arrow   accents
+--   green, yellow, orange, red  difficulty, time left and failed
+local function DarkPreset(c)
+   local theme = CopyTable(mod.themeDefaults)
+   local function Bar(settings)
+      settings.texture = "Solid"
+      settings.color = Hex(c.bar)
+      settings.color.a = 1
+   end
+   Bar(theme.title)
+   theme.title.borderedButton = false
+   Bar(theme.section)
+   theme.background.texture = "Solid"
+   theme.background.color = Hex(c.bg)
+   theme.background.alpha = 0.85
+   theme.background.hoverAlpha = 0.95
+   theme.layout.padding = 4
+   local colors = theme.colors
+   colors.title = Hex(c.title)
+   colors.section = Hex(c.section)
+   colors.zone = Hex(c.zone)
+   colors.currentZone = Hex(c.emphasis)
+   colors.quest = Hex(c.quest)
+   colors.questTag = Hex(c.tag)
+   colors.objective = Hex(c.body)
+   colors.complete = Hex(c.secondary)
+   colors.failed = Hex(c.red)
+   colors.timeLeft = Hex(c.orange)
+   colors.distance = Hex(c.secondary)
+   colors.arrow = Hex(c.arrow)
+   colors.scrollbar = Hex(c.secondary)
+   colors.trivial = Hex(c.secondary)
+   colors.standard = Hex(c.green)
+   colors.difficult = Hex(c.yellow)
+   colors.verydifficult = Hex(c.orange)
+   colors.impossible = Hex(c.red)
+   return theme
+end
+
+local PRESETS = {
+   -- https://ethanschoonover.com/solarized/
+   ["Solarized Dark"] = DarkPreset({
+      bg = "002b36", bar = "073642", body = "839496", emphasis = "93a1a1", secondary = "586e75",
+      title = "b58900", section = "268bd2", zone = "2aa198", quest = "b58900", tag = "6c71c4", arrow = "2aa198",
+      green = "859900", yellow = "b58900", orange = "cb4b16", red = "dc322f",
+   }),
+   -- https://www.nordtheme.com/
+   ["Nord"] = DarkPreset({
+      bg = "2e3440", bar = "3b4252", body = "d8dee9", emphasis = "eceff4", secondary = "7b88a1",
+      title = "88c0d0", section = "81a1c1", zone = "8fbcbb", quest = "ebcb8b", tag = "b48ead", arrow = "88c0d0",
+      green = "a3be8c", yellow = "ebcb8b", orange = "d08770", red = "bf616a",
+   }),
+   -- https://draculatheme.com/
+   ["Dracula"] = DarkPreset({
+      bg = "282a36", bar = "44475a", body = "f8f8f2", emphasis = "ffffff", secondary = "6272a4",
+      title = "ff79c6", section = "bd93f9", zone = "8be9fd", quest = "f1fa8c", tag = "ffb86c", arrow = "8be9fd",
+      green = "50fa7b", yellow = "f1fa8c", orange = "ffb86c", red = "ff5555",
+   }),
+   -- https://github.com/morhetz/gruvbox
+   ["Gruvbox Dark"] = DarkPreset({
+      bg = "282828", bar = "3c3836", body = "ebdbb2", emphasis = "fbf1c7", secondary = "928374",
+      title = "fabd2f", section = "83a598", zone = "8ec07c", quest = "fabd2f", tag = "d3869b", arrow = "8ec07c",
+      green = "b8bb26", yellow = "fabd2f", orange = "fe8019", red = "fb4934",
+   }),
+   -- https://catppuccin.com/ (Mocha)
+   ["Catppuccin Mocha"] = DarkPreset({
+      bg = "1e1e2e", bar = "313244", body = "cdd6f4", emphasis = "b4befe", secondary = "7f849c",
+      title = "cba6f7", section = "89b4fa", zone = "94e2d5", quest = "f9e2af", tag = "f5c2e7", arrow = "89dceb",
+      green = "a6e3a1", yellow = "f9e2af", orange = "fab387", red = "f38ba8",
+   }),
+   -- https://github.com/folke/tokyonight.nvim (Night)
+   ["Tokyo Night"] = DarkPreset({
+      bg = "1a1b26", bar = "24283b", body = "a9b1d6", emphasis = "c0caf5", secondary = "565f89",
+      title = "bb9af7", section = "7aa2f7", zone = "7dcfff", quest = "e0af68", tag = "bb9af7", arrow = "7dcfff",
+      green = "9ece6a", yellow = "e0af68", orange = "ff9e64", red = "f7768e",
+   }),
+   -- Atom One Dark
+   ["One Dark"] = DarkPreset({
+      bg = "282c34", bar = "2c313a", body = "abb2bf", emphasis = "dcdfe4", secondary = "5c6370",
+      title = "c678dd", section = "61afef", zone = "56b6c2", quest = "e5c07b", tag = "d19a66", arrow = "56b6c2",
+      green = "98c379", yellow = "e5c07b", orange = "d19a66", red = "e06c75",
+   }),
+   -- Monokai: neutral olive-grey
+   ["Monokai"] = DarkPreset({
+      bg = "272822", bar = "3e3d32", body = "f8f8f2", emphasis = "ffffff", secondary = "75715e",
+      title = "e6db74", section = "fd971f", zone = "a6e22e", quest = "e6db74", tag = "ae81ff", arrow = "66d9ef",
+      green = "a6e22e", yellow = "e6db74", orange = "fd971f", red = "f92672",
+   }),
+   -- https://github.com/sainnhe/everforest (Dark, medium): green-grey
+   ["Everforest Dark"] = DarkPreset({
+      bg = "2d353b", bar = "343f44", body = "d3c6aa", emphasis = "e5dfc5", secondary = "859289",
+      title = "dbbc7f", section = "a7c080", zone = "83c092", quest = "dbbc7f", tag = "d699b6", arrow = "83c092",
+      green = "a7c080", yellow = "dbbc7f", orange = "e69875", red = "e67e80",
+   }),
+   -- https://rosepinetheme.com/: muted purple
+   ["Rose Pine"] = DarkPreset({
+      bg = "191724", bar = "26233a", body = "e0def4", emphasis = "ffffff", secondary = "6e6a86",
+      title = "ebbcba", section = "c4a7e7", zone = "9ccfd8", quest = "f6c177", tag = "eb6f92", arrow = "9ccfd8",
+      green = "9ccfd8", yellow = "f6c177", orange = "ebbcba", red = "eb6f92",
+   }),
+   -- https://github.com/rebelot/kanagawa.nvim (Dragon): warm black
+   ["Kanagawa Dragon"] = DarkPreset({
+      bg = "181616", bar = "282727", body = "c5c9c5", emphasis = "c8c093", secondary = "737c73",
+      title = "c4b28a", section = "b6927b", zone = "8ea4a2", quest = "c4b28a", tag = "a292a3", arrow = "8ea4a2",
+      green = "87a987", yellow = "c4b28a", orange = "b98d7b", red = "c4746e",
+   }),
+   -- https://github.com/chriskempson/tomorrow-theme (Night): neutral charcoal
+   ["Tomorrow Night"] = DarkPreset({
+      bg = "1d1f21", bar = "282a2e", body = "c5c8c6", emphasis = "ffffff", secondary = "969896",
+      title = "f0c674", section = "b294bb", zone = "8abeb7", quest = "f0c674", tag = "de935f", arrow = "8abeb7",
+      green = "b5bd68", yellow = "f0c674", orange = "de935f", red = "cc6666",
+   }),
+   -- Zenburn: low-contrast grey
+   ["Zenburn"] = DarkPreset({
+      bg = "3f3f3f", bar = "4f4f4f", body = "dcdccc", emphasis = "ffffef", secondary = "8f8f8f",
+      title = "f0dfaf", section = "dfaf8f", zone = "93e0e3", quest = "f0dfaf", tag = "dc8cc3", arrow = "93e0e3",
+      green = "9fc59f", yellow = "f0dfaf", orange = "dfaf8f", red = "cc9393",
+   }),
+}
+
+--- Settings to show in the options: the selected theme's, or the Blizzard look.
+function mod:GetDisplayTheme()
+   return self:GetThemeSettings() or self.themeDefaults
+end
+
+--- Settings of the selected theme (custom or preset), or nil for the Blizzard theme.
+function mod:GetThemeSettings()
+   local name = self.db.profile.theme
+   return self.db.global.themes[name] or PRESETS[name]
+end
+
 --- Tracker background settings of the selected theme.
 function mod:GetBackground()
-   local theme = self:GetCustomTheme()
+   local theme = self:GetThemeSettings()
    return theme and theme.background or self.themeDefaults.background
 end
 
 --- Font settings ([role] = { face, size, outline }) of the selected theme.
 function mod:GetFonts()
-   local theme = self:GetCustomTheme()
+   local theme = self:GetThemeSettings()
    return theme and theme.fonts or self.themeDefaults.fonts
 end
 
@@ -263,17 +412,20 @@ end
 
 --- Content spacing (padding, line spacing) of the selected theme.
 function mod:GetContentLayout()
-   local theme = self:GetCustomTheme()
+   local theme = self:GetThemeSettings()
    return theme and theme.layout or self.themeDefaults.layout
 end
 
 function mod:GetTheme()
-   return self:GetCustomTheme() and custom or blizzard
+   return self:GetThemeSettings() and custom or blizzard
 end
 
 --- Theme names for dropdowns: [key] = display name.
 function mod:GetThemeList()
    local list = { [BLIZZARD] = L["Blizzard"] }
+   for name in pairs(PRESETS) do
+      list[name] = name
+   end
    for name in pairs(self.db.global.themes) do
       list[name] = name
    end
@@ -285,15 +437,15 @@ function mod:ValidateThemeName(name)
    name = strtrim(name or "")
    if name == "" then
       return L["Enter a theme name."]
-   elseif name:lower() == BLIZZARD or self.db.global.themes[name] then
+   elseif name:lower() == BLIZZARD or PRESETS[name] or self.db.global.themes[name] then
       return L["A theme with that name already exists."]
    end
 end
 
---- Creates a theme from the selected one (a Blizzard look for the Blizzard theme) and selects it.
+--- Creates a theme from the selected one (built-in or custom) and selects it.
 function mod:CreateTheme(name)
    name = strtrim(name)
-   self.db.global.themes[name] = CopyTable(self:GetCustomTheme() or self.themeDefaults)
+   self.db.global.themes[name] = CopyTable(self:GetThemeSettings() or self.themeDefaults)
    self:SelectTheme(name)
 end
 
@@ -482,7 +634,7 @@ end
 --- Call when theme settings change; header lines restyle on next render.
 function mod:RefreshTheme()
    self.themeVersion = self.themeVersion + 1
-   local theme = self:GetCustomTheme()
+   local theme = self:GetThemeSettings()
    local colors = theme and theme.colors or self.themeDefaults.colors
    -- New tables, so cached highlight colors don't go stale.
    textColors = {}

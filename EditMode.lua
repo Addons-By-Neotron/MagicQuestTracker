@@ -183,7 +183,7 @@ function mod:SetupEditMode()
             return values
          end,
          get = function()
-            return mod:GetCustomTheme() and mod.db.profile.theme or "blizzard"
+            return mod:GetThemeSettings() and mod.db.profile.theme or "blizzard"
          end,
          set = function(_, value)
             mod:SelectTheme(value)

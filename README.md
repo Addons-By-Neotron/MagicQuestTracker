@@ -15,10 +15,10 @@ A replacement for the built-in objective tracker for WoW Retail and Classic Fore
 - On WoW Forever, quests that were not in original Classic are marked with an infinity sign.
 - Retail: world quests (in the current area and tracked) and bonus objectives in their own sections.
 - Tracked profession recipes are shown in a separate section.
-- Scrollable, with a configurable max height, width and scale.
+- Scrollable, with a configurable max height, width and scale (via Edit Mode).
 - Tracker background (texture, color, border) as part of custom themes, with separate opacity for normal and mouseover.
 - Configurable spacing between zones, zone header and quests, quests and objectives.
-- Themes: "Blizzard" (the built-in tracker's header art) or your own named themes (colored title, section and zone bars, each with its own SharedMedia texture or Blizzard header art, color and optional border). Themes are shared by all profiles; a new theme starts as a copy of the selected one.
+- Themes: "Blizzard" (the built-in tracker's header art) or your own named themes (colored title, section and zone bars, each with its own SharedMedia texture or Blizzard header art, color and optional border). Built-in themes: Blizzard, plus dark themes Solarized Dark, Nord, Dracula, Gruvbox Dark, Catppuccin Mocha, Tokyo Night, One Dark, Monokai, Everforest Dark, Rose Pine, Kanagawa Dragon, Tomorrow Night and Zenburn. Themes are shared by all profiles; a new theme starts as a copy of the selected one, built-in or not.
 - Configurable fonts (face, size, outline) for the title, section and zone headers, quest titles and objectives, as part of custom themes.
 - Optionally hides in combat (inside instances only or everywhere), and inside instances (always, or when none of your quests are for the instance).
 - Configurable text colors in custom themes: headers, current zone, quest titles (single color or per difficulty), quest type, objectives, completed/failed objectives, time left, distance, direction arrow and scrollbar.
