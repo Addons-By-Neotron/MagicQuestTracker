@@ -257,6 +257,13 @@ local function ColorGroup(name, order, args)
    return { type = "group", name = name, inline = true, order = order, args = args }
 end
 
+local METERS_PER_YARD = 0.9144
+
+local function UsesMeters()
+   local units = mod.db.profile.distanceUnits
+   return units == "meters" or units == "metric"
+end
+
 local function BuildOptions()
    options = {
       general = {
@@ -337,6 +344,24 @@ local function BuildOptions()
                width = COLUMN_WIDTH,
                set = SetAndUpdateDistance,
             },
+            distanceUnits = {
+               type = "select",
+               name = L["Distance units"],
+               desc = L["Show distances in yards or meters, optionally switching to miles or kilometers for long distances."],
+               values = {
+                  yards = L["Yards"],
+                  meters = L["Meters"],
+                  imperial = L["Yards / miles"],
+                  metric = L["Meters / kilometers"],
+               },
+               sorting = { "yards", "imperial", "meters", "metric" },
+               order = 31.5,
+               width = COLUMN_WIDTH,
+               disabled = function()
+                  local profile = mod.db.profile
+                  return not (profile.showDistance or profile.showDirection)
+               end,
+            },
             showDirection = {
                type = "toggle",
                name = L["Show direction"],
@@ -355,12 +380,23 @@ local function BuildOptions()
             },
             arrowMaxDistance = {
                type = "range",
-               name = L["Arrow max distance"],
-               desc = L["Only show arrows for quests in other zones within this many yards. Quests in the current zone always get an arrow. 0 shows arrows at any distance."],
+               -- Saved in yards, shown in the selected distance units.
+               name = function()
+                  return format(L["Arrow max distance (%s)"], UsesMeters() and L["m"] or L["yd"])
+               end,
+               desc = L["Only show arrows for quests in other zones within this distance. Quests in the current zone always get an arrow. 0 shows arrows at any distance."],
                min = 0, max = 5000, step = 50, bigStep = 250,
                order = 34,
                width = COLUMN_WIDTH,
                disabled = function() return not mod.db.profile.showDirection end,
+               get = function()
+                  local yards = mod.db.profile.arrowMaxDistance
+                  return UsesMeters() and math.floor(yards * METERS_PER_YARD / 50 + 0.5) * 50 or yards
+               end,
+               set = function(_, val)
+                  mod.db.profile.arrowMaxDistance = UsesMeters() and val / METERS_PER_YARD or val
+                  mod:RequestUpdate()
+               end,
             },
             showLevel = {
                type = "toggle",
@@ -372,13 +408,15 @@ local function BuildOptions()
             waypointMode = {
                type = "select",
                name = L["Ctrl-click navigation"],
-               desc = L["What ctrl-clicking a quest does: set a TomTom waypoint, focus the quest for Blizzard's navigation, or both. Without TomTom, Blizzard's navigation is always used."],
+               desc = L["What ctrl-clicking a quest does: set a TomTom waypoint, focus the quest for Blizzard's navigation, or both."],
                values = {
                   tomtom = L["TomTom"],
                   blizzard = L["Blizzard"],
                   both = L["Both"],
                },
                order = 35,
+               -- Without TomTom, ctrl-click always uses Blizzard's navigation.
+               hidden = function() return not mod:HasTomTom() end,
                width = COLUMN_WIDTH,
             },
             markForeverQuests = {

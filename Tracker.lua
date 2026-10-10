@@ -657,6 +657,25 @@ local function AttachGroupButton(line, quest, rightOffset)
    button:Show()
 end
 
+local YARDS_PER_MILE = 1760
+local METERS_PER_YARD = 0.9144
+
+-- Distance in yards, formatted per the distanceUnits setting: yards / meters
+-- only, or switching to miles / kilometers for long distances.
+local function FormatDistance(yards, units)
+   if units == "meters" or units == "metric" then
+      local meters = yards * METERS_PER_YARD
+      if units == "metric" and meters >= 1000 then
+         return format(L["%.1f km"], meters / 1000)
+      end
+      return format(L["%d m"], math.floor(meters + 0.5))
+   end
+   if units == "imperial" and yards >= YARDS_PER_MILE then
+      return format(L["%.1f mi"], yards / YARDS_PER_MILE)
+   end
+   return format(L["%d yd"], math.floor(yards + 0.5))
+end
+
 function mod:RenderQuest(quest, profile)
    local normal, complete = colors.objective, colors.complete
    local titleColor = profile.colorByDifficulty and DifficultyColor(quest.difficultyLevel) or colors.quest
@@ -667,7 +686,7 @@ function mod:RenderQuest(quest, profile)
    local questIndent = showPOI and POI_QUEST_INDENT or QUEST_INDENT
    local objectiveIndent = showPOI and POI_OBJECTIVE_INDENT or OBJECTIVE_INDENT
 
-   local distanceText = profile.showDistance and quest.distance and format(L["%d yd"], math.floor(quest.distance + 0.5)) or nil
+   local distanceText = profile.showDistance and quest.distance and FormatDistance(quest.distance, profile.distanceUnits) or nil
    local arrowTarget = profile.showDirection and quest.poi or nil
    -- Quests in the current zone always get an arrow; the limit is for other zones.
    if arrowTarget and profile.arrowMaxDistance > 0 and not quest.inCurrentZone then

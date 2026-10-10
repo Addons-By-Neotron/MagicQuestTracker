@@ -120,6 +120,7 @@ mod.defaults = {
       zoneSort = "level",            -- level | name | distance
       questSort = "level",           -- level | name | distance
       showDistance = false,
+      distanceUnits = "yards",       -- yards | meters | imperial (yd/mi) | metric (m/km)
       showDirection = false,
       arrowSize = 16,
       arrowMaxDistance = 1000,       -- yards, 0 = no limit
