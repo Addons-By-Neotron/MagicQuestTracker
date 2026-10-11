@@ -34,7 +34,7 @@ local IS_FOREVER = (select(4, GetBuildInfo()) or 0) >= 16000 and (select(4, GetB
 local MAX_VANILLA_QUEST_ID = 9665
 mod.IS_FOREVER = IS_FOREVER
 local C_Map = C_Map
-local tinsert, sort = table.insert, table.sort
+local tinsert, tremove, sort = table.insert, table.remove, table.sort
 
 ----------------------------------------------------------------
 -- Current zone detection
@@ -275,24 +275,31 @@ end
 --- Returns a sorted list of zone sections:
 --- { name, isCurrent, zoneRank, minLevel, quests = { quest, ... } }
 --- plus the number of quests in the log and the number displayed.
--- Fold key of the pinned section, kept apart from zone names.
-mod.FOCUSED_FOLD_KEY = "\001focused"
+-- Sorts a list of quests by the configured quest sort order.
+local function SortQuests(quests, profile)
+   if profile.questSort == "distance" then
+      -- Ranks are per quest ID, so one table works across sections.
+      SortByDistance(quests, QuestKey, questRanks, questSorters.level)
+   else
+      sort(quests, questSorters[profile.questSort] or questSorters.level)
+   end
+end
 
--- Moves the focused (super tracked) quest, and with includeWatched the
--- quests on the built-in watch list, out of their zones into one section
--- placed on top: focused quest first, the rest in the order they were
--- listed. Zones left empty are dropped. Returns the new section list.
-local function PinFocusedQuests(sections, includeWatched)
-   local pinned, focused = new(), nil
-   local kept = new()
+-- Fold keys of the sections on top, kept apart from zone names.
+mod.FOCUSED_FOLD_KEY = "\001focused"
+mod.COMPLETED_FOLD_KEY = "\001completed"
+
+-- Moves the quests for which take(quest, section) is true out of their sections, in
+-- the order they are listed. Sections left empty are dropped. Returns the
+-- remaining sections and the moved quests.
+local function TakeQuests(sections, take)
+   local taken, kept = new(), new()
    for _, section in ipairs(sections) do
       local quests = new()
       local hasLocal = false
       for _, quest in ipairs(section.quests) do
-         if quest.isSuperTracked then
-            focused = quest
-         elseif includeWatched and quest.isWatched then
-            tinsert(pinned, quest)
+         if take(quest, section) then
+            tinsert(taken, quest)
          else
             tinsert(quests, quest)
             hasLocal = hasLocal or quest.inCurrentZone
@@ -308,31 +315,97 @@ local function PinFocusedQuests(sections, includeWatched)
       end
    end
    del(sections)
-   if focused then
-      tinsert(pinned, 1, focused)
-   end
-   if #pinned == 0 then
-      del(pinned)
-      return kept
-   end
+   return kept, taken
+end
 
+-- A section that isn't a zone: always listed on top, folded on its own and
+-- left alone by auto-fold.
+local function NewSpecialSection(name, foldKey, quests)
    local section = new()
-   section.name = includeWatched and L["Tracked"] or L["Focused"]
-   section.foldKey = mod.FOCUSED_FOLD_KEY
-   section.isPinned = true
+   section.name = name
+   section.foldKey = foldKey
+   section.isSpecial = true
    section.zoneRank = 0
    section.minLevel = math.huge
-   section.quests = pinned
-   for _, quest in ipairs(pinned) do
-      quest.isPinned = true
+   section.quests = quests
+   for _, quest in ipairs(quests) do
       if quest.inCurrentZone then section.hasLocalQuests = true end
       if quest.level < section.minLevel then section.minLevel = quest.level end
       if quest.distance and (not section.distance or quest.distance < section.distance) then
          section.distance = quest.distance
       end
    end
-   tinsert(kept, 1, section)
-   return kept
+   return section
+end
+
+local function IsComplete(quest) return quest.isComplete end
+
+-- Completed, and filed under the current zone or one of its sub-areas.
+local function IsCompleteHere(quest, section)
+   return quest.isComplete and section.isCurrent
+end
+
+-- Moves completed quests to the start ("first") or end ("last") of the
+-- list, keeping the order within both groups. Other modes leave it alone.
+local function GroupCompleted(quests, mode)
+   if mode ~= "first" and mode ~= "last" then return end
+   local done, rest = new(), new()
+   for _, quest in ipairs(quests) do
+      tinsert(quest.isComplete and done or rest, quest)
+   end
+   local first, second = done, rest
+   if mode == "last" then first, second = rest, done end
+   for i, quest in ipairs(first) do quests[i] = quest end
+   for i, quest in ipairs(second) do quests[#first + i] = quest end
+   del(done)
+   del(rest)
+end
+
+-- Moves the focused (super tracked) quest, and with includeWatched the
+-- quests on the built-in watch list, into one section on top: focused quest
+-- first, the rest in the order they were listed.
+local function PinFocusedQuests(sections, includeWatched, completedSort)
+   local pinned
+   sections, pinned = TakeQuests(sections, function(quest)
+      return quest.isSuperTracked or (includeWatched and quest.isWatched)
+   end)
+   if #pinned == 0 then
+      del(pinned)
+      return sections
+   end
+   GroupCompleted(pinned, completedSort)
+   for i, quest in ipairs(pinned) do
+      if quest.isSuperTracked then
+         tinsert(pinned, 1, tremove(pinned, i))
+         break
+      end
+   end
+   for _, quest in ipairs(pinned) do
+      quest.isPinned = true
+   end
+   local section = NewSpecialSection(includeWatched and L["Tracked"] or L["Focused"], mod.FOCUSED_FOLD_KEY, pinned)
+   section.isPinned = true
+   tinsert(sections, 1, section)
+   return sections
+end
+
+-- Moves the completed quests left in the zones (all of them, or only those
+-- of the current zone) into a section of their own, right below the
+-- focused / tracked section, sorted as one list by the quest sort order.
+local function SeparateCompletedQuests(sections, profile, currentOnly)
+   local pinned = sections[1] and sections[1].isPinned and tremove(sections, 1)
+   local completed
+   sections, completed = TakeQuests(sections, currentOnly and IsCompleteHere or IsComplete)
+   if #completed > 0 then
+      SortQuests(completed, profile)
+      tinsert(sections, 1, NewSpecialSection(L["Completed"], mod.COMPLETED_FOLD_KEY, completed))
+   else
+      del(completed)
+   end
+   if pinned then
+      tinsert(sections, 1, pinned)
+   end
+   return sections
 end
 
 function mod:CollectQuests()
@@ -347,6 +420,8 @@ function mod:CollectQuests()
    -- With a section on top, the focused quest is always shown (in it).
    local pinMode = profile.focusedSection == "focused" or profile.focusedSection == "tracked"
    local focusedID = pinMode and C_SuperTrack and C_SuperTrack.GetSuperTrackedQuestID() or nil
+   -- The "All" completed section lists every completed quest, whatever the filters.
+   local allCompleted = profile.completedSection == "all"
 
    for i = 1, C_QuestLog.GetNumQuestLogEntries() do
       local info = C_QuestLog.GetInfo(i)
@@ -364,7 +439,7 @@ function mod:CollectQuests()
             if visible and not profile.showAllQuests and C_QuestLog.GetQuestWatchType(info.questID) == nil then
                visible = false
             end
-            if info.questID == focusedID then
+            if info.questID == focusedID or (allCompleted and C_QuestLog.IsComplete(info.questID)) then
                visible = true
             end
             if visible then
@@ -409,16 +484,12 @@ function mod:CollectQuests()
       end
    end
 
-   if profile.questSort == "distance" then
-      for _, section in ipairs(sections) do
-         -- Ranks are per quest ID, so one table works across sections.
-         SortByDistance(section.quests, QuestKey, questRanks, questSorters.level)
-      end
-   else
-      local questSorter = questSorters[profile.questSort] or questSorters.level
-      for _, section in ipairs(sections) do
-         sort(section.quests, questSorter)
-      end
+   for _, section in ipairs(sections) do
+      SortQuests(section.quests, profile)
+   end
+
+   for _, section in ipairs(sections) do
+      GroupCompleted(section.quests, profile.completedSort)
    end
 
    -- A zone's distance is that of its nearest quest.
@@ -460,7 +531,17 @@ function mod:CollectQuests()
       -- Showing only watched quests, Tracked would take every quest out of
       -- its zone: only the focused quest goes on top then.
       local includeWatched = profile.focusedSection == "tracked" and profile.showAllQuests
-      sections = PinFocusedQuests(sections, includeWatched)
+      sections = PinFocusedQuests(sections, includeWatched, profile.completedSort)
+   end
+   if profile.completedSection == "all" or profile.completedSection == "current" then
+      sections = SeparateCompletedQuests(sections, profile, profile.completedSection == "current")
+   end
+   for _, section in ipairs(sections) do
+      local numComplete = 0
+      for _, quest in ipairs(section.quests) do
+         if quest.isComplete then numComplete = numComplete + 1 end
+      end
+      section.numComplete = numComplete
    end
 
    del(byName)

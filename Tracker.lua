@@ -887,7 +887,11 @@ function mod:Render(sections, numQuests, numShown, recipes, tasks)
          local zoneColor, currentZoneColor = colors.zone, colors.currentZone
          for _, section in ipairs(sections) do
             local collapsed = collapsedZones[section.foldKey or section.name]
-            local text = format("%s %s (%d)", collapsed and "+" or "-", section.name, #section.quests)
+            local count = #section.quests
+            if section.foldKey ~= mod.COMPLETED_FOLD_KEY and section.numComplete and section.numComplete > 0 then
+               count = format("%d, %s", count, format(L["%d complete"], section.numComplete))
+            end
+            local text = format("%s %s (%s)", collapsed and "+" or "-", section.name, count)
             local color = section.isCurrent and currentZoneColor or zoneColor
             AddLine("zone", section, text, "zone", ZONE_INDENT, spacing.zoneSpacing, color, Brighten(color), "zone")
             if not collapsed then

@@ -344,6 +344,32 @@ local function BuildOptions()
                order = 17,
                width = DROPDOWN_WIDTH,
             },
+            completedSort = {
+               type = "select",
+               name = L["Completed quests"],
+               desc = L["Where completed quests go within each zone: sorted like the other quests, first or last."],
+               values = {
+                  normal = L["Sorted normally"],
+                  first = L["First"],
+                  last = L["Last"],
+               },
+               sorting = { "normal", "first", "last" },
+               order = 18,
+               width = DROPDOWN_WIDTH,
+            },
+            completedSection = {
+               type = "select",
+               name = L["Completed section"],
+               desc = L["Show completed quests in their own section below the section on top: all of them, or only those in the current zone and its sub-areas. Zone headers show how many of their quests are complete."],
+               values = {
+                  none = L["Disabled"],
+                  all = L["All"],
+                  current = L["Current zone"],
+               },
+               sorting = { "none", "all", "current" },
+               order = 19,
+               width = DROPDOWN_WIDTH,
+            },
             zoneSort = {
                type = "select",
                name = L["Zone sort order"],
