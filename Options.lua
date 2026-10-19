@@ -516,6 +516,13 @@ local function BuildOptions()
                order = 23,
                width = COLUMN_WIDTH,
             },
+            colorCompleteQuests = {
+               type = "toggle",
+               name = L["Color completed quests"],
+               desc = L["Color the titles of completed quests with the Completed quest color, instead of by difficulty."],
+               order = 27,
+               width = COLUMN_WIDTH,
+            },
             showCompletedObjectives = {
                type = "toggle",
                name = L["Show completed objectives"],
@@ -785,6 +792,8 @@ local function BuildOptions()
                   quests = ColorGroup(L["Quest titles"], 2, {
                      quest = TextColor(L["Quest title"], 1,
                         L["Quest titles when not colored by difficulty, and tracked recipes."]),
+                     completeQuest = TextColor(L["Completed quest"], 2.5,
+                        L["Titles of completed quests, when Color completed quests is on."]),
                      questTag = TextColor(L["Quest type"], 2),
                      trivial = TextColor(L["Trivial"], 3),
                      standard = TextColor(L["Standard"], 4),
