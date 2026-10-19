@@ -394,14 +394,20 @@ end
 
 -- Moves the completed quests left in the zones (all of them, or only those
 -- of the current zone) into a section of their own, right below the
--- focused / tracked section, sorted as one list by the quest sort order.
+-- focused / tracked section (or at the very end with completedSort "last"),
+-- sorted as one list by the quest sort order.
 local function SeparateCompletedQuests(sections, profile, currentOnly)
    local pinned = sections[1] and sections[1].isPinned and tremove(sections, 1)
    local completed
    sections, completed = TakeQuests(sections, currentOnly and IsCompleteHere or IsComplete)
    if #completed > 0 then
       SortQuests(completed, profile)
-      tinsert(sections, 1, NewSpecialSection(L["Completed"], mod.COMPLETED_FOLD_KEY, completed))
+      local section = NewSpecialSection(L["Completed"], mod.COMPLETED_FOLD_KEY, completed)
+      if profile.completedSort == "last" then
+         tinsert(sections, section)
+      else
+         tinsert(sections, 1, section)
+      end
    else
       del(completed)
    end
