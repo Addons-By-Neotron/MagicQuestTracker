@@ -128,6 +128,7 @@ mod.defaults = {
       arrowSize = 16,
       arrowMaxDistance = 1000,       -- yards, 0 = no limit
       waypointMode = "both",         -- ctrl-click: tomtom | blizzard | both
+      poiTomTom = true,              -- clicking a quest's POI button also sets the TomTom waypoint
       blizzardFocus = true,          -- focus (super track) quests; off avoids taint errors
       showLevel = true,
       showQuestTags = true,

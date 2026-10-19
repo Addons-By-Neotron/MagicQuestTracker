@@ -644,6 +644,12 @@ local function POIButton_OnClick(button, mouseButton)
       return
    end
    POIButtonMixin.OnClick(button, mouseButton)
+   local quest = button:GetParent().data
+   if mouseButton == "LeftButton" and not IsShiftKeyDown() and quest
+      and mod:HasTomTom() and mod.db.profile.poiTomTom
+      and C_SuperTrack.GetSuperTrackedQuestID() == quest.questID then
+      mod:SetQuestWaypoint(quest, "tomtom")
+   end
 end
 
 -- Quest POI button (same as Blizzard's tracker): shows in progress / complete,

@@ -407,7 +407,7 @@ local function BuildOptions()
                   metric = L["Meters / kilometers"],
                },
                sorting = { "yards", "imperial", "meters", "metric" },
-               order = 31.5,
+               order = 33,
                width = COLUMN_WIDTH,
                disabled = function()
                   local profile = mod.db.profile
@@ -426,7 +426,7 @@ local function BuildOptions()
                type = "range",
                name = L["Arrow size"],
                min = 8, max = 32, step = 1,
-               order = 33,
+               order = 34,
                width = COLUMN_WIDTH,
                disabled = function() return not mod.db.profile.showDirection end,
             },
@@ -438,7 +438,7 @@ local function BuildOptions()
                end,
                desc = L["Only show arrows for quests in other zones within this distance. Quests in the current zone always get an arrow. 0 shows arrows at any distance."],
                min = 0, max = 5000, step = 50, bigStep = 250,
-               order = 34,
+               order = 36,
                width = COLUMN_WIDTH,
                disabled = function() return not mod.db.profile.showDirection end,
                get = function()
@@ -466,7 +466,7 @@ local function BuildOptions()
                   blizzard = L["Blizzard"],
                   both = L["Both"],
                },
-               order = 35,
+               order = 37,
                -- Without TomTom, ctrl-click always uses Blizzard's navigation.
                hidden = function() return not mod:HasTomTom() end,
                disabled = function() return not mod.db.profile.blizzardFocus end,
@@ -476,8 +476,17 @@ local function BuildOptions()
                type = "toggle",
                name = L["Use Blizzard quest focus"],
                desc = L["Let the tracker focus (super track) quests for Blizzard's navigation, and show the quest POI buttons. Focusing quests from an addon can cause harmless errors about blocked or tainted actions in Blizzard's UI; turn this off to avoid them."],
-               order = 36,
+               order = 35,
                width = COLUMN_WIDTH,
+            },
+            poiTomTom = {
+               type = "toggle",
+               name = L["Quest icon sets TomTom waypoint"],
+               desc = L["Clicking a quest's icon also sets the TomTom waypoint, like ctrl-clicking its title. Unfocusing a quest leaves the waypoint alone."],
+               order = 38,
+               width = COLUMN_WIDTH,
+               hidden = function() return not mod:HasTomTom() end,
+               disabled = function() return not mod.db.profile.blizzardFocus end,
             },
             markForeverQuests = {
                type = "toggle",
