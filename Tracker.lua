@@ -711,6 +711,9 @@ end
 function mod:RenderQuest(quest, profile)
    local normal, complete = colors.objective, colors.complete
    local titleColor = profile.colorByDifficulty and DifficultyColor(quest.difficultyLevel) or colors.quest
+   if profile.colorCompleteQuests and quest.isComplete then
+      titleColor = colors.completeQuest
+   end
    local itemSize = (profile.showItemButtons and quest.hasItem) and self.ITEM_BUTTON_SIZE or 0
    local groupSize = (profile.showFindGroupButton and CanFindGroup(quest)) and GROUP_BUTTON_SIZE or 0
    layout.rightInset = itemSize + groupSize
