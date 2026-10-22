@@ -720,6 +720,29 @@ local function BuildOptions()
                },
             },
             background = BackgroundGroup(11),
+            progressBar = {
+               type = "group",
+               name = L["Progress bars"],
+               desc = L["Bars shown for objectives that track progress as a percentage."],
+               order = 11.5,
+               get = function(info) return mod:GetDisplayTheme().progressBar[info[#info]] end,
+               set = function(info, val)
+                  mod:GetDisplayTheme().progressBar[info[#info]] = val
+                  mod:ApplyLayout()
+               end,
+               args = {
+                  texture = {
+                     type = "select",
+                     dialogControl = "LSM30_Statusbar",
+                     name = L["Bar texture"],
+                     values = AceGUIWidgetLSMlists.statusbar,
+                     order = 1,
+                  },
+                  color = ColorOption(L["Bar color"], 2),
+                  background = ColorOption(L["Bar background"], 3),
+                  textColor = ColorOption(L["Text color"], 4),
+               },
+            },
             fonts = {
                type = "group",
                name = L["Fonts"],
@@ -826,7 +849,7 @@ local function BuildOptions()
    }
    -- Built-in themes show their settings greyed out. (Disabling a tab group
    -- would disable the tab itself, so disable the settings inside.)
-   for _, key in ipairs({ "headers", "background", "contentLayout", "fonts", "colors" }) do
+   for _, key in ipairs({ "headers", "background", "progressBar", "contentLayout", "fonts", "colors" }) do
       DisableForBuiltIn(options.theme.args[key])
    end
    options.profiles = LibStub("AceDBOptions-3.0"):GetOptionsTable(mod.db)

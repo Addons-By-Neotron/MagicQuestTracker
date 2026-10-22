@@ -110,14 +110,17 @@ local function BuildObjectives(questID)
    if not list then return objectives end
    for _, obj in ipairs(list) do
       local text = obj.text
+      local percent
       if obj.type == "progressbar" and GetQuestProgressBarPercent then
-         local pct = GetQuestProgressBarPercent(questID) or 0
-         text = (text and text ~= "") and format("%s (%d%%)", text, pct) or format("%d%%", pct)
+         percent = GetQuestProgressBarPercent(questID) or 0
+         -- The text usually ends in the percentage too; the bar shows it.
+         text = text and text:gsub("%s*%(%d+%%%)%s*$", "")
       end
-      if text and text ~= "" then
+      if (text and text ~= "") or percent then
          local objective = new()
          objective.text = text
          objective.finished = obj.finished
+         objective.percent = percent
          tinsert(objectives, objective)
       end
    end

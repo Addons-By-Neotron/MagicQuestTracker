@@ -462,6 +462,7 @@ local function AddLine(kind, data, text, role, indent, spacing, color, highlight
    line.collapseIcon:Hide()
    if line.poiButton then line.poiButton:Hide() end
    if line.groupButton then line.groupButton:Hide() end
+   if line.bar then line.bar:Hide() end
    if arrowTarget then
       -- Arrow sits left of the distance text, centered on the first text
       -- line (it may be taller than the text); rotated by mod:UpdateArrows().
@@ -502,6 +503,48 @@ local function AddLine(kind, data, text, role, indent, spacing, color, highlight
    line:SetPoint("TOPLEFT", mod.frame.child, "TOPLEFT", 0, -layout.y)
    line:SetSize(layout.width, height)
    layout.y = layout.y + height
+   return line
+end
+
+-- Progress bar objectives (percentage based) get a bar like Blizzard's
+-- tracker; texture and colors come from the theme.
+local BAR_MAX_WIDTH = 200
+local BAR_PADDING = 4
+
+local function AddProgressBar(data, percent, indent, gap)
+   local line = AddLine("objective", data, "", "objective", indent, gap, colors.objective)
+   local bar = line.bar
+   if not bar then
+      bar = CreateFrame("StatusBar", nil, line)
+      bar:SetMinMaxValues(0, 100)
+      bar.bg = bar:CreateTexture(nil, "BACKGROUND")
+      bar.bg:SetAllPoints()
+      bar.label = bar:CreateFontString(nil, "OVERLAY")
+      bar.label:SetPoint("CENTER")
+      line.bar = bar
+   end
+   if bar.styleVersion ~= mod.themeVersion then
+      local settings = mod:GetProgressBarSettings()
+      local texture = media:Fetch("statusbar", settings.texture) or media:Fetch("statusbar", "Blizzard")
+      local c, bg, tc = settings.color, settings.background, settings.textColor
+      bar:SetStatusBarTexture(texture)
+      bar:SetStatusBarColor(c.r, c.g, c.b, c.a)
+      bar.bg:SetTexture(texture)
+      bar.bg:SetVertexColor(bg.r, bg.g, bg.b, bg.a)
+      bar.label:SetTextColor(tc.r, tc.g, tc.b, tc.a)
+      bar.styleVersion = mod.themeVersion
+   end
+   bar.label:SetFontObject(fontObjects.objective)
+   bar.label:SetFormattedText("%d%%", percent)
+   bar:SetValue(percent)
+   local height = math.ceil(bar.label:GetStringHeight()) + BAR_PADDING
+   local width = math.min(BAR_MAX_WIDTH, layout.width - indent - (layout.rightInset or 0))
+   bar:ClearAllPoints()
+   bar:SetPoint("TOPLEFT", indent, 0)
+   bar:SetSize(width, height)
+   bar:Show()
+   layout.y = layout.y - line:GetHeight() + height
+   line:SetHeight(height)
    return line
 end
 
@@ -752,8 +795,13 @@ function mod:RenderQuest(quest, profile)
    else
       for _, objective in ipairs(quest.objectives) do
          if not objective.finished then
-            AddLine("objective", quest, "- " .. objective.text, "objective", objectiveIndent, spacing.objectiveSpacing, normal)
-         elseif profile.showCompletedObjectives then
+            if objective.text and objective.text ~= "" then
+               AddLine("objective", quest, "- " .. objective.text, "objective", objectiveIndent, spacing.objectiveSpacing, normal)
+            end
+            if objective.percent then
+               AddProgressBar(quest, objective.percent, objectiveIndent, spacing.objectiveSpacing)
+            end
+         elseif objective.text and objective.text ~= "" and profile.showCompletedObjectives then
             AddLine("objective", quest, "- " .. objective.text, "objective", objectiveIndent, spacing.objectiveSpacing, complete)
          end
       end
@@ -823,6 +871,19 @@ function mod:Render(sections, numQuests, numShown, recipes, tasks)
       -- Hidden for combat; render when it ends.
       self.layoutDeferred = true
       return false
+   end
+   -- Scenarios (delves, ...): Blizzard's scenario block takes this spot, so
+   -- hide fully, even when item buttons hold the layout during combat.
+   if self:IsInScenario() and not self:IsInEditMode() then
+      frame:Hide()
+      if self:IsItemLayoutLocked() then
+         self.layoutDeferred = true  -- item buttons follow once combat ends
+         return false
+      end
+      self.numLinesUsed = 0
+      ReleaseUnusedLines(0)
+      self:RequestItemButtonLayout()
+      return true
    end
    if self:IsItemLayoutLocked() then
       -- Secure item buttons can't move during combat; re-render afterwards.

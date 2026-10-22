@@ -251,3 +251,7 @@ L["First"] = true
 L["Last"] = true
 L["Disabled"] = true
 L["All"] = true
+L["Progress bars"] = true
+L["Bars shown for objectives that track progress as a percentage."] = true
+L["Bar background"] = true
+L["Text color"] = true

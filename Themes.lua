@@ -275,6 +275,14 @@ local function DarkPreset(c)
    theme.background.alpha = 0.85
    theme.background.hoverAlpha = 0.95
    theme.layout.padding = 4
+   local bar = theme.progressBar
+   bar.texture = "Solid"
+   bar.color = Hex(c.section)
+   bar.color.a = 1
+   bar.background = Hex(c.bar)
+   bar.background.a = 1
+   bar.textColor = Hex(c.emphasis)
+   bar.textColor.a = 1
    local colors = theme.colors
    colors.title = Hex(c.title)
    colors.section = Hex(c.section)
@@ -408,6 +416,12 @@ local textColors = {}
 --- Text colors ([key] = { r, g, b }) of the selected theme; see themeDefaults.colors.
 function mod:GetTextColors()
    return textColors
+end
+
+--- Progress bar settings (texture, colors) of the selected theme.
+function mod:GetProgressBarSettings()
+   local theme = self:GetThemeSettings()
+   return theme and theme.progressBar or self.themeDefaults.progressBar
 end
 
 --- Content spacing (padding, line spacing) of the selected theme.

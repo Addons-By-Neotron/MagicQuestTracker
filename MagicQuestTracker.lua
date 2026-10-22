@@ -67,6 +67,13 @@ mod.themeDefaults = {
       borderSize = 12,
       borderColor = { r = 0.6, g = 0.6, b = 0.6 },  -- opacity follows the background
    },
+   -- Progress bar objectives (Blizzard's tracker progress bar look)
+   progressBar = {
+      texture = "Blizzard",   -- LibSharedMedia statusbar
+      color = { r = 0.26, g = 0.42, b = 1, a = 1 },
+      background = { r = 0, g = 0, b = 0, a = 0.5 },
+      textColor = { r = 1, g = 1, b = 1, a = 1 },
+   },
    -- Content spacing (pixels)
    layout = {
       padding = 0,              -- between the tracker edges (border) and the content
@@ -192,8 +199,15 @@ function mod:OnEnable()
    self:RegisterEvent("PLAYER_REGEN_DISABLED")
    self:RegisterEvent("ZONE_CHANGED_NEW_AREA", function()
       mod:UpdateCombatVisibility()
+      mod:UpdateScenarioVisibility()
       mod:RequestUpdate()
    end)
+   -- Scenarios (delves, ...): show Blizzard's scenario block while in one.
+   for _, event in ipairs({ "SCENARIO_UPDATE", "SCENARIO_COMPLETED" }) do
+      if not (C_EventUtils and C_EventUtils.IsEventValid) or C_EventUtils.IsEventValid(event) then
+         self:RegisterEvent(event, "UpdateScenarioVisibility")
+      end
+   end
    self:ApplyProfile()
 end
 
@@ -430,21 +444,60 @@ local function SetTrackerMouse(enabled, inCombat, ...)
    end
 end
 
+-- In a scenario (delve, ...), Blizzard's tracker stays visible for its
+-- scenario module only, which MQT doesn't show; its other modules are
+-- hidden the same way as the whole tracker otherwise. MQT hides fully.
+function mod:IsInScenario()
+   return C_Scenario and C_Scenario.IsInScenario and C_Scenario.IsInScenario() or false
+end
+
+local function IsHiddenModule(module)
+   if not mod.blizzardHidden then return false end
+   return not mod.scenarioShown or module ~= ScenarioObjectiveTracker
+end
+
+-- Applies the hidden / scenario-only state to the tracker and its modules.
+local function ApplyTrackerVisibility(tracker)
+   local inCombat = InCombatLockdown()
+   local scenarioOnly = mod.blizzardHidden and mod.scenarioShown
+   tracker:SetAlpha((mod.blizzardHidden and not scenarioOnly) and 0 or 1)
+   for _, module in ipairs(tracker.modules or {}) do
+      module:SetAlpha((scenarioOnly and IsHiddenModule(module)) and 0 or 1)
+   end
+   -- Mouse back on wherever we turned it off, then off where hidden.
+   SetTrackerMouse(true, inCombat, tracker)
+   if not mod.blizzardHidden then return end
+   if not scenarioOnly then
+      SetTrackerMouse(false, inCombat, tracker)
+      return
+   end
+   for _, module in ipairs(tracker.modules or {}) do
+      if IsHiddenModule(module) then
+         SetTrackerMouse(false, inCombat, module)
+      end
+   end
+end
+
 -- Blocks are (re)filled as quests change and handed to their module's
 -- AddBlock during layout: only that block's frames need the mouse turned
 -- off, and only when Blizzard actually lays the tracker out.
 local hookedModules = {}
 
-local function OnAddBlock(_, block)
-   if mod.blizzardHidden then
+local function OnAddBlock(module, block)
+   if IsHiddenModule(module) then
       SetTrackerMouse(false, InCombatLockdown(), block)
    end
 end
 
+-- Modules come and go (the scenario module is added when one starts).
 local function HookModule(_, module)
-   if module and module.AddBlock and not hookedModules[module] then
+   if not module then return end
+   if module.AddBlock and not hookedModules[module] then
       hookedModules[module] = true
       hooksecurefunc(module, "AddBlock", OnAddBlock)
+   end
+   if mod.blizzardHidden and mod.scenarioShown then
+      module:SetAlpha(IsHiddenModule(module) and 0 or 1)
    end
 end
 
@@ -453,7 +506,20 @@ function mod:UpdateBlizzardTrackerMouse()
    local tracker = ObjectiveTrackerFrame
    if tracker and self.trackerMousePending then
       self.trackerMousePending = nil
-      SetTrackerMouse(not self.blizzardHidden, false, tracker)
+      ApplyTrackerVisibility(tracker)
+   end
+end
+
+-- Entering or leaving a scenario switches between hiding the whole tracker
+-- and showing only its scenario module.
+function mod:UpdateScenarioVisibility()
+   local shown = self:IsInScenario()
+   if shown == self.scenarioShown then return end
+   self.scenarioShown = shown
+   self:RequestUpdate()  -- MQT hides itself in scenarios
+   local tracker = ObjectiveTrackerFrame
+   if tracker and self.blizzardHidden then
+      ApplyTrackerVisibility(tracker)
    end
 end
 
@@ -465,10 +531,11 @@ function mod:SetBlizzardTrackerHidden(hide)
    if not hide and not self.blizzardHidden then return end
 
    self.blizzardHidden = hide
+   self.scenarioShown = self:IsInScenario()
    if hide and not self.blizzardHooked then
       self.blizzardHooked = true
       hooksecurefunc(tracker, "SetAlpha", function(frame, alpha)
-         if mod.blizzardHidden and alpha ~= 0 then
+         if mod.blizzardHidden and not mod.scenarioShown and alpha ~= 0 then
             frame:SetAlpha(0)
          end
       end)
@@ -479,8 +546,7 @@ function mod:SetBlizzardTrackerHidden(hide)
          hooksecurefunc(tracker, "AddModule", HookModule)
       end
    end
-   tracker:SetAlpha(hide and 0 or 1)
-   SetTrackerMouse(not hide, InCombatLockdown(), tracker)
+   ApplyTrackerVisibility(tracker)
 end
 
 ----------------------------------------------------------------
