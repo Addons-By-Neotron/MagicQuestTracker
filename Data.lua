@@ -865,6 +865,16 @@ function mod:CollectAchievements()
             local objective = new()
             objective.text = description
             objective.failed = IsAchievementEligible and not IsAchievementEligible(achievementID)
+            for _, timer in pairs(self.achievementTimers) do
+               if timer.achievementID == achievementID then
+                  if GetTime() <= timer.timerEnd then
+                     objective.timerEnd = timer.timerEnd
+                  else
+                     objective.failed = true
+                  end
+                  break
+               end
+            end
             tinsert(objectives, objective)
          end
          tinsert(achievements, achievement)

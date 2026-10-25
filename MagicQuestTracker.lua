@@ -192,7 +192,7 @@ local QUEST_EVENTS = {
 
 -- Not on every client (Forever has no achievements).
 local ACHIEVEMENT_EVENTS = {
-   "CONTENT_TRACKING_UPDATE", "TRACKED_ACHIEVEMENT_UPDATE", "TRACKED_ACHIEVEMENT_LIST_CHANGED", "ACHIEVEMENT_EARNED",
+   "CONTENT_TRACKING_UPDATE", "TRACKED_ACHIEVEMENT_LIST_CHANGED", "ACHIEVEMENT_EARNED",
 }
 
 local function IsEventValid(event)
@@ -229,7 +229,26 @@ function mod:OnEnable()
          self:RegisterEvent(event, "RequestUpdate")
       end
    end
+   if IsEventValid("TRACKED_ACHIEVEMENT_UPDATE") then
+      self:RegisterEvent("TRACKED_ACHIEVEMENT_UPDATE")
+   end
    self:ApplyProfile()
+end
+
+-- Timers of achievements without criteria are only known from this event
+-- (as in Blizzard's tracker); timed achievements with criteria have them
+-- in the criteria info. Kept for the session, like Blizzard does, so a
+-- timer that ran out shows the achievement as failed.
+mod.achievementTimers = {}
+
+function mod:TRACKED_ACHIEVEMENT_UPDATE(_, achievementID, criteriaID, elapsed, duration)
+   if criteriaID and elapsed and duration and GetAchievementNumCriteria(achievementID) == 0 then
+      local timer = self.achievementTimers[criteriaID] or {}
+      timer.achievementID = achievementID
+      timer.timerEnd = GetTime() - elapsed + duration
+      self.achievementTimers[criteriaID] = timer
+   end
+   self:RequestUpdate()
 end
 
 function mod:OnDisable()
