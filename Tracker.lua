@@ -510,6 +510,20 @@ end
 -- tracker; texture and colors come from the theme.
 local BAR_MAX_WIDTH = 200
 local BAR_PADDING = 4
+local BAR_MARKERS = { 0.25, 0.5, 0.75 }  -- like Blizzard's bars
+local BAR_MARKER_WIDTH = 1
+
+-- The Blizzard theme uses the scenario tracker's bar: fixed size, segmented
+-- frame (the segments are its markers), Blizzard's fill and font.
+local BLIZZARD_BAR = {
+   width = 191, height = 17,
+   frameAtlas = "bonusobjectives-bar-frame-5",
+   frameOffsetX = -8, frameOffsetY = -1,  -- frame relative to the bar's left edge
+   texture = [[Interface\TargetingFrame\UI-StatusBar]],
+   color = { r = 0.26, g = 0.42, b = 1, a = 1 },
+   background = { r = 0.04, g = 0.07, b = 0.18, a = 1 },
+   textColor = { r = 1, g = 1, b = 1, a = 1 },
+}
 
 local function AddProgressBar(data, percent, indent, gap)
    local line = AddLine("objective", data, "", "objective", indent, gap, colors.objective)
@@ -521,30 +535,76 @@ local function AddProgressBar(data, percent, indent, gap)
       bar.bg:SetAllPoints()
       bar.label = bar:CreateFontString(nil, "OVERLAY")
       bar.label:SetPoint("CENTER")
+      bar.markers = {}
+      for i in ipairs(BAR_MARKERS) do
+         local marker = bar:CreateTexture(nil, "OVERLAY", nil, -1)
+         marker:SetWidth(BAR_MARKER_WIDTH)
+         bar.markers[i] = marker
+      end
       line.bar = bar
    end
    if bar.styleVersion ~= mod.themeVersion then
-      local settings = mod:GetProgressBarSettings()
-      local texture = media:Fetch("statusbar", settings.texture) or media:Fetch("statusbar", "Blizzard")
+      local frameInfo = not mod:GetThemeSettings() and C_Texture and C_Texture.GetAtlasInfo
+         and C_Texture.GetAtlasInfo(BLIZZARD_BAR.frameAtlas)
+      bar.frameInfo = frameInfo or nil
+      local settings = frameInfo and BLIZZARD_BAR or mod:GetProgressBarSettings()
+      local texture = frameInfo and BLIZZARD_BAR.texture
+         or media:Fetch("statusbar", settings.texture) or media:Fetch("statusbar", "Blizzard")
       local c, bg, tc = settings.color, settings.background, settings.textColor
+      if frameInfo then
+         if not bar.frame then
+            bar.frame = bar:CreateTexture(nil, "ARTWORK")
+         end
+         bar.frame:SetAtlas(BLIZZARD_BAR.frameAtlas)
+      end
+      if bar.frame then bar.frame:SetShown(frameInfo and true or false) end
       bar:SetStatusBarTexture(texture)
       bar:SetStatusBarColor(c.r, c.g, c.b, c.a)
       bar.bg:SetTexture(texture)
       bar.bg:SetVertexColor(bg.r, bg.g, bg.b, bg.a)
       bar.label:SetTextColor(tc.r, tc.g, tc.b, tc.a)
+      local mc = settings.markerColor
+      for _, marker in ipairs(bar.markers) do
+         if mc then marker:SetColorTexture(mc.r, mc.g, mc.b, mc.a) end
+         marker:SetShown(mc ~= nil)
+      end
       bar.styleVersion = mod.themeVersion
    end
-   bar.label:SetFontObject(fontObjects.objective)
+   local frameInfo = bar.frameInfo
+   bar.label:SetFontObject(frameInfo and GameFontHighlightMedium or fontObjects.objective)
+   local tc = (frameInfo and BLIZZARD_BAR or mod:GetProgressBarSettings()).textColor
+   bar.label:SetTextColor(tc.r, tc.g, tc.b, tc.a)
    bar.label:SetFormattedText("%d%%", percent)
    bar:SetValue(percent)
-   local height = math.ceil(bar.label:GetStringHeight()) + BAR_PADDING
-   local width = math.min(BAR_MAX_WIDTH, layout.width - indent - (layout.rightInset or 0))
+   local available = layout.width - indent - (layout.rightInset or 0)
+   local width, height, lineHeight
    bar:ClearAllPoints()
-   bar:SetPoint("TOPLEFT", indent, 0)
+   if frameInfo then
+      -- The frame reaches past the bar; keep it inside the line.
+      local scale = math.min(1, available / frameInfo.width)
+      width, height = BLIZZARD_BAR.width * scale, BLIZZARD_BAR.height
+      lineHeight = frameInfo.height
+      local left = -BLIZZARD_BAR.frameOffsetX * scale
+      bar:SetPoint("TOPLEFT", indent + left, -(lineHeight - height) / 2)
+      bar.frame:SetSize(frameInfo.width * scale, frameInfo.height)
+      bar.frame:ClearAllPoints()
+      bar.frame:SetPoint("LEFT", bar, "LEFT", BLIZZARD_BAR.frameOffsetX * scale, BLIZZARD_BAR.frameOffsetY)
+   else
+      height = math.ceil(bar.label:GetStringHeight()) + BAR_PADDING
+      width = math.min(BAR_MAX_WIDTH, available)
+      lineHeight = height
+      bar:SetPoint("TOPLEFT", indent, 0)
+   end
    bar:SetSize(width, height)
+   for i, marker in ipairs(bar.markers) do
+      local x = math.floor(width * BAR_MARKERS[i] - BAR_MARKER_WIDTH / 2 + 0.5)
+      marker:ClearAllPoints()
+      marker:SetPoint("TOPLEFT", x, 0)
+      marker:SetPoint("BOTTOMLEFT", x, 0)
+   end
    bar:Show()
-   layout.y = layout.y - line:GetHeight() + height
-   line:SetHeight(height)
+   layout.y = layout.y - line:GetHeight() + lineHeight
+   line:SetHeight(lineHeight)
    return line
 end
 
@@ -1138,12 +1198,34 @@ local function InsertChatLink(link)
    return false
 end
 
-local function OpenQuestOnMap(questID)
+-- Opened from addon code, the world map refreshes its pins tainted, which
+-- trips protected calls in combat (ADDON_ACTION_BLOCKED on
+-- SetPassThroughButtons), so in combat the map opens once combat ends.
+local function OpenMap(func, ...)
+   if not InCombatLockdown() then
+      return func(...)
+   end
+   local args = { n = select("#", ...), ... }
+   mod.pendingMapOpen = function() func(unpack(args, 1, args.n)) end
+   mod:Print(L["The map opens when combat ends."])
+end
+
+function mod:ApplyPendingMapOpen()
+   local open = self.pendingMapOpen
+   self.pendingMapOpen = nil
+   if open then open() end
+end
+
+local function OpenQuestOnMapNow(questID)
    if QuestMapFrame_OpenToQuestDetails then
       QuestMapFrame_OpenToQuestDetails(questID)
    elseif ToggleQuestLog then
       ToggleQuestLog()
    end
+end
+
+local function OpenQuestOnMap(questID)
+   OpenMap(OpenQuestOnMapNow, questID)
 end
 
 local function ToggleQuestWatch(questID, isWorldQuest)
@@ -1160,7 +1242,7 @@ local function ToggleQuestWatch(questID, isWorldQuest)
    end
 end
 
-local function OpenTaskOnMap(questID)
+local function OpenTaskOnMapNow(questID)
    local mapID = C_TaskQuest.GetQuestZoneID(questID)
    if mapID and OpenQuestLog then
       OpenQuestLog(mapID)
@@ -1168,6 +1250,10 @@ local function OpenTaskOnMap(questID)
          EventRegistry:TriggerEvent("MapCanvas.PingQuestID", questID)
       end
    end
+end
+
+local function OpenTaskOnMap(questID)
+   OpenMap(OpenTaskOnMapNow, questID)
 end
 
 -- Menus can stay open across updates, which recycle the quest tables, so
@@ -1239,7 +1325,7 @@ local function ShowQuestMenu(owner, quest)
 
       if QuestUtil and QuestUtil.OpenQuestDetails then
          root:CreateButton(OBJECTIVES_VIEW_IN_QUESTLOG or L["Open quest details"], function()
-            QuestUtil.OpenQuestDetails(questID)
+            OpenMap(QuestUtil.OpenQuestDetails, questID)
          end)
       end
 
@@ -1341,7 +1427,7 @@ mod.lineClickHandlers = {
    section = function(self, _, section, button)
       -- Right-click on the Quests header opens the quest log.
       if button == "RightButton" and section.key == "quests" and ToggleQuestLog then
-         ToggleQuestLog()
+         OpenMap(ToggleQuestLog)
          return
       end
       local collapsed = self.db.char.collapsedSections

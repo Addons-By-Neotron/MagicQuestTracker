@@ -283,6 +283,8 @@ local function DarkPreset(c)
    bar.background.a = 1
    bar.textColor = Hex(c.emphasis)
    bar.textColor.a = 1
+   bar.markerColor = Hex(c.emphasis)
+   bar.markerColor.a = 0.5
    local colors = theme.colors
    colors.title = Hex(c.title)
    colors.section = Hex(c.section)

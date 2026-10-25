@@ -73,6 +73,7 @@ mod.themeDefaults = {
       color = { r = 0.26, g = 0.42, b = 1, a = 1 },
       background = { r = 0, g = 0, b = 0, a = 0.5 },
       textColor = { r = 1, g = 1, b = 1, a = 1 },
+      markerColor = { r = 1, g = 1, b = 1, a = 0.45 },  -- lines at 25/50/75%
    },
    -- Content spacing (pixels)
    layout = {
@@ -337,6 +338,7 @@ function mod:PLAYER_REGEN_ENABLED()
       self.layoutDeferred = true  -- render (and show) below
    end
    self:ApplyPendingSuperTrack()
+   self:ApplyPendingMapOpen()
    self:UpdateBlizzardTrackerMouse()
    if self.applyLayoutDeferred then
       self.applyLayoutDeferred = nil

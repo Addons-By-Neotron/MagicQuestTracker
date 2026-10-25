@@ -263,3 +263,5 @@ L["Achievements"] = true
 L["View achievement"] = true
 L["Show tracked achievements"] = true
 L["Show tracked achievements in a separate section."] = true
+L["Marker color"] = true
+L["The map opens when combat ends."] = true

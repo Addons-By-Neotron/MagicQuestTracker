@@ -749,6 +749,7 @@ local function BuildOptions()
                   color = ColorOption(L["Bar color"], 2),
                   background = ColorOption(L["Bar background"], 3),
                   textColor = ColorOption(L["Text color"], 4),
+                  markerColor = ColorOption(L["Marker color"], 5),
                },
             },
             fonts = {
