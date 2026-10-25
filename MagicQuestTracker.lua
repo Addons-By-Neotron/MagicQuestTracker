@@ -143,6 +143,7 @@ mod.defaults = {
       colorByDifficulty = true,
       showCompletedObjectives = true,
       showRecipes = true,
+      showAchievements = true,
       showWorldQuests = true,
       showBonusObjectives = true,
       showItemButtons = true,
@@ -189,6 +190,20 @@ local QUEST_EVENTS = {
    "TRACKED_RECIPE_UPDATE", "BAG_UPDATE_DELAYED", "CURRENCY_DISPLAY_UPDATE",
 }
 
+-- Not on every client (Forever has no achievements).
+local ACHIEVEMENT_EVENTS = {
+   "CONTENT_TRACKING_UPDATE", "TRACKED_ACHIEVEMENT_UPDATE", "TRACKED_ACHIEVEMENT_LIST_CHANGED", "ACHIEVEMENT_EARNED",
+}
+
+local function IsEventValid(event)
+   return not (C_EventUtils and C_EventUtils.IsEventValid) or C_EventUtils.IsEventValid(event)
+end
+
+local SCENARIO_EVENTS = {
+   "SCENARIO_UPDATE", "SCENARIO_COMPLETED", "SCENARIO_CRITERIA_UPDATE",
+   "SCENARIO_CRITERIA_SHOW_STATE_UPDATE", "SCENARIO_BONUS_VISIBILITY_UPDATE",
+}
+
 function mod:OnEnable()
    self:CreateTracker()
    for _, event in ipairs(QUEST_EVENTS) do
@@ -202,10 +217,16 @@ function mod:OnEnable()
       mod:UpdateScenarioVisibility()
       mod:RequestUpdate()
    end)
-   -- Scenarios (delves, ...): show Blizzard's scenario block while in one.
-   for _, event in ipairs({ "SCENARIO_UPDATE", "SCENARIO_COMPLETED" }) do
-      if not (C_EventUtils and C_EventUtils.IsEventValid) or C_EventUtils.IsEventValid(event) then
+   -- Scenarios (delves, ...): the Scenario section, or Blizzard's scenario
+   -- block for the ones MQT doesn't show.
+   for _, event in ipairs(SCENARIO_EVENTS) do
+      if IsEventValid(event) then
          self:RegisterEvent(event, "UpdateScenarioVisibility")
+      end
+   end
+   for _, event in ipairs(ACHIEVEMENT_EVENTS) do
+      if IsEventValid(event) then
+         self:RegisterEvent(event, "RequestUpdate")
       end
    end
    self:ApplyProfile()
@@ -264,7 +285,9 @@ end
 
 --- True when the tracker should be hidden in the current instance: always,
 --- or when none of the quests are for this instance (sections from CollectQuests).
-function mod:ShouldHideInInstance(sections)
+function mod:ShouldHideInInstance(sections, scenario)
+   -- The Scenario section replaces Blizzard's scenario block (delves, ...).
+   if scenario then return false end
    local mode = self.db.profile.hideInInstances
    if mode == "never" or not InInstance() then return false end
    if mode == "noQuests" then
@@ -323,6 +346,8 @@ function mod:RunUpdate()
    local sections, numQuests, numShown = self:CollectQuests()
    local recipes = self.db.profile.showRecipes and self:CollectRecipes() or nil
    local tasks = self:CollectTasks()
+   local scenario = self:CollectScenario()
+   local achievements = self.db.profile.showAchievements and self:CollectAchievements() or nil
    self:AutoFoldZones(sections, tasks)
 
    -- The rendered lines reference the data they show, so the previous data
@@ -330,15 +355,20 @@ function mod:RunUpdate()
    -- buttons in combat) keeps the old data on screen; recycle the new instead.
    local data = self.dataPool or {}
    self.dataPool = data
-   if self:Render(sections, numQuests, numShown, recipes, tasks) then
+   if self:Render(sections, numQuests, numShown, recipes, tasks, scenario, achievements) then
       self.deepDel(data.sections)
       self.deepDel(data.recipes)
       self.deepDel(data.tasks)
+      self.deepDel(data.scenario)
+      self.deepDel(data.achievements)
       data.sections, data.recipes, data.tasks = sections, recipes, tasks
+      data.scenario, data.achievements = scenario, achievements
    else
       self.deepDel(sections)
       self.deepDel(recipes)
       self.deepDel(tasks)
+      self.deepDel(scenario)
+      self.deepDel(achievements)
    end
 end
 
@@ -444,11 +474,18 @@ local function SetTrackerMouse(enabled, inCombat, ...)
    end
 end
 
--- In a scenario (delve, ...), Blizzard's tracker stays visible for its
--- scenario module only, which MQT doesn't show; its other modules are
--- hidden the same way as the whole tracker otherwise. MQT hides fully.
 function mod:IsInScenario()
    return C_Scenario and C_Scenario.IsInScenario and C_Scenario.IsInScenario() or false
+end
+
+--- True in scenarios MQT doesn't show (Mythic+, Proving Grounds): Blizzard's
+--- tracker stays visible for its scenario module only, and MQT hides fully.
+--- Its other modules are hidden the same way as the whole tracker otherwise.
+function mod:IsBlizzardScenario()
+   if not self:IsInScenario() then return false end
+   local scenarioType = select(10, C_Scenario.GetInfo())
+   return scenarioType ~= nil and (scenarioType == LE_SCENARIO_TYPE_CHALLENGE_MODE
+      or scenarioType == LE_SCENARIO_TYPE_PROVING_GROUNDS)
 end
 
 local function IsHiddenModule(module)
@@ -510,13 +547,14 @@ function mod:UpdateBlizzardTrackerMouse()
    end
 end
 
--- Entering or leaving a scenario switches between hiding the whole tracker
--- and showing only its scenario module.
+-- Scenario progress updates the Scenario section; entering or leaving one
+-- MQT doesn't show switches between hiding the whole Blizzard tracker and
+-- showing only its scenario module.
 function mod:UpdateScenarioVisibility()
-   local shown = self:IsInScenario()
+   self:RequestUpdate()
+   local shown = self:IsBlizzardScenario()
    if shown == self.scenarioShown then return end
    self.scenarioShown = shown
-   self:RequestUpdate()  -- MQT hides itself in scenarios
    local tracker = ObjectiveTrackerFrame
    if tracker and self.blizzardHidden then
       ApplyTrackerVisibility(tracker)
@@ -531,7 +569,7 @@ function mod:SetBlizzardTrackerHidden(hide)
    if not hide and not self.blizzardHidden then return end
 
    self.blizzardHidden = hide
-   self.scenarioShown = self:IsInScenario()
+   self.scenarioShown = self:IsBlizzardScenario()
    if hide and not self.blizzardHooked then
       self.blizzardHooked = true
       hooksecurefunc(tracker, "SetAlpha", function(frame, alpha)

@@ -17,8 +17,8 @@ A replacement for the built-in objective tracker for WoW Retail and Classic Fore
 - Quest item buttons for quests with a usable item.
 - On WoW Forever, quests that were not in original Classic are marked with an infinity sign.
 - Retail: world quests (in the current area and tracked) and bonus objectives in their own sections.
-- Retail: in delves and other scenarios, the tracker steps aside for Blizzard's scenario block, which still shows when the Blizzard tracker is hidden.
-- Tracked profession recipes are shown in a separate section.
+- Retail: scenarios (delves, open world scenarios, ...) in their own section on top, with your quests below. In Mythic+ and Proving Grounds the tracker steps aside for Blizzard's scenario block, which still shows when the Blizzard tracker is hidden.
+- Tracked achievements and profession recipes are shown in separate sections.
 - Scrollable, with a configurable max height, width and scale (via Edit Mode).
 - Tracker background (texture, color, border) as part of custom themes, with separate opacity for normal and mouseover.
 - Configurable spacing between zones, zone header and quests, quests and objectives.

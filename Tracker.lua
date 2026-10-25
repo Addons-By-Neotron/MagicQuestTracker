@@ -751,8 +751,38 @@ local function FormatDistance(yards, units)
    return format(L["%d yd"], math.floor(yards + 0.5))
 end
 
-function mod:RenderQuest(quest, profile)
+local function AddTimerLine(data, timerEnd, indent)
+   local line = AddLine("objective", data, FormatTimeLeft(math.max(0, timerEnd - GetTime())), "objective",
+      indent, spacing.objectiveSpacing, colors.timeLeft)
+   line.timerEnd = timerEnd
+   UpdateTimerLine(line)
+   tinsert(timerLines, line)
+end
+
+-- Objectives ({ text, finished, percent, timerEnd }) of a quest or scenario.
+local function RenderObjectives(data, objectives, indent, profile)
    local normal, complete = colors.objective, colors.complete
+   for _, objective in ipairs(objectives) do
+      local hasText = objective.text and objective.text ~= ""
+      if not objective.finished then
+         if hasText then
+            AddLine("objective", data, "- " .. objective.text, "objective", indent, spacing.objectiveSpacing,
+               objective.failed and colors.failed or normal)
+         end
+         if objective.percent then
+            AddProgressBar(data, objective.percent, indent, spacing.objectiveSpacing)
+         end
+         if objective.timerEnd then
+            AddTimerLine(data, objective.timerEnd, indent)
+         end
+      elseif hasText and profile.showCompletedObjectives then
+         AddLine("objective", data, "- " .. objective.text, "objective", indent, spacing.objectiveSpacing, complete)
+      end
+   end
+end
+
+function mod:RenderQuest(quest, profile)
+   local normal = colors.objective
    local titleColor = profile.colorByDifficulty and DifficultyColor(quest.difficultyLevel) or colors.quest
    local itemSize = (profile.showItemButtons and quest.hasItem) and self.ITEM_BUTTON_SIZE or 0
    local groupSize = (profile.showFindGroupButton and CanFindGroup(quest)) and GROUP_BUTTON_SIZE or 0
@@ -793,25 +823,10 @@ function mod:RenderQuest(quest, profile)
       end
       AddLine("objective", quest, text, "objective", objectiveIndent, spacing.objectiveSpacing, normal)
    else
-      for _, objective in ipairs(quest.objectives) do
-         if not objective.finished then
-            if objective.text and objective.text ~= "" then
-               AddLine("objective", quest, "- " .. objective.text, "objective", objectiveIndent, spacing.objectiveSpacing, normal)
-            end
-            if objective.percent then
-               AddProgressBar(quest, objective.percent, objectiveIndent, spacing.objectiveSpacing)
-            end
-         elseif objective.text and objective.text ~= "" and profile.showCompletedObjectives then
-            AddLine("objective", quest, "- " .. objective.text, "objective", objectiveIndent, spacing.objectiveSpacing, complete)
-         end
-      end
+      RenderObjectives(quest, quest.objectives, objectiveIndent, profile)
    end
    if quest.timerEnd then
-      local line = AddLine("objective", quest, FormatTimeLeft(math.max(0, quest.timerEnd - GetTime())), "objective",
-         objectiveIndent, spacing.objectiveSpacing, colors.timeLeft)
-      line.timerEnd = quest.timerEnd
-      UpdateTimerLine(line)
-      tinsert(timerLines, line)
+      AddTimerLine(quest, quest.timerEnd, objectiveIndent)
    end
    if quest.timeLeftText then
       AddLine("objective", quest, quest.timeLeftText, "objective", objectiveIndent, spacing.objectiveSpacing,
@@ -840,11 +855,107 @@ function mod:RenderSectionHeader(key, text, profile)
    return not collapsed
 end
 
+-- Blizzard UI widgets (stage timer, wagon health, ...) in the Scenario
+-- section, one container per spot, each registered for a widget set.
+-- Widgets change size on their own; that triggers a re-render.
+local SCENARIO_TRACKER_WIDGET_SET = 252      -- Blizzard's bottom widget block
+local SCENARIO_TRACKER_TOP_WIDGET_SET = 514  -- below the objectives
+local widgetBlocks = {}
+
+local function WidgetLayout(container, sortedWidgets)
+   DefaultWidgetLayout(container, sortedWidgets)
+   local showing = container:HasAnyWidgetsShowing()
+   if showing ~= container.renderedShowing
+      or (showing and math.abs(container:GetHeight() - (container.renderedHeight or 0)) > 0.5) then
+      mod:RequestUpdate()
+   end
+end
+
+local function AddWidgetBlock(key, widgetSetID, gap)
+   local container = widgetBlocks[key]
+   if not container then
+      container = CreateFrame("Frame", nil, mod.frame.child, "UIWidgetContainerTemplate")
+      widgetBlocks[key] = container
+   end
+   container.used = true
+   container:RegisterForWidgetSet(widgetSetID, WidgetLayout)
+   local showing = container:HasAnyWidgetsShowing()
+   container.renderedShowing = showing
+   container.renderedHeight = showing and container:GetHeight() or 0
+   if not showing then
+      container:Hide()
+      return
+   end
+   -- Scale down widgets wider than the tracker; anchor offsets are in the
+   -- container's (scaled) coordinates.
+   local width, height = container:GetWidth(), container:GetHeight()
+   local scale = (width > layout.width and width > 0) and layout.width / width or 1
+   layout.y = layout.y + gap
+   container:SetScale(scale)
+   container:ClearAllPoints()
+   container:SetPoint("TOPLEFT", mod.frame.child, "TOPLEFT", (layout.width - width * scale) / 2 / scale, -layout.y / scale)
+   container:Show()
+   layout.y = layout.y + height * scale
+end
+
+-- Unregistered when not shown, so hidden widgets don't keep updating.
+local function ReleaseUnusedWidgetBlocks()
+   for _, container in pairs(widgetBlocks) do
+      if not container.used then
+         container:UnregisterForWidgetSet()
+         container:Hide()
+      end
+      container.used = nil
+   end
+end
+
+-- Scenario (delve, ...) on top: stage, its widgets and objectives, then
+-- bonus steps.
+function mod:RenderScenario(scenario, profile)
+   if not scenario then return end
+   local name = scenario.name
+   if not name or name == "" then name = L["Scenario"] end
+   if not self:RenderSectionHeader("scenario", name, profile) then return end
+   local titleColor = colors.quest
+   -- Stage widgets show the stage name themselves (as Blizzard's do).
+   local title = not scenario.widgetSetID and scenario.stageName or nil
+   if scenario.stage > scenario.numStages then
+      title = L["Complete"]
+   elseif scenario.numStages > 1 then
+      title = title and format(L["Stage %d/%d: %s"], scenario.stage, scenario.numStages, title)
+         or format(L["Stage %d/%d"], scenario.stage, scenario.numStages)
+   end
+   if title and title ~= "" then
+      AddLine("scenario", scenario, title, "quest", QUEST_INDENT, spacing.questSpacing, titleColor)
+   end
+   if scenario.widgetSetID then
+      AddWidgetBlock("stage", scenario.widgetSetID, spacing.objectiveSpacing)
+   end
+   RenderObjectives(scenario, scenario.criteria, OBJECTIVE_INDENT, profile)
+   AddWidgetBlock("top", SCENARIO_TRACKER_TOP_WIDGET_SET, spacing.objectiveSpacing)
+   for _, bonus in ipairs(scenario.bonus) do
+      AddLine("scenario", bonus, bonus.name or "", "quest", QUEST_INDENT, spacing.questSpacing, titleColor)
+      RenderObjectives(bonus, bonus.criteria, OBJECTIVE_INDENT, profile)
+   end
+   AddWidgetBlock("bottom", SCENARIO_TRACKER_WIDGET_SET, spacing.objectiveSpacing)
+end
+
 function mod:RenderTaskSection(key, name, tasks, profile)
    if not tasks or #tasks == 0 then return end
    if not self:RenderSectionHeader(key, format("%s (%d)", name, #tasks), profile) then return end
    for _, task in ipairs(tasks) do
       self:RenderQuest(task, profile)
+   end
+end
+
+function mod:RenderAchievements(achievements, profile)
+   if not achievements or #achievements == 0 then return end
+   local header = format("%s (%d)", TRACKER_HEADER_ACHIEVEMENTS or L["Achievements"], #achievements)
+   if not self:RenderSectionHeader("achievements", header, profile) then return end
+   local titleColor = colors.quest
+   for _, achievement in ipairs(achievements) do
+      AddLine("achievement", achievement, achievement.name, "quest", QUEST_INDENT, spacing.questSpacing, titleColor, Brighten(titleColor))
+      RenderObjectives(achievement, achievement.objectives, OBJECTIVE_INDENT, profile)
    end
 end
 
@@ -863,7 +974,7 @@ function mod:RenderRecipes(recipes, profile)
    end
 end
 
-function mod:Render(sections, numQuests, numShown, recipes, tasks)
+function mod:Render(sections, numQuests, numShown, recipes, tasks, scenario, achievements)
    local frame = self.frame
    local profile = self.db.profile
 
@@ -872,9 +983,10 @@ function mod:Render(sections, numQuests, numShown, recipes, tasks)
       self.layoutDeferred = true
       return false
    end
-   -- Scenarios (delves, ...): Blizzard's scenario block takes this spot, so
-   -- hide fully, even when item buttons hold the layout during combat.
-   if self:IsInScenario() and not self:IsInEditMode() then
+   -- Scenarios MQT doesn't show (Mythic+, ...): Blizzard's scenario block
+   -- takes this spot, so hide fully, even when item buttons hold the layout
+   -- during combat.
+   if self:IsBlizzardScenario() and not self:IsInEditMode() then
       frame:Hide()
       if self:IsItemLayoutLocked() then
          self.layoutDeferred = true  -- item buttons follow once combat ends
@@ -882,6 +994,7 @@ function mod:Render(sections, numQuests, numShown, recipes, tasks)
       end
       self.numLinesUsed = 0
       ReleaseUnusedLines(0)
+      ReleaseUnusedWidgetBlocks()
       self:RequestItemButtonLayout()
       return true
    end
@@ -901,12 +1014,14 @@ function mod:Render(sections, numQuests, numShown, recipes, tasks)
    frame.title.text:SetText(profile.onlyCurrentZone and L["Zone Objectives"] or L["All Objectives"])
    wipe(timerLines)
 
-   local hasContent = numQuests > 0 or (recipes and #recipes > 0)
+   local hasContent = numQuests > 0 or scenario or (recipes and #recipes > 0)
+      or (achievements and #achievements > 0)
       or (tasks and (#tasks.worldQuests > 0 or #tasks.bonus > 0))
-   if (not hasContent or self:ShouldHideInInstance(sections)) and not self:IsInEditMode() then
+   if (not hasContent or self:ShouldHideInInstance(sections, scenario)) and not self:IsInEditMode() then
       frame:Hide()
       self.numLinesUsed = 0
       ReleaseUnusedLines(0)
+      ReleaseUnusedWidgetBlocks()
       self:RequestItemButtonLayout()
       return true
    end
@@ -925,6 +1040,7 @@ function mod:Render(sections, numQuests, numShown, recipes, tasks)
    local titleHeight = frame.title:GetHeight() + 4 + 2 * spacing.padding
    if self.db.char.minimized then
       ReleaseUnusedLines(0)
+      ReleaseUnusedWidgetBlocks()
       frame.scroll:Hide()
       frame:SetHeight(titleHeight)
       self:UpdateScrollBar()
@@ -932,6 +1048,8 @@ function mod:Render(sections, numQuests, numShown, recipes, tasks)
       return true
    end
    frame.scroll:Show()
+
+   self:RenderScenario(scenario, profile)
 
    if numQuests > 0 then
       local maxQuests = C_QuestLog.GetMaxNumQuestsCanAccept and C_QuestLog.GetMaxNumQuestsCanAccept() or numQuests
@@ -970,11 +1088,14 @@ function mod:Render(sections, numQuests, numShown, recipes, tasks)
       self:RenderTaskSection("bonus", TRACKER_HEADER_BONUS_OBJECTIVES or L["Bonus Objectives"], tasks.bonus, profile)
    end
 
+   self:RenderAchievements(achievements, profile)
+
    if profile.showRecipes then
       self:RenderRecipes(recipes, profile)
    end
 
    ReleaseUnusedLines(self.numLinesUsed)
+   ReleaseUnusedWidgetBlocks()
 
    local contentHeight = layout.y + 4
    local child = frame.child
@@ -1173,6 +1294,42 @@ local function ShowRecipeMenu(owner, recipe)
    end)
 end
 
+local function UntrackAchievement(achievementID)
+   C_ContentTracking.StopTracking(Enum.ContentTrackingType.Achievement, achievementID, Enum.ContentTrackingStopType.Manual)
+   if AchievementFrameAchievements_ForceUpdate then
+      AchievementFrameAchievements_ForceUpdate()
+   end
+end
+
+local function ShowAchievement(achievementID)
+   if not AchievementFrame and AchievementFrame_LoadUI then
+      AchievementFrame_LoadUI()
+   end
+   if not AchievementFrame then return end
+   if not AchievementFrame:IsShown() then
+      AchievementFrame_ToggleAchievementFrame()
+      AchievementFrame_SelectAchievement(achievementID)
+   elseif AchievementFrameAchievements.selection ~= achievementID then
+      AchievementFrame_SelectAchievement(achievementID)
+   else
+      AchievementFrame_ToggleAchievementFrame()
+   end
+end
+
+local function ShowAchievementMenu(owner, achievement)
+   -- Copy the fields: the achievement table is recycled on the next update.
+   local achievementID, name = achievement.achievementID, achievement.name
+   MenuUtil.CreateContextMenu(owner, function(_, root)
+      root:CreateTitle(name)
+      root:CreateButton(OBJECTIVES_VIEW_ACHIEVEMENT or L["View achievement"], function()
+         ShowAchievementFrameForAchievement(achievementID)
+      end)
+      root:CreateButton(OBJECTIVES_STOP_TRACKING or L["Stop tracking"], function()
+         UntrackAchievement(achievementID)
+      end)
+   end)
+end
+
 mod.lineClickHandlers = {
    zone = function(self, _, section)
       local collapsed = self.db.char.collapsedZones
@@ -1212,6 +1369,19 @@ mod.lineClickHandlers = {
          ShowQuestComplete(questID)
       else
          OpenQuestOnMap(questID)
+      end
+   end,
+
+   achievement = function(self, line, achievement, button)
+      local achievementID = achievement.achievementID
+      if IsModifiedClick("CHATLINK") then
+         InsertChatLink(GetAchievementLink(achievementID))
+      elseif button == "RightButton" then
+         ShowAchievementMenu(line, achievement)
+      elseif IsModifiedClick("QUESTWATCHTOGGLE") then
+         UntrackAchievement(achievementID)
+      else
+         ShowAchievement(achievementID)
       end
    end,
 

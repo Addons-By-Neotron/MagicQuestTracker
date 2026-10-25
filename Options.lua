@@ -523,6 +523,14 @@ local function BuildOptions()
                order = 41,
                width = COLUMN_WIDTH,
             },
+            showAchievements = {
+               type = "toggle",
+               name = L["Show tracked achievements"],
+               desc = L["Show tracked achievements in a separate section."],
+               order = 41.5,
+               width = COLUMN_WIDTH,
+               hidden = function() return not (C_ContentTracking and GetAchievementInfo) end,
+            },
             showWorldQuests = {
                type = "toggle",
                name = L["Show world quests"],

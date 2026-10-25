@@ -731,3 +731,144 @@ function mod:CollectRecipes()
    end
    return recipes
 end
+
+----------------------------------------------------------------
+-- Scenarios (delves, open world scenarios, ...)
+----------------------------------------------------------------
+
+local issecretvalue = issecretvalue or function() return false end
+
+-- Same text as Blizzard's scenario tracker; weighted criteria are a
+-- percentage shown as a progress bar.
+local function AddCriteria(list, info)
+   if not info then return end
+   local objective = new()
+   local text = info.description
+   if info.isWeightedProgress then
+      if not info.completed then objective.percent = info.quantity or 0 end
+   elseif not info.isFormatted then
+      text = format("%d/%d %s", info.quantity or 0, info.totalQuantity or 0, text or "")
+   end
+   objective.text = text
+   objective.finished = info.completed
+   if info.duration and not issecretvalue(info.duration) and info.duration > 0
+      and info.elapsed and info.elapsed <= info.duration then
+      objective.timerEnd = GetTime() - info.elapsed + info.duration
+   end
+   tinsert(list, objective)
+end
+
+--- Returns { name, stage, numStages, stageName, widgetSetID, criteria = { objective, ... },
+--- bonus = { { name, criteria }, ... } } for the current scenario, or nil
+--- when not in one, or in one Blizzard's scenario block shows instead
+--- (mod:IsBlizzardScenario). Objectives are { text, finished, percent, timerEnd }.
+function mod:CollectScenario()
+   if not self:IsInScenario() or self:IsBlizzardScenario() or not C_ScenarioInfo then
+      return nil
+   end
+   local name, stage, numStages = C_Scenario.GetInfo()
+   if not numStages or numStages == 0 then return nil end
+   local scenario = new()
+   scenario.name, scenario.stage, scenario.numStages = name, stage, numStages
+   scenario.criteria = new()
+   scenario.bonus = new()
+   if stage > numStages then return scenario end  -- completed
+
+   local stageName, description, numCriteria, _, _, _, _, _, _, weightedProgress, _, widgetSetID = C_Scenario.GetStepInfo()
+   scenario.stageName = stageName
+   scenario.widgetSetID = widgetSetID  -- stage widgets (timer, ...)
+   if not C_Scenario.ShouldShowCriteria or C_Scenario.ShouldShowCriteria() then
+      if weightedProgress then
+         -- One bar for the whole stage.
+         local objective = new()
+         objective.text = description
+         objective.percent = weightedProgress
+         tinsert(scenario.criteria, objective)
+      else
+         for i = 1, numCriteria or 0 do
+            AddCriteria(scenario.criteria, C_ScenarioInfo.GetCriteriaInfo(i))
+         end
+      end
+   end
+
+   for _, step in ipairs(C_Scenario.GetBonusSteps and C_Scenario.GetBonusSteps() or EMPTY) do
+      local bonusName, _, numBonusCriteria, failed, _, _, shown = C_Scenario.GetStepInfo(step)
+      if shown and not failed then
+         local bonus = new()
+         bonus.name = bonusName
+         bonus.criteria = new()
+         for i = 1, numBonusCriteria or 0 do
+            AddCriteria(bonus.criteria, C_ScenarioInfo.GetCriteriaInfoByStep(step, i))
+         end
+         tinsert(scenario.bonus, bonus)
+      end
+   end
+   return scenario
+end
+
+----------------------------------------------------------------
+-- Tracked achievements
+----------------------------------------------------------------
+
+local MAX_ACHIEVEMENT_CRITERIA = 5  -- as Blizzard's tracker; "..." for the rest
+
+--- Returns a list of { achievementID, name, objectives = { objective, ... } }
+--- for the tracked achievements, or nil when the client has none.
+--- Objectives are { text, failed, timerEnd }; completed criteria are left out.
+function mod:CollectAchievements()
+   local trackingType = Enum and Enum.ContentTrackingType and Enum.ContentTrackingType.Achievement
+   if not (trackingType and C_ContentTracking and GetAchievementInfo) then
+      return nil
+   end
+   local achievements = new()
+   for _, achievementID in ipairs(C_ContentTracking.GetTrackedIDs(trackingType) or EMPTY) do
+      local _, name, _, _, _, _, _, description, _, _, _, _, wasEarnedByMe = GetAchievementInfo(achievementID)
+      if name and not wasEarnedByMe then
+         local achievement = new()
+         achievement.achievementID = achievementID
+         achievement.name = name
+         local objectives = new()
+         achievement.objectives = objectives
+         local numCriteria = GetAchievementNumCriteria(achievementID) or 0
+         local numShown = 0
+         for i = 1, numCriteria do
+            local text, criteriaType, completed, _, _, _, flags, assetID, quantityString, _, eligible, duration, elapsed =
+               GetAchievementCriteriaInfo(achievementID, i)
+            if not completed then
+               local objective = new()
+               if numShown == MAX_ACHIEVEMENT_CRITERIA then
+                  objective.text = "..."
+                  tinsert(objectives, objective)
+                  break
+               end
+               if description and flags and EVALUATION_TREE_FLAG_PROGRESS_BAR
+                  and bit.band(flags, EVALUATION_TREE_FLAG_PROGRESS_BAR) == EVALUATION_TREE_FLAG_PROGRESS_BAR then
+                  if quantityString and quantityString:lower():find("interface\\moneyframe", 1, true) then
+                     text = quantityString .. " " .. description
+                  else
+                     text = (quantityString or ""):gsub(" / ", "/") .. " " .. description
+                  end
+               elseif criteriaType == CRITERIA_TYPE_ACHIEVEMENT and assetID then
+                  -- Meta achievement: the criteria are achievements.
+                  text = select(2, GetAchievementInfo(assetID)) or text
+               end
+               objective.text = text
+               objective.failed = not eligible
+               if duration and elapsed and elapsed < duration then
+                  objective.timerEnd = GetTime() - elapsed + duration
+               end
+               tinsert(objectives, objective)
+               numShown = numShown + 1
+            end
+         end
+         if numCriteria == 0 then
+            local objective = new()
+            objective.text = description
+            objective.failed = IsAchievementEligible and not IsAchievementEligible(achievementID)
+            tinsert(objectives, objective)
+         end
+         tinsert(achievements, achievement)
+      end
+   end
+   return achievements
+end
