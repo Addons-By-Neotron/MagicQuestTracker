@@ -1423,20 +1423,16 @@ mod.lineClickHandlers = {
          end
       elseif IsControlKeyDown() then
          self:SetQuestWaypoint(quest)
-      elseif quest.isAutoComplete and quest.isComplete and ShowQuestComplete and not IsAltKeyDown() then
+      elseif quest.isAutoComplete and quest.isComplete and ShowQuestComplete then
          ShowQuestComplete(questID)
-      elseif IsAltKeyDown() or not self:CanFocusQuests() then
+      elseif self.db.profile.mapClicks then
          -- Opening the map from addon code taints it, and Blizzard's map
-         -- code is then blocked when the map is opened in combat. So it
-         -- only happens on alt-click (or without quest focus), if enabled.
-         if not self.db.profile.mapClicks then return end
+         -- code is then blocked when the map is next opened in combat.
          if quest.isTask then
             OpenTaskOnMap(questID)
          else
             OpenQuestOnMap(questID)
          end
-      else
-         self:SetSuperTrackedQuest(quest.isSuperTracked and 0 or questID)
       end
    end,
 

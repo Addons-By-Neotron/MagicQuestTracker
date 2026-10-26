@@ -137,7 +137,7 @@ mod.defaults = {
       arrowMaxDistance = 1000,       -- yards, 0 = no limit
       waypointMode = "both",         -- ctrl-click: tomtom | blizzard | both
       blizzardFocus = true,          -- focus (super track) quests; off avoids taint errors
-      mapClicks = true,              -- alt-click opens the quest on the map (taints the map)
+      mapClicks = true,              -- left-click opens the quest on the map (taints the map)
       showLevel = true,
       showQuestTags = true,
       markForeverQuests = true,

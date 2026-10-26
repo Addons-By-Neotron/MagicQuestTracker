@@ -122,10 +122,6 @@ end
 --- (map pins, objective tracker) then trip over protected calls and secret
 --- auras. That can't be avoided, but in combat it is deferred until combat
 --- ends, where secret auras make it fail.
-function mod:CanFocusQuests()
-   return self.db.profile.blizzardFocus and C_SuperTrack and C_SuperTrack.SetSuperTrackedQuestID and true or false
-end
-
 function mod:SetSuperTrackedQuest(questID)
    if not self.db.profile.blizzardFocus then
       self.pendingSuperTrack = nil

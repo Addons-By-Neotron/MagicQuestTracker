@@ -481,8 +481,8 @@ local function BuildOptions()
             },
             mapClicks = {
                type = "toggle",
-               name = L["Alt-click opens map"],
-               desc = L["Alt-clicking a quest opens it on the map (left-click focuses it). Opening the map from an addon can cause harmless errors about blocked actions when the map is next opened in combat; turn this off to avoid them. The right-click menu can still show quests on the map."],
+               name = L["Left-click opens map"],
+               desc = L["Left-clicking a quest opens it on the map. Opening the map from an addon can cause harmless errors about blocked actions when the map is next opened in combat; turn this off to avoid them. The right-click menu can still show quests on the map."],
                order = 37,
                width = COLUMN_WIDTH,
             },
