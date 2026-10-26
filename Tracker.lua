@@ -1198,34 +1198,12 @@ local function InsertChatLink(link)
    return false
 end
 
--- Opened from addon code, the world map refreshes its pins tainted, which
--- trips protected calls in combat (ADDON_ACTION_BLOCKED on
--- SetPassThroughButtons), so in combat the map opens once combat ends.
-local function OpenMap(func, ...)
-   if not InCombatLockdown() then
-      return func(...)
-   end
-   local args = { n = select("#", ...), ... }
-   mod.pendingMapOpen = function() func(unpack(args, 1, args.n)) end
-   mod:Print(L["The map opens when combat ends."])
-end
-
-function mod:ApplyPendingMapOpen()
-   local open = self.pendingMapOpen
-   self.pendingMapOpen = nil
-   if open then open() end
-end
-
-local function OpenQuestOnMapNow(questID)
+local function OpenQuestOnMap(questID)
    if QuestMapFrame_OpenToQuestDetails then
       QuestMapFrame_OpenToQuestDetails(questID)
    elseif ToggleQuestLog then
       ToggleQuestLog()
    end
-end
-
-local function OpenQuestOnMap(questID)
-   OpenMap(OpenQuestOnMapNow, questID)
 end
 
 local function ToggleQuestWatch(questID, isWorldQuest)
@@ -1242,7 +1220,7 @@ local function ToggleQuestWatch(questID, isWorldQuest)
    end
 end
 
-local function OpenTaskOnMapNow(questID)
+local function OpenTaskOnMap(questID)
    local mapID = C_TaskQuest.GetQuestZoneID(questID)
    if mapID and OpenQuestLog then
       OpenQuestLog(mapID)
@@ -1250,10 +1228,6 @@ local function OpenTaskOnMapNow(questID)
          EventRegistry:TriggerEvent("MapCanvas.PingQuestID", questID)
       end
    end
-end
-
-local function OpenTaskOnMap(questID)
-   OpenMap(OpenTaskOnMapNow, questID)
 end
 
 -- Menus can stay open across updates, which recycle the quest tables, so
@@ -1325,7 +1299,7 @@ local function ShowQuestMenu(owner, quest)
 
       if QuestUtil and QuestUtil.OpenQuestDetails then
          root:CreateButton(OBJECTIVES_VIEW_IN_QUESTLOG or L["Open quest details"], function()
-            OpenMap(QuestUtil.OpenQuestDetails, questID)
+            QuestUtil.OpenQuestDetails(questID)
          end)
       end
 
@@ -1427,7 +1401,7 @@ mod.lineClickHandlers = {
    section = function(self, _, section, button)
       -- Right-click on the Quests header opens the quest log.
       if button == "RightButton" and section.key == "quests" and ToggleQuestLog then
-         OpenMap(ToggleQuestLog)
+         ToggleQuestLog()
          return
       end
       local collapsed = self.db.char.collapsedSections
@@ -1449,12 +1423,20 @@ mod.lineClickHandlers = {
          end
       elseif IsControlKeyDown() then
          self:SetQuestWaypoint(quest)
-      elseif quest.isTask then
-         OpenTaskOnMap(questID)
-      elseif quest.isAutoComplete and quest.isComplete and ShowQuestComplete then
+      elseif quest.isAutoComplete and quest.isComplete and ShowQuestComplete and not IsAltKeyDown() then
          ShowQuestComplete(questID)
+      elseif IsAltKeyDown() or not self:CanFocusQuests() then
+         -- Opening the map from addon code taints it, and Blizzard's map
+         -- code is then blocked when the map is opened in combat. So it
+         -- only happens on alt-click (or without quest focus), if enabled.
+         if not self.db.profile.mapClicks then return end
+         if quest.isTask then
+            OpenTaskOnMap(questID)
+         else
+            OpenQuestOnMap(questID)
+         end
       else
-         OpenQuestOnMap(questID)
+         self:SetSuperTrackedQuest(quest.isSuperTracked and 0 or questID)
       end
    end,
 
