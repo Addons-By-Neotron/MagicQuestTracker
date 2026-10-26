@@ -264,4 +264,5 @@ L["View achievement"] = true
 L["Show tracked achievements"] = true
 L["Show tracked achievements in a separate section."] = true
 L["Marker color"] = true
-L["The map opens when combat ends."] = true
+L["Left-click opens map"] = true
+L["Left-clicking a quest opens it on the map. Opening the map from an addon can cause harmless errors about blocked actions when the map is next opened in combat; turn this off to avoid them. The right-click menu can still show quests on the map."] = true

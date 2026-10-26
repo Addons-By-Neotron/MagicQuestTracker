@@ -479,6 +479,13 @@ local function BuildOptions()
                order = 36,
                width = COLUMN_WIDTH,
             },
+            mapClicks = {
+               type = "toggle",
+               name = L["Left-click opens map"],
+               desc = L["Left-clicking a quest opens it on the map. Opening the map from an addon can cause harmless errors about blocked actions when the map is next opened in combat; turn this off to avoid them. The right-click menu can still show quests on the map."],
+               order = 37,
+               width = COLUMN_WIDTH,
+            },
             markForeverQuests = {
                type = "toggle",
                name = L["Mark new Forever quests"],
