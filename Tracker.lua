@@ -735,18 +735,34 @@ local function CanFindGroup(quest)
       and QuestUtil.CanCreateQuestGroup(quest.questID) or false
 end
 
+local function SetPOIWaypoint(quest)
+   if quest and mod:HasTomTom() and mod.db.profile.poiTomTom then
+      mod:SetQuestWaypoint(quest, "tomtom")
+   end
+end
+
 -- Blizzard's click handler super tracks right away; in combat, defer the
 -- focus change instead (see mod:SetSuperTrackedQuest).
 local function POIButton_OnClick(button, mouseButton)
+   local quest = button:GetParent().data
+   local leftClick = mouseButton == "LeftButton" and not IsShiftKeyDown()
    -- Shift-click (chat link / untrack) goes to Blizzard as usual.
-   if mouseButton == "LeftButton" and InCombatLockdown() and not IsShiftKeyDown() then
+   if leftClick and InCombatLockdown() then
       local questID = button:GetQuestID()
       if questID then
-         mod:SetSuperTrackedQuest(button:IsSelected() and 0 or questID)
+         local focusing = not button:IsSelected()
+         mod:SetSuperTrackedQuest(focusing and questID or 0)
+         -- Unfocusing leaves the TomTom waypoint alone.
+         if focusing then
+            SetPOIWaypoint(quest)
+         end
       end
       return
    end
    POIButtonMixin.OnClick(button, mouseButton)
+   if leftClick and quest and C_SuperTrack.GetSuperTrackedQuestID() == quest.questID then
+      SetPOIWaypoint(quest)
+   end
 end
 
 -- Quest POI button (same as Blizzard's tracker): shows in progress / complete,

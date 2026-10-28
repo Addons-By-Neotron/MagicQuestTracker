@@ -236,6 +236,8 @@ L["Built-in themes can't be changed. Make an editable copy under a new name."] =
 L["Make a copy of the selected theme under a new name."] = true
 L["Name for the copy of %s:"] = true
 L["%s (copy)"] = true
+L["Quest icon sets TomTom waypoint"] = true
+L["Clicking a quest's icon also sets the TomTom waypoint, like ctrl-clicking its title. Unfocusing a quest leaves the waypoint alone."] = true
 L["Use Blizzard quest focus"] = true
 L["Let the tracker focus (super track) quests for Blizzard's navigation, and show the quest POI buttons. Focusing quests from an addon can cause harmless errors about blocked or tainted actions in Blizzard's UI; turn this off to avoid them."] = true
 L["Section on top"] = true
@@ -249,7 +251,7 @@ L["Show completed quests in their own section below the section on top: all of t
 L["Completed"] = true
 L["%d complete"] = true
 L["Completed quests"] = true
-L["Where completed quests go within each zone: sorted like the other quests, first or last."] = true
+L["Where completed quests go, within each zone or as the Completed section: sorted like the other quests, first or last."] = true
 L["Sorted normally"] = true
 L["First"] = true
 L["Last"] = true
