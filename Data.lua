@@ -53,6 +53,11 @@ end
 
 local function GetCurrentZoneNames()
    wipe(zoneNames)
+   -- Neighborhood quests are filed under a generic "Neighborhood" header;
+   -- the global is a label with a trailing colon.
+   if C_Housing and C_Housing.IsOnNeighborhoodMap() and HOUSING_CORNERSTONE_NEIGHBORHOOD then
+      add((HOUSING_CORNERSTONE_NEIGHBORHOOD:gsub("%s*[:：]%s*$", "")))
+   end
    add(GetRealZoneText())
    add(GetZoneText())
 
