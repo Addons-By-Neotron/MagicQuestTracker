@@ -1343,6 +1343,10 @@ function mod:RenderPass(reserveScrollbar, sections, numQuests, numShown, recipes
       local header
       if profile.simpleSectionHeaders then
          header = questsLabel
+      elseif view == "tracked" then
+         -- Tracked quests count against the game's watch limit, not the log's.
+         local maxWatches = Constants and Constants.QuestWatchConsts and Constants.QuestWatchConsts.MAX_QUEST_WATCHES or 25
+         header = format("%s (%d/%d)", questsLabel, numShown, maxWatches)
       elseif numShown ~= numQuests then
          header = format(L["%s (%d of %d/%d)"], questsLabel, numShown, numQuests, maxQuests)
       else

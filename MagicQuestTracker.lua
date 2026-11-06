@@ -181,6 +181,7 @@ mod.defaults = {
       autoFoldZone = nil,     -- zone the auto-fold was last applied for
       collapsedSections = {}, -- [quests|worldQuests|bonus|recipes] = true
       minimized = false,
+      fullLogWarned = nil,    -- quest ID list the "log almost full" warning was shown for
    },
 }
 
@@ -231,11 +232,7 @@ function mod:OnInitialize()
    -- "what's new" window yet gets that (see Wizard.lua).
    local fresh = self:MigrateDefaults()
    self.freshInstall = fresh and self.db.global.whatsNewSeen == nil
-   -- Profiles without saved geometry are placed over Blizzard's tracker once
-   -- its position is known (see MatchBlizzardOnFirstLoad).
-   if self.db.profile.geometryMatched == nil then
-      self.db.profile.geometryMatched = self:HasSavedGeometry()
-   end
+   self:InitGeometryFlag()
 
    self:SetupOptions()
    self:RegisterChatCommand("mqt", "ChatCommand")
@@ -318,8 +315,19 @@ function mod:OnDisable()
    if self.frame then self.frame:Hide() end
 end
 
+-- Profiles without saved geometry are placed over Blizzard's tracker once
+-- its position is known (see MatchBlizzardOnFirstLoad).
+function mod:InitGeometryFlag()
+   if self.db.profile.geometryMatched == nil then
+      self.db.profile.geometryMatched = self:HasSavedGeometry()
+   end
+end
+
 function mod:ApplyProfile()
    self:MigrateDefaults()
+   -- A profile created while playing gets the same treatment as a new install.
+   self:InitGeometryFlag()
+   self:MatchBlizzardOnFirstLoad()
    -- "log" sort order was removed; fall back to level.
    local profile = self.db.profile
    if profile.zoneSort ~= "name" and profile.zoneSort ~= "distance" then profile.zoneSort = "level" end
@@ -423,9 +431,34 @@ function mod:RequestUpdate()
    self.updateTimer = self:ScheduleTimer("RunUpdate", UPDATE_DELAY)
 end
 
+-- Warns once per session when only this many quest slots are left, unless
+-- the quest log is the same as when the warning was last shown.
+local LOG_WARN_SLOTS = 2
+
+function mod:CheckQuestLogFull()
+   if self.logFullChecked or not C_QuestLog.GetMaxNumQuestsCanAccept then return end
+   local _, count = C_QuestLog.GetNumQuestLogEntries()
+   local max = C_QuestLog.GetMaxNumQuestsCanAccept()
+   if not count or not max or max <= 0 or count < max - LOG_WARN_SLOTS then return end
+   self.logFullChecked = true
+   local ids = {}
+   for i = 1, C_QuestLog.GetNumQuestLogEntries() do
+      local info = C_QuestLog.GetInfo(i)
+      if info and not info.isHeader and not info.isHidden then ids[#ids + 1] = info.questID end
+   end
+   table.sort(ids)
+   local signature = table.concat(ids, ",")
+   if self.db.char.fullLogWarned == signature then return end
+   self.db.char.fullLogWarned = signature
+   local text = format(L["Your quest log is almost full (%d/%d)."], count, max)
+   self:Print("|cffffd100" .. text .. "|r")
+   if UIErrorsFrame then UIErrorsFrame:AddMessage(text, 1, 0.82, 0) end
+end
+
 function mod:RunUpdate()
    self.updateTimer = nil
    if not self.frame then return end
+   self:CheckQuestLogFull()
    local sections, numQuests, numShown = self:CollectQuests()
    local recipes = self.db.profile.showRecipes and self:CollectRecipes() or nil
    local tasks = self:CollectTasks()

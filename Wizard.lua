@@ -873,6 +873,10 @@ function mod:ShowWhatsNew(all)
       title:SetText(L["What's new in Magic Quest Tracker"])
       AddButton(frame, L["Run setup wizard"], "BOTTOMLEFT", 28, function() mod:ShowWizard() end, 160)
       AddButton(frame, L["Close"], "BOTTOMRIGHT", -28, function() frame:Hide() end, 100)
+      AddButton(frame, L["Don't show again"], "BOTTOM", 25, function()
+         mod.db.global.whatsNewDisabled = true
+         frame:Hide()
+      end, 140)
       frame:SetScript("OnHide", function() mod:MarkWhatsNewSeen() end)
       tinsert(UISpecialFrames, "MagicQuestTrackerWhatsNew")
    end
@@ -932,7 +936,7 @@ function mod:ShowStartupDialogs()
    if InCombatLockdown() then return end
    if self.freshInstall then
       self:ShowWelcome()
-   elseif (self.db.global.whatsNewSeen or 0) < self.WHATS_NEW_VERSION then
+   elseif not self.db.global.whatsNewDisabled and (self.db.global.whatsNewSeen or 0) < self.WHATS_NEW_VERSION then
       self:ShowWhatsNew()
    end
 end
