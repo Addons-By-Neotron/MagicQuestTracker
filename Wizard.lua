@@ -769,7 +769,9 @@ end
 
 mod.WHATS_NEW_VERSION = 1
 
--- { version, title, desc, get, set } (get and set only for features with a switch)
+-- { version, title, desc, get, set, enabled, visible } (get and set only for
+-- features with a switch; the switch is grayed out unless enabled() says so,
+-- and the entry is skipped where visible() is false)
 local WHATS_NEW = {
    { 1, L["Setup wizard"],
       L["Pick Blizzard's look or one of the themes, then choose the features. Run it from the button below, the settings, or /mqt wizard."] },
@@ -793,6 +795,12 @@ local WHATS_NEW = {
       end },
    { 1, L["Fold icons"],
       L["Choose how folded headers look: a triangle, chevron, plus / minus, or Blizzard's button, on the left, right or after the title. See the General settings."] },
+   { 1, L["Quest voiceover buttons"],
+      L["Adds the play button of the Spoken Quests addon to quests that have a voiceover."],
+      function() return mod:GetWizardOption("showPlayButton") end,
+      function(value) mod:SetWizardOption("showPlayButton", value) end,
+      function() return mod:GetQuestVoice() ~= nil end,
+      function() return mod.IS_FOREVER end },
 }
 
 function mod:MarkWhatsNewSeen()
@@ -857,7 +865,7 @@ function mod:ShowWhatsNew(all)
    local seen = all and 0 or (self.db.global.whatsNewSeen or 0)
    local entries = {}
    for _, entry in ipairs(WHATS_NEW) do
-      if entry[1] > seen then entries[#entries + 1] = entry end
+      if entry[1] > seen and (not entry[7] or entry[7]()) then entries[#entries + 1] = entry end
    end
    if #entries == 0 then return end
 
@@ -879,16 +887,24 @@ function mod:ShowWhatsNew(all)
       end, 140)
       frame:SetScript("OnHide", function() mod:MarkWhatsNewSeen() end)
       tinsert(UISpecialFrames, "MagicQuestTrackerWhatsNew")
+      -- Many releases' worth of features scroll instead of growing the window.
+      local scroll = CreateFrame("ScrollFrame", nil, frame, "UIPanelScrollFrameTemplate")
+      scroll:SetPoint("TOPLEFT", 28, -52)
+      scroll:SetPoint("BOTTOMRIGHT", -46, 56)
+      frame.child = CreateFrame("Frame", nil, scroll)
+      frame.child:SetSize(1, 1)
+      scroll:SetScrollChild(frame.child)
+      frame.scroll = scroll
    end
 
    frame.entries = frame.entries or {}
-   local width = 480 - 64
-   local y = 52
+   local width = 480 - 28 - 46
+   local y = 0
    local refreshers = {}
    for i, entry in ipairs(entries) do
       local row = frame.entries[i]
       if not row then
-         row = CreateFrame("Frame", nil, frame)
+         row = CreateFrame("Frame", nil, frame.child)
          row.check = CreateFrame("CheckButton", nil, row, "UICheckButtonTemplate")
          row.check:SetSize(CHECK_SIZE, CHECK_SIZE)
          row.check:SetPoint("TOPLEFT", 0, 0)
@@ -902,10 +918,12 @@ function mod:ShowWhatsNew(all)
       end
       local get, set = entry[4], entry[5]
       row.check:SetShown(get ~= nil)
+      local enabled = not entry[6] or entry[6]()
+      row.check:SetEnabled(enabled)
       -- Entries without a switch line up with the others.
       local indent = CHECK_SIZE + 4
       row:ClearAllPoints()
-      row:SetPoint("TOPLEFT", 32, -y)
+      row:SetPoint("TOPLEFT", 0, -y)
       row.title:ClearAllPoints()
       row.title:SetPoint("TOPLEFT", indent, -4)
       row.title:SetWidth(width - indent)
@@ -913,7 +931,7 @@ function mod:ShowWhatsNew(all)
       row.desc:ClearAllPoints()
       row.desc:SetPoint("TOPLEFT", indent, -(row.title:GetStringHeight() + 8))
       row.desc:SetWidth(width - indent)
-      row.desc:SetText(entry[3])
+      row.desc:SetText(enabled and entry[3] or (entry[3] .. " " .. L["(Needs the Spoken Quests addon, which isn't installed.)"]))
       local height = row.title:GetStringHeight() + row.desc:GetStringHeight() + 14
       row:SetSize(width, height)
       row:Show()
@@ -924,7 +942,9 @@ function mod:ShowWhatsNew(all)
       y = y + height + 4
    end
    for _, refresh in ipairs(refreshers) do refresh() end
-   frame:SetHeight(y + 64)
+   frame.child:SetSize(width, y)
+   frame.scroll:SetVerticalScroll(0)
+   frame:SetHeight(math.min(y + 112, math.floor(UIParent:GetHeight() * 0.75)))
    frame:Show()
 end
 

@@ -703,6 +703,18 @@ local function BuildOptions()
                width = COLUMN_WIDTH,
                hidden = function() return mod.IS_FOREVER end,
             },
+            showPlayButton = {
+               type = "toggle",
+               name = function()
+                  if mod:GetQuestVoice() then return L["Show quest voiceover buttons"] end
+                  return L["Show quest voiceover buttons (needs Spoken Quests)"]
+               end,
+               desc = L["Show a play button on quests that have a voiceover, to hear the quest text read aloud. Needs the Spoken Quests addon."],
+               order = 54,
+               width = COLUMN_WIDTH,
+               disabled = function() return not mod:GetQuestVoice() end,
+               hidden = function() return not mod.IS_FOREVER end,
+            },
             hideBlizzardTracker = {
                type = "toggle",
                name = L["Hide Blizzard tracker"],

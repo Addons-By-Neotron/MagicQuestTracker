@@ -615,6 +615,7 @@ local function AddLine(kind, data, text, role, indent, spacing, color, highlight
    line.collapseIcon:Hide()
    if line.poiButton then line.poiButton:Hide() end
    if line.groupButton then line.groupButton:Hide() end
+   if line.playButton then line.playButton:Hide() end
    if line.previewItem then line.previewItem:Hide() end
    if line.bar then line.bar:Hide() end
    if arrowTarget then
@@ -996,6 +997,49 @@ local function AttachGroupButton(line, quest, rightOffset)
    button:Show()
 end
 
+-- The Spoken Quests addon (Forever / Classic) voices quests and exposes the
+-- UI it adds play buttons with. Returns that, or nil when it isn't loaded.
+function mod:GetQuestVoice()
+   local voiceOver = rawget(_G, "VoiceOver")
+   local ui = type(voiceOver) == "table" and voiceOver.QuestOverlayUI
+   if ui and ui.MakePlayButton and ui.BindPlayButton and ui.ShowsTrackerButton and ui.SetPlayButtonState then
+      return ui
+   end
+end
+
+local PLAY_BUTTON_SIZE = 16
+
+-- Whether the quest has a voiceover to play (and Spoken wants a tracker button for it).
+local function HasQuestVoice(ui, questID)
+   local ok, voiced = pcall(ui.ShowsTrackerButton, ui, questID)
+   return ok and voiced and true or false
+end
+
+-- Spoken Quests' play button, left of the group and item buttons. It is
+-- Spoken's own button: it plays, stops and replays the quest's line.
+local function AttachPlayButton(ui, line, quest, rightOffset)
+   local button = line.playButton
+   if not button then
+      local ok
+      ok, button = pcall(ui.MakePlayButton, ui, line)
+      if not ok or not button then return end
+      button:SetSize(PLAY_BUTTON_SIZE, PLAY_BUTTON_SIZE)
+      button.setPlayState = ui.FollowQueue
+      line.playButton = button
+   end
+   if button.questID ~= quest.questID then
+      button.soundData = nil
+      if not pcall(ui.BindPlayButton, ui, button, quest.questID, quest.title, "Magic Quest Tracker") then
+         button:Hide()
+         return
+      end
+   end
+   button:ClearAllPoints()
+   button:SetPoint("TOPRIGHT", line, "TOPRIGHT", -rightOffset, 2)
+   button:Show()
+   pcall(ui.SetPlayButtonState, ui, button)
+end
+
 local YARDS_PER_MILE = 1760
 local METERS_PER_YARD = 0.9144
 
@@ -1053,7 +1097,9 @@ function mod:RenderQuest(quest, profile)
    end
    local itemSize = (profile.showItemButtons and quest.hasItem) and self.ITEM_BUTTON_SIZE or 0
    local groupSize = (profile.showFindGroupButton and not self.IS_FOREVER and (self.previewing and quest.previewGroup or not self.previewing and CanFindGroup(quest))) and GROUP_BUTTON_SIZE or 0
-   layout.rightInset = itemSize + groupSize
+   local voiceUI = profile.showPlayButton and not self.previewing and self:GetQuestVoice()
+   local playSize = (voiceUI and HasQuestVoice(voiceUI, quest.questID)) and PLAY_BUTTON_SIZE or 0
+   layout.rightInset = itemSize + groupSize + playSize
    local showPOI = POIButtonsEnabled(profile)
    local questIndent = showPOI and POI_QUEST_INDENT or QUEST_INDENT
    local objectiveIndent = showPOI and POI_OBJECTIVE_INDENT or OBJECTIVE_INDENT
@@ -1075,6 +1121,9 @@ function mod:RenderQuest(quest, profile)
    end
    if groupSize > 0 then
       AttachGroupButton(titleLine, quest, itemSize)
+   end
+   if playSize > 0 then
+      AttachPlayButton(voiceUI, titleLine, quest, itemSize + groupSize)
    end
    if itemSize > 0 and self.previewing then
       AttachPreviewItemButton(titleLine, quest)
@@ -1102,7 +1151,7 @@ function mod:RenderQuest(quest, profile)
          colors.timeLeft)
    end
    -- Make room for the whole item / group button before the next quest.
-   local buttonSize = math.max(itemSize, groupSize)
+   local buttonSize = math.max(itemSize, groupSize, playSize)
    if buttonSize > 0 and layout.y - questTop < buttonSize then
       layout.y = questTop + buttonSize
    end

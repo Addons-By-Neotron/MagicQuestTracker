@@ -165,6 +165,7 @@ mod.defaults = {
       showItemButtons = true,
       showPOIButtons = true,
       showFindGroupButton = true,
+      showPlayButton = false, -- Spoken Quests voiceover play button (Forever)
 
       -- Layout (position is per Edit Mode layout)
       layouts = {},           -- [layoutName] = { point, x, y, width, maxHeight, scale }
