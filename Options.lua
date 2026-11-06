@@ -277,6 +277,48 @@ local function DisableForBuiltIn(group)
    end
 end
 
+-- Fold icon selection for zone and section headers (profile.zoneFold, ...).
+local function FoldStyleOption(name, key, order)
+   return {
+      type = "select",
+      name = name,
+      desc = L["The icon that shows whether a header is folded. Colored like the header text, except for the Blizzard style."],
+      values = {
+         none = L["None"],
+         blizzard = L["Blizzard"],
+         triangle = L["Triangle"],
+         chevron = L["Chevron"],
+         box = L["Plus / minus box"],
+         plusminus = L["Plus / minus"],
+      },
+      sorting = { "none", "blizzard", "triangle", "chevron", "box", "plusminus" },
+      order = order,
+      width = DROPDOWN_WIDTH,
+      get = function() return mod.db.profile[key] end,
+      set = function(_, val)
+         mod.db.profile[key] = val
+         mod:RequestUpdate()
+      end,
+   }
+end
+
+local function FoldPositionOption(name, key, order, styleKey)
+   return {
+      type = "select",
+      name = name,
+      values = { left = L["Left"], after = L["Right of title"], right = L["Right"] },
+      sorting = { "left", "after", "right" },
+      order = order,
+      width = DROPDOWN_WIDTH,
+      disabled = function() return mod.db.profile[styleKey] == "none" end,
+      get = function() return mod.db.profile[key] end,
+      set = function(_, val)
+         mod.db.profile[key] = val
+         mod:RequestUpdate()
+      end,
+   }
+end
+
 local function BuildOptions()
    options = {
       general = {
@@ -331,6 +373,24 @@ local function BuildOptions()
                   mod:RequestUpdate()
                end,
             },
+            simpleSectionHeaders = {
+               type = "toggle",
+               name = L["Simple section headers"],
+               desc = L["Leave the quest counts out of section headers like Quests and World Quests."],
+               order = 14.05,
+               width = COLUMN_WIDTH,
+            },
+            simpleZoneHeaders = {
+               type = "toggle",
+               name = L["Simple zone headers"],
+               desc = L["Leave the quest and completed counts out of zone headers."],
+               order = 14.06,
+               width = COLUMN_WIDTH,
+            },
+            zoneFold = FoldStyleOption(L["Zone fold icon"], "zoneFold", 14.1),
+            zoneFoldPosition = FoldPositionOption(L["Zone fold icon position"], "zoneFoldPosition", 14.2, "zoneFold"),
+            sectionFold = FoldStyleOption(L["Section fold icon"], "sectionFold", 14.3),
+            sectionFoldPosition = FoldPositionOption(L["Section fold icon position"], "sectionFoldPosition", 14.4, "sectionFold"),
             focusedSection = {
                type = "select",
                name = L["Section on top"],

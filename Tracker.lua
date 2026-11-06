@@ -34,9 +34,10 @@ local InCombatLockdown = InCombatLockdown
 
 -- Header art, heights and text insets come from the theme (Themes.lua).
 local SCROLLBAR_WIDTH = 4
--- Content is narrower than the tracker by the scrollbar and its gap; header
--- bars extend into that space to span the full width, like the title bar.
-mod.HEADER_BAR_EXTEND = SCROLLBAR_WIDTH + 4
+-- Space taken from the content width while the scrollbar is needed; header
+-- bars extend into it to span the full width, like the title bar
+-- (mod.headerBarExtend is that space, or 0 without a scrollbar).
+local SCROLLBAR_RESERVE = SCROLLBAR_WIDTH + 4
 local SCROLL_STEP = 40
 local FADE_IN = 0.15   -- seconds (scrollbar and background hover fade)
 local FADE_OUT = 0.6
@@ -50,6 +51,20 @@ local OBJECTIVE_INDENT = 16
 local POI_QUEST_INDENT = 39
 local POI_OBJECTIVE_INDENT = 43
 local GROUP_BUTTON_SIZE = 24
+
+-- Fold icons of zone and section headers. The icon always takes a slot of
+-- FOLD_SLOT pixels (icon plus gap) so headers don't shift when toggled.
+-- Texture styles are tinted with the header text color; the rotated ones
+-- point right when folded and down when open.
+local FOLD_SLOT = 18
+local FOLD_TEXTURES = "Interface\\AddOns\\MagicQuestTracker\\Textures\\"
+local FOLD_STYLES = {
+   blizzard = { atlas = { "ui-questtrackerbutton-secondary-expand", "ui-questtrackerbutton-secondary-collapse" }, size = 16 },
+   triangle = { texture = { FOLD_TEXTURES .. "FoldTriangle" }, rotate = true, size = 12 },
+   chevron = { texture = { FOLD_TEXTURES .. "FoldChevron" }, rotate = true, size = 12 },
+   box = { texture = { FOLD_TEXTURES .. "FoldPlusBox", FOLD_TEXTURES .. "FoldMinusBox" }, size = 14 },
+   plusminus = { texture = { FOLD_TEXTURES .. "FoldPlus", FOLD_TEXTURES .. "FoldMinus" }, size = 12 },
+}
 
 -- Text colors come from the theme (mod:GetTextColors()); set by Render.
 local colors
@@ -428,7 +443,41 @@ local layout = {}  -- reused render state
 local spacing      -- content spacing of the theme, set by Render
 
 -- headerKind: nil, "section" or "zone"; the theme decides how headers look.
-local function AddLine(kind, data, text, role, indent, spacing, color, highlightColor, headerKind, rightText, arrowTarget)
+-- Places the fold icon of a header line. x is where the text starts: the
+-- slot is there on the left side, and right after the text (textWidth wide)
+-- with "after". On the right the slot ends at the line's right edge plus the
+-- theme's line.foldRight overhang.
+local function ApplyFoldIcon(line, def, side, collapsed, color, isBar, x, textWidth, role)
+   local icon = line.collapseIcon
+   icon:ClearAllPoints()
+   icon:SetRotation(0)
+   icon:SetSize(def.size, def.size)
+   if def.atlas then
+      icon:SetAtlas(collapsed and def.atlas[1] or def.atlas[2])
+      icon:SetVertexColor(1, 1, 1, 1)
+   else
+      icon:SetTexture(collapsed and def.texture[1] or def.texture[#def.texture])
+      icon:SetTexCoord(0, 1, 0, 1)
+      icon:SetVertexColor(unpack(color))
+      if def.rotate and not collapsed then
+         icon:SetRotation(-math.pi / 2)
+      end
+   end
+   local center = FOLD_SLOT / 2 - 1
+   local y = isBar and 0 or -(mod:GetFonts()[role].size + 2) / 2
+   local anchor = isBar and "" or "TOP"
+   if side == "left" then
+      icon:SetPoint("CENTER", line, anchor .. "LEFT", x + center, y)
+   elseif side == "after" then
+      icon:SetPoint("CENTER", line, anchor .. "LEFT", x + textWidth + 2 + center, y)
+   else
+      icon:SetPoint("CENTER", line, anchor .. "RIGHT", (line.foldRight or 0) - center, y)
+   end
+   icon:Show()
+end
+
+-- collapsed: true / false for headers that can be folded, nil otherwise.
+local function AddLine(kind, data, text, role, indent, spacing, color, highlightColor, headerKind, rightText, arrowTarget, collapsed)
    local line = AcquireLine()
    local theme = mod:GetTheme()
    local isBar, minHeight, textIndent, padding
@@ -442,15 +491,25 @@ local function AddLine(kind, data, text, role, indent, spacing, color, highlight
       end
    else
       line.styleKind = nil
+      line.foldRight = 0
       if line.border then line.border:Hide() end
    end
+   local foldDef, foldSide
+   if collapsed ~= nil and headerKind then
+      local profile = mod.db.profile
+      foldDef = FOLD_STYLES[profile[headerKind .. "Fold"]]
+      foldSide = profile[headerKind .. "FoldPosition"]
+   end
+   local foldLeft = foldDef and foldSide == "left" and FOLD_SLOT or 0
+   -- "after" (right of the text) reserves its slot at the right end, so the text never wraps into it.
+   local foldRight = foldDef and foldSide ~= "left" and FOLD_SLOT or 0
    line.kind = kind
    line.data = data
    line.color = color
    line.highlightColor = highlightColor
    line:EnableMouse(highlightColor ~= nil)
 
-   local width = layout.width - indent - (layout.rightInset or 0)
+   local width = layout.width - indent - (layout.rightInset or 0) - foldLeft - foldRight
    if rightText then
       local right = line.rightText
       right:SetFontObject(fontObjects.objective)
@@ -486,14 +545,18 @@ local function AddLine(kind, data, text, role, indent, spacing, color, highlight
    line.text:SetFontObject(fontObjects[role])
    line.text:ClearAllPoints()
    if isBar then
-      line.text:SetPoint("LEFT", indent + textIndent, 0)
+      line.text:SetPoint("LEFT", indent + textIndent + foldLeft, 0)
       width = width - textIndent
    else
-      line.text:SetPoint("TOPLEFT", indent, 0)
+      line.text:SetPoint("TOPLEFT", indent + foldLeft, 0)
    end
    line.text:SetWidth(width)
    line.text:SetText(text)
    line.text:SetTextColor(unpack(color))
+   if foldDef then
+      ApplyFoldIcon(line, foldDef, foldSide, collapsed, color, isBar, indent + (isBar and textIndent or 0),
+         math.min(line.text:GetStringWidth(), width), role)
+   end
    mod.SetBarShown(line, isBar or false)
 
    local height = math.ceil(line.text:GetStringHeight())
@@ -926,14 +989,18 @@ function mod:RenderQuest(quest, profile)
 end
 
 -- Section headers (Quests, World Quests, ...) look like Blizzard's module
--- headers: header bar, collapse icon on the right, click to fold.
+-- headers: header bar, fold icon (see FOLD_STYLES), click to fold.
 -- Returns true when the section is expanded.
+-- Section header text, with the number of entries unless headers are simple.
+function mod:HeaderWithCount(name, count)
+   if self.db.profile.simpleSectionHeaders then return name end
+   return format("%s (%d)", name, count)
+end
+
 function mod:RenderSectionHeader(key, text, profile)
    local collapsed = self.db.char.collapsedSections[key]
-   local line = AddLine("section", SECTION_DATA[key], text, "module", 0, spacing.sectionSpacing, colors.section, Brighten(colors.section), "section")
-   local icon = line.collapseIcon
-   icon:SetAtlas(collapsed and "ui-questtrackerbutton-secondary-expand" or "ui-questtrackerbutton-secondary-collapse")
-   icon:Show()
+   AddLine("section", SECTION_DATA[key], text, "module", 0, spacing.sectionSpacing, colors.section, Brighten(colors.section),
+      "section", nil, nil, collapsed and true or false)
    if not collapsed then
       layout.nextSpacing = spacing.zoneHeaderSpacing
    end
@@ -1027,7 +1094,7 @@ end
 
 function mod:RenderTaskSection(key, name, tasks, profile)
    if not tasks or #tasks == 0 then return end
-   if not self:RenderSectionHeader(key, format("%s (%d)", name, #tasks), profile) then return end
+   if not self:RenderSectionHeader(key, self:HeaderWithCount(name, #tasks), profile) then return end
    for _, task in ipairs(tasks) do
       self:RenderQuest(task, profile)
    end
@@ -1035,7 +1102,7 @@ end
 
 function mod:RenderAchievements(achievements, profile)
    if not achievements or #achievements == 0 then return end
-   local header = format("%s (%d)", TRACKER_HEADER_ACHIEVEMENTS or L["Achievements"], #achievements)
+   local header = self:HeaderWithCount(TRACKER_HEADER_ACHIEVEMENTS or L["Achievements"], #achievements)
    if not self:RenderSectionHeader("achievements", header, profile) then return end
    local titleColor = colors.quest
    for _, achievement in ipairs(achievements) do
@@ -1046,7 +1113,7 @@ end
 
 function mod:RenderRecipes(recipes, profile)
    if not recipes or #recipes == 0 then return end
-   local header = format("%s (%d)", PROFESSIONS_TRACKER_HEADER_PROFESSION or L["Professions"], #recipes)
+   local header = self:HeaderWithCount(PROFESSIONS_TRACKER_HEADER_PROFESSION or L["Professions"], #recipes)
    if not self:RenderSectionHeader("recipes", header, profile) then return end
 
    local titleColor, normal, complete = colors.quest, colors.objective, colors.complete
@@ -1059,7 +1126,10 @@ function mod:RenderRecipes(recipes, profile)
    end
 end
 
-function mod:Render(sections, numQuests, numShown, recipes, tasks, scenario, achievements)
+-- Renders once; reserveScrollbar takes the scrollbar's space from the content
+-- width. Returns whether it rendered and, when it did, whether the content
+-- needs a scrollbar.
+function mod:RenderPass(reserveScrollbar, sections, numQuests, numShown, recipes, tasks, scenario, achievements)
    local frame = self.frame
    local profile = self.db.profile
 
@@ -1119,7 +1189,13 @@ function mod:Render(sections, numQuests, numShown, recipes, tasks, scenario, ach
    spacing = self:GetContentLayout()
    colors = self:GetTextColors()
    local size = self:GetLayoutSettings()
-   layout.width = size.width - SCROLLBAR_WIDTH - 4 - 2 * spacing.padding
+   local reserve = reserveScrollbar and SCROLLBAR_RESERVE or 0
+   if reserve ~= self.headerBarExtend then
+      -- Header art depends on the width: restyle the lines.
+      self.headerBarExtend = reserve
+      self.themeVersion = self.themeVersion + 1
+   end
+   layout.width = size.width - reserve - 2 * spacing.padding
 
    -- Title, gap below it and the padding on both ends.
    local titleHeight = frame.title:GetHeight() + 4 + 2 * spacing.padding
@@ -1140,7 +1216,9 @@ function mod:Render(sections, numQuests, numShown, recipes, tasks, scenario, ach
       local maxQuests = C_QuestLog.GetMaxNumQuestsCanAccept and C_QuestLog.GetMaxNumQuestsCanAccept() or numQuests
       local questsLabel = TRACKER_HEADER_QUESTS or L["Quests"]
       local header
-      if numShown ~= numQuests then
+      if profile.simpleSectionHeaders then
+         header = questsLabel
+      elseif numShown ~= numQuests then
          header = format(L["%s (%d of %d/%d)"], questsLabel, numShown, numQuests, maxQuests)
       else
          header = format("%s (%d/%d)", questsLabel, numQuests, maxQuests)
@@ -1155,9 +1233,10 @@ function mod:Render(sections, numQuests, numShown, recipes, tasks, scenario, ach
             if section.foldKey ~= mod.COMPLETED_FOLD_KEY and section.numComplete and section.numComplete > 0 then
                count = format("%d, %s", count, format(L["%d complete"], section.numComplete))
             end
-            local text = format("%s %s (%s)", collapsed and "+" or "-", section.name, count)
+            local text = profile.simpleZoneHeaders and section.name or format("%s (%s)", section.name, count)
             local color = section.isCurrent and currentZoneColor or zoneColor
-            AddLine("zone", section, text, "zone", ZONE_INDENT, spacing.zoneSpacing, color, Brighten(color), "zone")
+            AddLine("zone", section, text, "zone", ZONE_INDENT, spacing.zoneSpacing, color, Brighten(color), "zone",
+               nil, nil, collapsed and true or false)
             if not collapsed then
                layout.nextSpacing = spacing.zoneHeaderSpacing
                for _, quest in ipairs(section.quests) do
@@ -1206,7 +1285,23 @@ function mod:Render(sections, numQuests, numShown, recipes, tasks, scenario, ach
    if profile.showDirection then
       self:UpdateArrows()
    end
-   return true
+   return true, contentHeight > maxContent
+end
+
+-- The scrollbar only takes space while the content doesn't fit. The width
+-- changes the wrapping and so the height: render with the last known state
+-- and once more if the content turns out to need the other one (it can't
+-- flip back, as a narrower width never makes the content shorter).
+function mod:Render(...)
+   local reserve = self.scrollbarReserved or false
+   local ok, needsScrollbar = self:RenderPass(reserve, ...)
+   if ok and needsScrollbar ~= nil then
+      self.scrollbarReserved = needsScrollbar
+      if needsScrollbar ~= reserve then
+         ok = self:RenderPass(needsScrollbar, ...)
+      end
+   end
+   return ok
 end
 
 ----------------------------------------------------------------

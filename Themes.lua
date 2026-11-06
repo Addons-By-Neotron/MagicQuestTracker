@@ -179,10 +179,10 @@ end
 function blizzard.StyleHeader(line)
    SetBarColor(line, 1, 1, 1, 1)
    -- Like the title art: natural size, centered, widened with the tracker.
-   -- The line is narrower than the tracker by HEADER_BAR_EXTEND.
-   SliceAtlas(line, HEADER_ATLAS, mod:GetLayoutSettings().width - BLIZZARD_TRACKER_WIDTH, mod.HEADER_BAR_EXTEND / 2, 24)
+   -- The line is narrower than the tracker by mod.headerBarExtend.
+   SliceAtlas(line, HEADER_ATLAS, mod:GetLayoutSettings().width - BLIZZARD_TRACKER_WIDTH, mod.headerBarExtend / 2, 24)
    HideBorder(line)
-   line.collapseIcon:SetPoint("RIGHT", mod.HEADER_BAR_EXTEND - 2, 0)
+   line.foldRight = mod.headerBarExtend - 2
 end
 
 ----------------------------------------------------------------
@@ -212,7 +212,7 @@ local function StyleBar(owner, kind, left)
    local color = settings.color
    local art = ATLAS_TEXTURES[settings.texture]
    -- Section/zone bars span the full tracker width; the title already does.
-   local extend = kind == "title" and 0 or mod.HEADER_BAR_EXTEND
+   local extend = kind == "title" and 0 or mod.headerBarExtend
    bg:ClearAllPoints()
    if art and art.centered then
       -- Placed like the Blizzard theme does.
@@ -285,7 +285,7 @@ end
 
 function custom.StyleHeader(line, kind, left)
    local inset = StyleBar(line, kind, left)
-   line.collapseIcon:SetPoint("RIGHT", mod.HEADER_BAR_EXTEND - 2 - inset, 0)
+   line.foldRight = mod.headerBarExtend - 2 - inset
 end
 
 ----------------------------------------------------------------
