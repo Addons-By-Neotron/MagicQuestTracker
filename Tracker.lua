@@ -179,12 +179,12 @@ function mod:CreateTracker()
       if button == "RightButton" then
          mod:OpenConfig()
       elseif button == "MiddleButton" then
-         mod:ToggleCurrentZoneOnly()
+         mod:CycleView()
       end
    end)
    title:SetScript("OnEnter", function(self)
       GameTooltip:SetOwner(self, "ANCHOR_LEFT")
-      GameTooltip:AddLine(L["Middle-click: Toggle current zone only"], 1, 1, 1)
+      GameTooltip:AddLine(L["Middle-click: Change view (all / current zone / tracked)"], 1, 1, 1)
       GameTooltip:AddLine(L["Right-click: Options"], 1, 1, 1)
       GameTooltip:Show()
    end)
@@ -336,10 +336,31 @@ function mod:UpdateMinimizeButton()
    button:SetPushedAtlas(atlas .. "-pressed")
 end
 
-function mod:ToggleCurrentZoneOnly()
-   self.db.profile.onlyCurrentZone = not self.db.profile.onlyCurrentZone
+-- Which quests are shown: "all", "zone" (current zone only) or "tracked"
+-- (the built-in watch list only), kept in showAllQuests / onlyCurrentZone.
+local VIEW_ORDER = { "all", "zone", "tracked" }
+
+function mod:GetView()
+   local profile = self.db.profile
+   if not profile.showAllQuests then return "tracked" end
+   return profile.onlyCurrentZone and "zone" or "all"
+end
+
+function mod:SetView(view)
+   local profile = self.db.profile
+   profile.showAllQuests = view ~= "tracked"
+   profile.onlyCurrentZone = view == "zone"
    self:NotifyOptionsChanged()
    self:RequestUpdate()
+end
+
+function mod:CycleView()
+   local current = self:GetView()
+   for i, view in ipairs(VIEW_ORDER) do
+      if view == current then
+         return self:SetView(VIEW_ORDER[i % #VIEW_ORDER + 1])
+      end
+   end
 end
 
 function mod:ToggleMinimized()
@@ -1166,7 +1187,9 @@ function mod:RenderPass(reserveScrollbar, sections, numQuests, numShown, recipes
    end
    self.itemEntries = entries
 
-   frame.title.text:SetText(profile.onlyCurrentZone and L["Zone Objectives"] or L["All Objectives"])
+   local view = self:GetView()
+   frame.title.text:SetText(view == "tracked" and L["Tracked Objectives"]
+      or view == "zone" and L["Zone Objectives"] or L["All Objectives"])
    wipe(timerLines)
 
    local hasContent = numQuests > 0 or scenario or (recipes and #recipes > 0)
@@ -1228,17 +1251,22 @@ function mod:RenderPass(reserveScrollbar, sections, numQuests, numShown, recipes
          local collapsedZones = self.db.char.collapsedZones
          local zoneColor, currentZoneColor = colors.zone, colors.currentZone
          for _, section in ipairs(sections) do
-            local collapsed = collapsedZones[section.foldKey or section.name]
+            local hideHeader = profile.hideZoneHeaders
+            local collapsed = not hideHeader and collapsedZones[section.foldKey or section.name]
             local count = #section.quests
             if section.foldKey ~= mod.COMPLETED_FOLD_KEY and section.numComplete and section.numComplete > 0 then
                count = format("%d, %s", count, format(L["%d complete"], section.numComplete))
             end
             local text = profile.simpleZoneHeaders and section.name or format("%s (%s)", section.name, count)
             local color = section.isCurrent and currentZoneColor or zoneColor
-            AddLine("zone", section, text, "zone", ZONE_INDENT, spacing.zoneSpacing, color, Brighten(color), "zone",
-               nil, nil, collapsed and true or false)
+            if not hideHeader then
+               AddLine("zone", section, text, "zone", ZONE_INDENT, spacing.zoneSpacing, color, Brighten(color), "zone",
+                  nil, nil, collapsed and true or false)
+            end
             if not collapsed then
-               layout.nextSpacing = spacing.zoneHeaderSpacing
+               if not hideHeader then
+                  layout.nextSpacing = spacing.zoneHeaderSpacing
+               end
                for _, quest in ipairs(section.quests) do
                   self:RenderQuest(quest, profile)
                end

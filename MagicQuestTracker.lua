@@ -122,7 +122,7 @@ mod.defaults = {
       hideBlizzardTracker = true,
       hideInCombat = "never",        -- never | instances | always
       hideInInstances = "never",     -- never | noQuests | always
-      showAllQuests = true,          -- false = only quests on the built-in watch list
+      showAllQuests = true,          -- false = only quests on the built-in watch list (see mod:GetView)
       currentZoneFirst = true,
       onlyCurrentZone = false,
       autoFoldZones = false,
@@ -147,6 +147,7 @@ mod.defaults = {
       colorByDifficulty = true,
       simpleSectionHeaders = false,  -- no quest counts in section headers (Quests, World Quests, ...)
       simpleZoneHeaders = false,     -- no quest counts in zone headers
+      hideZoneHeaders = false,       -- quests of all zones in one list, without zone headers
       zoneFold = "triangle",         -- fold icon of zone headers: none | blizzard | triangle | chevron | box | plusminus
       zoneFoldPosition = "left",     -- left | after (right of the title) | right
       sectionFold = "blizzard",      -- fold icon of section headers (Quests, World Quests, ...)

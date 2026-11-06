@@ -310,7 +310,7 @@ local function FoldPositionOption(name, key, order, styleKey)
       sorting = { "left", "after", "right" },
       order = order,
       width = DROPDOWN_WIDTH,
-      disabled = function() return mod.db.profile[styleKey] == "none" end,
+      disabled = function() return mod.db.profile[styleKey] == "none" or (styleKey == "zoneFold" and mod.db.profile.hideZoneHeaders) end,
       get = function() return mod.db.profile[key] end,
       set = function(_, val)
          mod.db.profile[key] = val
@@ -339,12 +339,29 @@ local function BuildOptions()
             sectionHeader = { type = "header", name = L["Sections"], order = 40 },
             buttonHeader = { type = "header", name = L["Buttons"], order = 50 },
             otherHeader = { type = "header", name = L["Other"], order = 60 },
-            showAllQuests = {
-               type = "toggle",
-               name = L["Show all quests"],
-               desc = L["Show every quest in the quest log. When disabled, only quests on the built-in watch list are shown."],
+            view = {
+               type = "select",
+               name = L["Quests shown"],
+               desc = L["All quests in the quest log, only those in your current zone or on the current map, or only the quests you track (the built-in watch list). Middle-click the tracker title to cycle through them."],
+               values = {
+                  all = L["All quests"],
+                  zone = L["Current zone only"],
+                  tracked = L["Tracked quests only"],
+               },
+               sorting = { "all", "zone", "tracked" },
                order = 11,
+               width = DROPDOWN_WIDTH,
+               get = function() return mod:GetView() end,
+               set = function(_, val) mod:SetView(val) end,
+            },
+            autoTrack = {
+               type = "toggle",
+               name = L["Automatically track new quests"],
+               desc = L["Add quests to the watch list when you accept them. This is the game's own automatic quest tracking setting."],
+               order = 11.5,
                width = COLUMN_WIDTH,
+               get = function() return GetCVarBool("autoQuestWatch") end,
+               set = function(_, val) (C_CVar and C_CVar.SetCVar or SetCVar)("autoQuestWatch", val and "1" or "0") end,
             },
             currentZoneFirst = {
                type = "toggle",
@@ -353,20 +370,13 @@ local function BuildOptions()
                order = 13,
                width = COLUMN_WIDTH,
             },
-            onlyCurrentZone = {
-               type = "toggle",
-               name = L["Only show quests in current zone"],
-               desc = L["Hide quests that are not in your current zone or on the current map."],
-               order = 12,
-               width = COLUMN_WIDTH,
-            },
             autoFoldZones = {
                type = "toggle",
                name = L["Auto-fold other zones"],
                desc = L["When showing all quests, fold every zone except the current one whenever you enter a new zone. Zones you unfold stay open until the next zone change."],
                order = 14,
                width = COLUMN_WIDTH,
-               disabled = function() return mod.db.profile.onlyCurrentZone end,
+               disabled = function() return mod:GetView() == "zone" or mod.db.profile.hideZoneHeaders end,
                set = function(_, val)
                   mod.db.profile.autoFoldZones = val
                   mod.db.char.autoFoldZone = nil  -- apply right away
@@ -385,6 +395,14 @@ local function BuildOptions()
                name = L["Simple zone headers"],
                desc = L["Leave the quest and completed counts out of zone headers."],
                order = 14.06,
+               width = COLUMN_WIDTH,
+               disabled = function() return mod.db.profile.hideZoneHeaders end,
+            },
+            hideZoneHeaders = {
+               type = "toggle",
+               name = L["Hide zone headers"],
+               desc = L["List the quests of all zones together, without zone headers. This also hides the headers of the Completed and Focused / Tracked sections."],
+               order = 14.07,
                width = COLUMN_WIDTH,
             },
             zoneFold = FoldStyleOption(L["Zone fold icon"], "zoneFold", 14.1),
