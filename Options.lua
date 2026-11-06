@@ -1027,14 +1027,21 @@ local function BuildOptions()
                sectionSpacing = {
                   type = "range",
                   name = L["Section spacing"],
-                  desc = L["Space above each section header (Quests, World Quests, Professions)."],
+                  desc = L["Space above each section header (Quests, World Quests, Professions), between sections. Not used above the first section."],
                   min = 0, max = 40, step = 1,
                   order = 20.5,
+               },
+               sectionHeaderSpacing = {
+                  type = "range",
+                  name = L["Section header spacing"],
+                  desc = L["Space between a section header and the line below it, usually the first zone header."],
+                  min = 0, max = 30, step = 1,
+                  order = 20.7,
                },
                zoneSpacing = {
                   type = "range",
                   name = L["Zone spacing"],
-                  desc = L["Space above each zone header."],
+                  desc = L["Space above each zone header, except the first one below a section header."],
                   min = 0, max = 40, step = 1,
                   order = 21,
                },

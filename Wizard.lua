@@ -767,7 +767,7 @@ end
 -- is switched on by updating.
 ----------------------------------------------------------------
 
-mod.WHATS_NEW_VERSION = 1
+mod.WHATS_NEW_VERSION = 2
 
 -- { version, title, desc, get, set, enabled, visible } (get and set only for
 -- features with a switch; the switch is grayed out unless enabled() says so,
@@ -795,6 +795,8 @@ local WHATS_NEW = {
       end },
    { 1, L["Fold icons"],
       L["Choose how folded headers look: a triangle, chevron, plus / minus, or Blizzard's button, on the left, right or after the title. See the General settings."] },
+   { 2, L["Spacing settings"],
+      L["Zone spacing, zone header spacing and a new section header spacing now each control one gap: above a zone header, below it, and below a section header. Find them in the Theme settings, Layout tab."] },
    { 1, L["Quest voiceover buttons"],
       L["Adds the play button of the Spoken Quests addon to quests that have a voiceover."],
       function() return mod:GetWizardOption("showPlayButton") end,

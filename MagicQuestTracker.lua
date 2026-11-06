@@ -80,8 +80,9 @@ mod.themeDefaults = {
    -- Content spacing (pixels)
    layout = {
       padding = 0,              -- between the tracker edges (border) and the content
-      sectionSpacing = 24,      -- above each section header (Quests, World Quests, ...)
-      zoneSpacing = 7,          -- above each zone header
+      sectionSpacing = 24,      -- above each section header (Quests, World Quests, ...), but not the first
+      sectionHeaderSpacing = 7, -- between a section header and the first line below it (usually a zone header)
+      zoneSpacing = 7,          -- above each zone header, but not the first one below a section header
       zoneHeaderSpacing = 7,    -- between a zone header and its first quest
       questSpacing = 6,         -- above each quest title
       objectiveSpacing = 1,     -- between objective lines

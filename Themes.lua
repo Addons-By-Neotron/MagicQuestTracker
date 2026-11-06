@@ -589,6 +589,7 @@ local OLD_SETTINGS = {
    layout = {
       { "padding", "padding", 0 },
       { "sectionSpacing", "sectionSpacing", 10 },
+      { "sectionHeaderSpacing", "sectionHeaderSpacing", 2 },
       { "zoneSpacing", "zoneSpacing", 8 },
       { "zoneHeaderSpacing", "zoneHeaderSpacing", 2 },
       { "questSpacing", "questSpacing", 6 },
@@ -701,6 +702,11 @@ function mod:MigrateCustomTheme()
    end
    profile.fonts = nil
    for _, settings in pairs(self.db.global.themes) do
+      -- The gap below a section header used to be the zone header spacing.
+      local layout = settings.layout
+      if layout and layout.sectionHeaderSpacing == nil and layout.zoneHeaderSpacing then
+         layout.sectionHeaderSpacing = layout.zoneHeaderSpacing
+      end
       FillDefaults(settings, self.themeDefaults)
    end
 end

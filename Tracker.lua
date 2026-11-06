@@ -1172,7 +1172,7 @@ function mod:RenderSectionHeader(key, text, profile)
    AddLine("section", SECTION_DATA[key], text, "module", 0, spacing.sectionSpacing, colors.section, Brighten(colors.section),
       "section", nil, nil, collapsed and true or false)
    if not collapsed then
-      layout.nextSpacing = spacing.zoneHeaderSpacing
+      layout.nextSpacing = spacing.sectionHeaderSpacing or spacing.zoneHeaderSpacing
    end
    return not collapsed
 end
