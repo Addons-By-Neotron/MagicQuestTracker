@@ -145,6 +145,7 @@ function mod:MatchBlizzardTracker()
    local scale = settings.scale * self.frame:GetParent():GetEffectiveScale() / uiScale
    local height = math.floor(blizzard:GetHeight() * blizzardScale / scale + 0.5)
    settings.maxHeight = math.max(100, math.min(1200, height))
+   settings.width = math.max(150, math.min(600, math.floor(blizzard:GetWidth() * blizzardScale / scale + 0.5)))
    settings.point = "TOPRIGHT"
    settings.x = (right * blizzardScale - UIParent:GetRight()) / scale
    settings.y = (top * blizzardScale - UIParent:GetTop()) / scale
@@ -152,6 +153,24 @@ function mod:MatchBlizzardTracker()
    self:ApplyLayout()
    self:NotifyOptionsChanged()
    LEM:RefreshFrameSettings(self.frame)
+   return true
+end
+
+--- True when the profile already has a saved position or size.
+function mod:HasSavedGeometry()
+   local profile = self.db.profile
+   return next(profile.layouts) ~= nil or GetLegacyLayout(profile) ~= nil
+end
+
+--- On first load (no saved geometry), takes over the position and size of
+--- Blizzard's tracker. Retries until its position is known.
+function mod:MatchBlizzardOnFirstLoad()
+   local profile = self.db.profile
+   if profile.geometryMatched ~= false then return end
+   if self:MatchBlizzardTracker() then
+      profile.geometryMatched = true
+      profile.hideBlizzardTracker = true
+   end
 end
 
 local function FormatPercent(value)
@@ -195,6 +214,7 @@ function mod:SetupEditMode()
    })
 
    LEM:RegisterCallback("layout", function()
+      mod:MatchBlizzardOnFirstLoad()
       mod:ApplyLayout()
       mod:NotifyOptionsChanged()
    end)

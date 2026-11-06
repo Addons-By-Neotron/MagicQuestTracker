@@ -34,15 +34,21 @@ local InCombatLockdown = InCombatLockdown
 
 -- Header art, heights and text insets come from the theme (Themes.lua).
 local SCROLLBAR_WIDTH = 4
+-- Content is narrower than the tracker by the scrollbar and its gap; header
+-- bars extend into that space to span the full width, like the title bar.
+mod.HEADER_BAR_EXTEND = SCROLLBAR_WIDTH + 4
 local SCROLL_STEP = 40
 local FADE_IN = 0.15   -- seconds (scrollbar and background hover fade)
 local FADE_OUT = 0.6
 local ZONE_INDENT = 4
 local QUEST_INDENT = 6
 local OBJECTIVE_INDENT = 16
--- With quest POI buttons (left of the title), like Blizzard's tracker.
-local POI_QUEST_INDENT = 26
-local POI_OBJECTIVE_INDENT = 30
+-- With quest POI buttons (left of the title), like Blizzard's tracker. The
+-- button is 20 wide but its icon is 32 and the focus glow 50, so the indent
+-- (button center = indent - 14) leaves room for the glow to not be clipped
+-- at the left edge.
+local POI_QUEST_INDENT = 39
+local POI_OBJECTIVE_INDENT = 43
 local GROUP_BUTTON_SIZE = 24
 
 -- Text colors come from the theme (mod:GetTextColors()); set by Render.
@@ -269,7 +275,7 @@ function mod:ApplyLayout()
    title:ClearAllPoints()
    title:SetPoint("TOPLEFT", padding, -padding)
    title:SetPoint("TOPRIGHT", -padding, -padding)
-   frame.scroll:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -SCROLLBAR_WIDTH - 2 - padding, padding)
+   frame.scroll:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -padding, padding)
    frame.title:EnableMouse(true)
    self:UpdateMinimizeButton()
    self:RequestUpdate()
@@ -342,7 +348,7 @@ function mod:UpdateScrollBar()
    local maxScroll = contentHeight - viewHeight
    local offset = (viewHeight - thumbHeight) * (scroll:GetVerticalScroll() / maxScroll)
    thumb:ClearAllPoints()
-   thumb:SetPoint("TOPRIGHT", scroll, "TOPRIGHT", SCROLLBAR_WIDTH + 2, -offset)
+   thumb:SetPoint("TOPRIGHT", scroll, "TOPRIGHT", 0, -offset)
    thumb:SetHeight(thumbHeight)
    thumb:Show()
 end
@@ -488,7 +494,7 @@ local function AddLine(kind, data, text, role, indent, spacing, color, highlight
    line.text:SetWidth(width)
    line.text:SetText(text)
    line.text:SetTextColor(unpack(color))
-   line.bg:SetShown(isBar or false)
+   mod.SetBarShown(line, isBar or false)
 
    local height = math.ceil(line.text:GetStringHeight())
    if isBar then

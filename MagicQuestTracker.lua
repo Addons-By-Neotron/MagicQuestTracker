@@ -182,6 +182,11 @@ function mod:OnInitialize()
    self.db.RegisterCallback(self, "OnProfileChanged", "ApplyProfile")
    self.db.RegisterCallback(self, "OnProfileCopied", "ApplyProfile")
    self.db.RegisterCallback(self, "OnProfileReset", "ApplyProfile")
+   -- Profiles without saved geometry are placed over Blizzard's tracker once
+   -- its position is known (see MatchBlizzardOnFirstLoad).
+   if self.db.profile.geometryMatched == nil then
+      self.db.profile.geometryMatched = self:HasSavedGeometry()
+   end
 
    self:SetupOptions()
    self:RegisterChatCommand("mqt", "ChatCommand")
@@ -278,6 +283,7 @@ function mod:ApplyProfile()
 end
 
 function mod:PLAYER_ENTERING_WORLD()
+   self:MatchBlizzardOnFirstLoad()
    -- Blizzard's tracker initializes on PLAYER_ENTERING_WORLD; re-apply afterwards.
    self:SetBlizzardTrackerHidden(self.db.profile.hideBlizzardTracker)
    self:UpdateCombatVisibility()

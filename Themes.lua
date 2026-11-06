@@ -54,8 +54,8 @@ mod.themeVersion = 0
 --   centered: drawn at natural size, centered, widened with the tracker
 --   minHeight: header height the art is designed for
 local ATLAS_TEXTURES = {
-   ["Blizzard Tracker Title"] = { atlas = TITLE_ATLAS, centered = true, minHeight = 30 },
-   ["Blizzard Tracker Header"] = { atlas = HEADER_ATLAS, minHeight = 24 },
+   ["Blizzard Tracker Title"] = { atlas = TITLE_ATLAS, centered = true, cap = 48, minHeight = 30 },
+   ["Blizzard Tracker Header"] = { atlas = HEADER_ATLAS, centered = true, cap = 24, minHeight = 24 },
 }
 
 --- Statusbar textures plus the Blizzard header art, for the texture dropdown.
@@ -70,6 +70,69 @@ function mod:GetBarTextureList()
       list[name] = info and info.file or name
    end
    return list
+end
+
+-- Header art is drawn as left cap / stretched middle / right cap so that
+-- widening the tracker doesn't smear the ends (like the centered natural-size
+-- art in Blizzard's own tracker, which never needs stretching). The owner's
+-- bg texture is the left cap; bgMid and bgRight are created on demand.
+local function SetBarColor(owner, r, g, b, a)
+   owner.bg:SetVertexColor(r, g, b, a)
+   if owner.bgMid then
+      owner.bgMid:SetVertexColor(r, g, b, a)
+      owner.bgRight:SetVertexColor(r, g, b, a)
+   end
+end
+
+local function UnsliceBar(owner)
+   owner.bgSliced = false
+   if owner.bgMid then
+      owner.bgMid:Hide()
+      owner.bgRight:Hide()
+   end
+end
+
+--- Shows or hides a header background, slices included.
+function mod.SetBarShown(owner, shown)
+   owner.bg:SetShown(shown)
+   if owner.bgMid then
+      owner.bgMid:SetShown(shown and owner.bgSliced or false)
+      owner.bgRight:SetShown(shown and owner.bgSliced or false)
+   end
+end
+
+-- widenBy: width added to the art's natural width; centerX: offset of the
+-- art's center from the owner's center; cap: width of each end piece.
+local function SliceAtlas(owner, atlas, widenBy, centerX, cap)
+   if not owner.bgMid then
+      owner.bgMid = owner:CreateTexture(nil, "BACKGROUND")
+      owner.bgRight = owner:CreateTexture(nil, "BACKGROUND")
+   end
+   local info = C_Texture.GetAtlasInfo(atlas)
+   local width, height, file = info.width, info.height, info.file
+   local l, r, t, b = info.leftTexCoord, info.rightTexCoord, info.topTexCoord, info.bottomTexCoord
+   local left, mid, right = owner.bg, owner.bgMid, owner.bgRight
+   cap = math.min(cap, math.floor(width / 3))
+   local capSpan = (r - l) * cap / width
+   for _, tex in ipairs({ left, mid, right }) do
+      -- Atlases are filtered trilinear; art drawn at half its source size
+      -- looks heavier with the default linear filter.
+      tex:SetTexture(file, "CLAMP", "CLAMP", "TRILINEAR")
+      tex:ClearAllPoints()
+      tex:SetHeight(height)
+      tex:Show()
+   end
+   left:SetTexCoord(l, l + capSpan, t, b)
+   mid:SetTexCoord(l + capSpan, r - capSpan, t, b)
+   right:SetTexCoord(r - capSpan, r, t, b)
+   left:SetWidth(cap)
+   right:SetWidth(cap)
+   local half = (width + widenBy) / 2
+   left:SetPoint("LEFT", owner, "CENTER", centerX - half, 0)
+   right:SetPoint("RIGHT", owner, "CENTER", centerX + half, 0)
+   mid:SetPoint("LEFT", left, "RIGHT")
+   mid:SetPoint("RIGHT", right, "LEFT")
+   owner.bgSliced = true
 end
 
 local function CreateBorder(owner)
@@ -90,16 +153,11 @@ end
 local blizzard = {}
 
 function blizzard.StyleTitle(title, profile)
-   local bg = title.bg
-   bg:ClearAllPoints()
-   bg:SetVertexColor(1, 1, 1, 1)
+   SetBarColor(title, 1, 1, 1, 1)
    -- Natural size, centered: on Blizzard's 260 px header the art overhangs
    -- both ends (the swirl left of the text). Keep that overhang at any width.
-   bg:SetAtlas(TITLE_ATLAS, true)
-   bg.naturalWidth = bg.naturalWidth or bg:GetWidth()
-   bg:SetPoint("CENTER")
-   bg:SetWidth(bg.naturalWidth + mod:GetLayoutSettings().width - BLIZZARD_TRACKER_WIDTH)
-   bg:Show()
+   SliceAtlas(title, TITLE_ATLAS, mod:GetLayoutSettings().width - BLIZZARD_TRACKER_WIDTH, 0, 48)
+   mod.SetBarShown(title, true)
    HideBorder(title)
    title.minimize:GetHighlightTexture():SetAlpha(1)
    title.minimize:ClearAllPoints()
@@ -119,14 +177,12 @@ function blizzard.HeaderLayout(kind)
 end
 
 function blizzard.StyleHeader(line)
-   local bg = line.bg
-   bg:ClearAllPoints()
-   bg:SetVertexColor(1, 1, 1, 1)
-   bg:SetAtlas(HEADER_ATLAS, true)
-   bg:SetPoint("LEFT")
-   bg:SetPoint("RIGHT")
+   SetBarColor(line, 1, 1, 1, 1)
+   -- Like the title art: natural size, centered, widened with the tracker.
+   -- The line is narrower than the tracker by HEADER_BAR_EXTEND.
+   SliceAtlas(line, HEADER_ATLAS, mod:GetLayoutSettings().width - BLIZZARD_TRACKER_WIDTH, mod.HEADER_BAR_EXTEND / 2, 24)
    HideBorder(line)
-   line.collapseIcon:SetPoint("RIGHT", -2, 0)
+   line.collapseIcon:SetPoint("RIGHT", mod.HEADER_BAR_EXTEND - 2, 0)
 end
 
 ----------------------------------------------------------------
@@ -155,32 +211,33 @@ local function StyleBar(owner, kind, left)
    local bg = owner.bg
    local color = settings.color
    local art = ATLAS_TEXTURES[settings.texture]
+   -- Section/zone bars span the full tracker width; the title already does.
+   local extend = kind == "title" and 0 or mod.HEADER_BAR_EXTEND
    bg:ClearAllPoints()
-   if art then
+   if art and art.centered then
       -- Placed like the Blizzard theme does.
+      SliceAtlas(owner, art.atlas, mod:GetLayoutSettings().width - BLIZZARD_TRACKER_WIDTH, extend / 2, art.cap)
+   elseif art then
+      UnsliceBar(owner)
       bg:SetAtlas(art.atlas, true)
-      if art.centered then
-         bg:SetWidth(bg:GetWidth() + mod:GetLayoutSettings().width - BLIZZARD_TRACKER_WIDTH)
-         bg:SetPoint("CENTER")
-      else
-         bg:SetPoint("LEFT", left, 0)
-         bg:SetPoint("RIGHT")
-      end
+      bg:SetPoint("LEFT", left, 0)
+      bg:SetPoint("RIGHT", extend, 0)
    else
+      UnsliceBar(owner)
       bg:SetTexture(media:Fetch("statusbar", settings.texture) or WHITE)
       bg:SetTexCoord(0, 1, 0, 1)
       bg:SetPoint("TOPLEFT", left + inset, -inset)
-      bg:SetPoint("BOTTOMRIGHT", -inset, inset)
+      bg:SetPoint("BOTTOMRIGHT", extend - inset, inset)
    end
-   bg:SetVertexColor(color.r, color.g, color.b, color.a)
-   bg:Show()
+   SetBarColor(owner, color.r, color.g, color.b, color.a)
+   mod.SetBarShown(owner, true)
 
    local backdrop = backdrops[kind]
    if backdrop then
       local border = owner.border or CreateBorder(owner)
       border:ClearAllPoints()
       border:SetPoint("TOPLEFT", left, 0)
-      border:SetPoint("BOTTOMRIGHT")
+      border:SetPoint("BOTTOMRIGHT", extend, 0)
       border:SetBackdrop(backdrop)
       local c = settings.borderColor
       border:SetBackdropBorderColor(c.r, c.g, c.b, c.a)
@@ -228,7 +285,7 @@ end
 
 function custom.StyleHeader(line, kind, left)
    local inset = StyleBar(line, kind, left)
-   line.collapseIcon:SetPoint("RIGHT", -2 - inset, 0)
+   line.collapseIcon:SetPoint("RIGHT", mod.HEADER_BAR_EXTEND - 2 - inset, 0)
 end
 
 ----------------------------------------------------------------
