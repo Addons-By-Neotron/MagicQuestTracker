@@ -326,6 +326,7 @@ local function BuildOptions()
          name = APP_NAME,
          get = Get,
          set = SetAndUpdate,
+         childGroups = "tab",
          args = {
             desc = {
                type = "description",
@@ -333,12 +334,19 @@ local function BuildOptions()
                order = 0,
                fontSize = "medium",
             },
-            displayHeader = { type = "header", name = L["Quests"], order = 10 },
-            titleHeader = { type = "header", name = L["Quest titles"], order = 20 },
-            distanceHeader = { type = "header", name = L["Distance and navigation"], order = 30 },
-            sectionHeader = { type = "header", name = L["Sections"], order = 40 },
-            buttonHeader = { type = "header", name = L["Buttons"], order = 50 },
-            otherHeader = { type = "header", name = L["Other"], order = 60 },
+            wizard = {
+               type = "execute",
+               name = L["Run setup wizard"],
+               desc = L["Pick Blizzard's look or one of the themes, then choose the features. Changes apply right away; cancel to put everything back."],
+               order = 1,
+               width = COLUMN_WIDTH,
+               func = function()
+                  -- The settings would cover the tracker the wizard previews.
+                  if InCombatLockdown() then return mod:ShowWizard() end
+                  mod:CloseConfig()
+                  mod:ShowWizard()
+               end,
+            },
             view = {
                type = "select",
                name = L["Quests shown"],
@@ -349,433 +357,470 @@ local function BuildOptions()
                   tracked = L["Tracked quests only"],
                },
                sorting = { "all", "zone", "tracked" },
-               order = 11,
+               order = 2,
                width = DROPDOWN_WIDTH,
                get = function() return mod:GetView() end,
                set = function(_, val) mod:SetView(val) end,
             },
-            autoTrack = {
-               type = "toggle",
-               name = L["Automatically track new quests"],
-               desc = L["Add quests to the watch list when you accept them. This is the game's own automatic quest tracking setting."],
-               order = 11.5,
-               width = COLUMN_WIDTH,
-               get = function() return GetCVarBool("autoQuestWatch") end,
-               set = function(_, val) (C_CVar and C_CVar.SetCVar or SetCVar)("autoQuestWatch", val and "1" or "0") end,
-            },
-            currentZoneFirst = {
-               type = "toggle",
-               name = L["Show current zone first"],
-               desc = L["Place the zone you are currently in at the top. Remaining zones are sorted using the zone sort order."],
-               order = 13,
-               width = COLUMN_WIDTH,
-            },
-            autoFoldZones = {
-               type = "toggle",
-               name = L["Auto-fold other zones"],
-               desc = L["When showing all quests, fold every zone except the current one whenever you enter a new zone. Zones you unfold stay open until the next zone change."],
-               order = 14,
-               width = COLUMN_WIDTH,
-               disabled = function() return mod:GetView() == "zone" or mod:GetZoneHeaderMode() == "always" end,
-               set = function(_, val)
-                  mod.db.profile.autoFoldZones = val
-                  mod.db.char.autoFoldZone = nil  -- apply right away
-                  mod:RequestUpdate()
-               end,
-            },
-            simpleSectionHeaders = {
-               type = "toggle",
-               name = L["Simple section headers"],
-               desc = L["Leave the quest counts out of section headers like Quests and World Quests."],
-               order = 14.05,
-               width = COLUMN_WIDTH,
-            },
-            simpleZoneHeaders = {
-               type = "toggle",
-               name = L["Simple zone headers"],
-               desc = L["Leave the quest and completed counts out of zone headers."],
-               order = 14.06,
-               width = COLUMN_WIDTH,
-               disabled = function() return mod:GetZoneHeaderMode() == "always" end,
-            },
-            hideZoneHeaders = {
-               type = "select",
-               name = L["Zone headers"],
-               desc = L["Show or hide the zone headers. Without them the quests of all zones are listed together. This also affects the headers of the Completed and Focused / Tracked sections."],
-               values = {
-                  never = L["Show"],
-                  single = L["Hide when only one is shown"],
-                  always = L["Hide"],
+            quests = {
+               type = "group",
+               name = L["Quests"],
+               order = 10,
+               args = {
+                  autoTrack = {
+                     type = "toggle",
+                     name = L["Automatically track new quests"],
+                     desc = L["Add quests to the watch list when you accept them. This is the game's own automatic quest tracking setting."],
+                     order = 1,
+                     width = COLUMN_WIDTH,
+                     get = function() return GetCVarBool("autoQuestWatch") end,
+                     set = function(_, val) (C_CVar and C_CVar.SetCVar or SetCVar)("autoQuestWatch", val and "1" or "0") end,
+                  },
+                  currentZoneFirst = {
+                     type = "toggle",
+                     name = L["Show current zone first"],
+                     desc = L["Place the zone you are currently in at the top. Remaining zones are sorted using the zone sort order."],
+                     order = 2,
+                     width = COLUMN_WIDTH,
+                  },
+                  autoFoldZones = {
+                     type = "toggle",
+                     name = L["Auto-fold other zones"],
+                     desc = L["When showing all quests, fold every zone except the current one whenever you enter a new zone. Zones you unfold stay open until the next zone change."],
+                     order = 3,
+                     width = COLUMN_WIDTH,
+                     disabled = function() return mod:GetView() == "zone" or mod:GetZoneHeaderMode() == "always" end,
+                     set = function(_, val)
+                        mod.db.profile.autoFoldZones = val
+                        mod.db.char.autoFoldZone = nil  -- apply right away
+                        mod:RequestUpdate()
+                     end,
+                  },
+                  zoneSort = {
+                     type = "select",
+                     name = L["Zone sort order"],
+                     desc = L["How zones are ordered. Level sorts zones by their lowest level quest, distance by their nearest quest."],
+                     values = SORT_VALUES,
+                     order = 4,
+                     width = DROPDOWN_WIDTH,
+                     set = SetAndUpdateDistance,
+                  },
+                  questSort = {
+                     type = "select",
+                     name = L["Quest sort order"],
+                     desc = L["How quests are ordered within each zone. Distance sorts by straight-line distance to the quest's next location on the map; quests without one are listed last."],
+                     values = SORT_VALUES,
+                     order = 5,
+                     width = DROPDOWN_WIDTH,
+                     set = SetAndUpdateDistance,
+                  },
+                  headers = {
+                     type = "group",
+                     name = L["Headers"],
+                     inline = true,
+                     order = 6,
+                     args = {
+                        hideZoneHeaders = {
+                           type = "select",
+                           name = L["Zone headers"],
+                           desc = L["Show or hide the zone headers. Without them the quests of all zones are listed together. This also affects the headers of the Completed and Focused / Tracked sections."],
+                           values = {
+                              never = L["Show"],
+                              single = L["Hide when only one is shown"],
+                              always = L["Hide"],
+                           },
+                           sorting = { "never", "single", "always" },
+                           order = 1,
+                           width = DROPDOWN_WIDTH,
+                           get = function() return mod:GetZoneHeaderMode() end,
+                           set = function(_, val) mod:SetZoneHeaderMode(val) end,
+                        },
+                        simpleZoneHeaders = {
+                           type = "toggle",
+                           name = L["Simple zone headers"],
+                           desc = L["Leave the quest and completed counts out of zone headers."],
+                           order = 2,
+                           width = COLUMN_WIDTH,
+                           disabled = function() return mod:GetZoneHeaderMode() == "always" end,
+                        },
+                        simpleSectionHeaders = {
+                           type = "toggle",
+                           name = L["Simple section headers"],
+                           desc = L["Leave the quest counts out of section headers like Quests and World Quests."],
+                           order = 3,
+                           width = COLUMN_WIDTH,
+                        },
+                        zoneFold = FoldStyleOption(L["Zone fold icon"], "zoneFold", 4),
+                        zoneFoldPosition = FoldPositionOption(L["Zone fold icon position"], "zoneFoldPosition", 5, "zoneFold"),
+                        sectionFold = FoldStyleOption(L["Section fold icon"], "sectionFold", 6),
+                        sectionFoldPosition = FoldPositionOption(L["Section fold icon position"], "sectionFoldPosition", 7, "sectionFold"),
+                     },
+                  },
                },
-               sorting = { "never", "single", "always" },
-               order = 14.07,
-               width = DROPDOWN_WIDTH,
-               get = function() return mod:GetZoneHeaderMode() end,
-               set = function(_, val) mod:SetZoneHeaderMode(val) end,
             },
-            zoneFold = FoldStyleOption(L["Zone fold icon"], "zoneFold", 14.1),
-            zoneFoldPosition = FoldPositionOption(L["Zone fold icon position"], "zoneFoldPosition", 14.2, "zoneFold"),
-            sectionFold = FoldStyleOption(L["Section fold icon"], "sectionFold", 14.3),
-            sectionFoldPosition = FoldPositionOption(L["Section fold icon position"], "sectionFoldPosition", 14.4, "sectionFold"),
-            focusedSection = {
-               type = "select",
-               name = L["Section on top"],
-               desc = L["Show a section above the zones: Focused holds the focused quest, Tracked also holds the quests on the built-in watch list. Those quests move out of their zones, and the focused quest is shown even when other settings would hide it. When only watched quests are shown, Tracked holds just the focused quest."],
-               values = {
-                  none = L["None"],
-                  focused = L["Focused"],
-                  tracked = L["Tracked"],
+            sections = {
+               type = "group",
+               name = L["Sections"],
+               order = 20,
+               args = {
+                  focusedSection = {
+                     type = "select",
+                     name = L["Section on top"],
+                     desc = L["Show a section above the zones: Focused holds the focused quest, Tracked also holds the quests on the built-in watch list. Those quests move out of their zones, and the focused quest is shown even when other settings would hide it. When only watched quests are shown, Tracked holds just the focused quest."],
+                     values = {
+                        none = L["None"],
+                        focused = L["Focused"],
+                        tracked = L["Tracked"],
+                     },
+                     sorting = { "none", "focused", "tracked" },
+                     order = 1,
+                     width = DROPDOWN_WIDTH,
+                  },
+                  focusedPosition = {
+                     type = "select",
+                     name = L["Section on top position"],
+                     desc = L["Where the Focused / Tracked section goes: above or below the zones."],
+                     values = { top = L["Above the zones"], bottom = L["Below the zones"] },
+                     sorting = { "top", "bottom" },
+                     order = 2,
+                     width = DROPDOWN_WIDTH,
+                     disabled = function() return mod.db.profile.focusedSection == "none" end,
+                  },
+                  completedSection = {
+                     type = "select",
+                     name = L["Completed section"],
+                     desc = L["Show completed quests in their own section below the section on top: all of them, or only those in the current zone and its sub-areas. Zone headers show how many of their quests are complete."],
+                     values = {
+                        none = L["Disabled"],
+                        all = L["All"],
+                        current = L["Current zone"],
+                     },
+                     sorting = { "none", "all", "current" },
+                     order = 3,
+                     width = DROPDOWN_WIDTH,
+                  },
+                  completedPosition = {
+                     type = "select",
+                     name = L["Completed section position"],
+                     desc = L["Where the Completed section goes: above or below the zones (and the Focused / Tracked section)."],
+                     values = { top = L["Above the zones"], bottom = L["Below the zones"] },
+                     sorting = { "top", "bottom" },
+                     order = 4,
+                     width = DROPDOWN_WIDTH,
+                     get = function()
+                        local profile = mod.db.profile
+                        return profile.completedPosition or (profile.completedSort == "last" and "bottom" or "top")
+                     end,
+                     disabled = function() return mod.db.profile.completedSection == "none" end,
+                  },
+                  completedSort = {
+                     type = "select",
+                     name = L["Completed quests"],
+                     desc = L["Where completed quests go, within each zone or as the Completed section: sorted like the other quests, first or last."],
+                     values = {
+                        normal = L["Sorted normally"],
+                        first = L["First"],
+                        last = L["Last"],
+                     },
+                     sorting = { "normal", "first", "last" },
+                     order = 5,
+                     width = DROPDOWN_WIDTH,
+                  },
+                  showRecipes = {
+                     type = "toggle",
+                     name = L["Show tracked recipes"],
+                     desc = L["Show recipes tracked from the professions window in a separate section."],
+                     order = 6,
+                     width = COLUMN_WIDTH,
+                  },
+                  showAchievements = {
+                     type = "toggle",
+                     name = L["Show tracked achievements"],
+                     desc = L["Show tracked achievements in a separate section."],
+                     order = 7,
+                     width = COLUMN_WIDTH,
+                     hidden = function() return not (C_ContentTracking and GetAchievementInfo) end,
+                  },
+                  showWorldQuests = {
+                     type = "toggle",
+                     name = L["Show world quests"],
+                     desc = L["Show world quests in the current area and tracked world quests in a separate section."],
+                     order = 8,
+                     width = COLUMN_WIDTH,
+                     hidden = function() return mod.IS_FOREVER or not GetTasksTable end,
+                  },
+                  showBonusObjectives = {
+                     type = "toggle",
+                     name = L["Show bonus objectives"],
+                     desc = L["Show bonus objectives in the current area in a separate section."],
+                     order = 9,
+                     width = COLUMN_WIDTH,
+                     hidden = function() return mod.IS_FOREVER or not GetTasksTable end,
+                  },
                },
-               sorting = { "none", "focused", "tracked" },
-               order = 17,
-               width = DROPDOWN_WIDTH,
             },
-            completedSort = {
-               type = "select",
-               name = L["Completed quests"],
-               desc = L["Where completed quests go, within each zone or as the Completed section: sorted like the other quests, first or last."],
-               values = {
-                  normal = L["Sorted normally"],
-                  first = L["First"],
-                  last = L["Last"],
+            titles = {
+               type = "group",
+               name = L["Quest titles"],
+               order = 30,
+               args = {
+                  showLevel = {
+                     type = "toggle",
+                     name = L["Show quest level"],
+                     desc = L["Prefix quest titles with their level. + marks elite and group quests, D dungeon, R raid and H heroic quests."],
+                     order = 1,
+                     width = COLUMN_WIDTH,
+                  },
+                  showQuestTags = {
+                     type = "toggle",
+                     name = L["Show quest type"],
+                     desc = L["Append the quest type, such as Elite, Dungeon, Raid or Daily, to quest titles."],
+                     order = 2,
+                     width = COLUMN_WIDTH,
+                  },
+                  colorByDifficulty = {
+                     type = "toggle",
+                     name = L["Color by difficulty"],
+                     desc = L["Color quest titles by their difficulty relative to your level."],
+                     order = 3,
+                     width = COLUMN_WIDTH,
+                  },
+                  colorCompleteQuests = {
+                     type = "toggle",
+                     name = L["Color completed quests"],
+                     desc = L["Color the titles of completed quests with the Completed quest color, instead of by difficulty."],
+                     order = 4,
+                     width = COLUMN_WIDTH,
+                  },
+                  showCompletedObjectives = {
+                     type = "toggle",
+                     name = L["Show completed objectives"],
+                     desc = L["Show finished objectives of incomplete quests, dimmed."],
+                     order = 5,
+                     width = COLUMN_WIDTH,
+                  },
+                  markWatchedQuests = {
+                     type = "toggle",
+                     name = L["Mark tracked quests"],
+                     desc = L["Show a check mark after quests on the built-in watch list. Not shown in the section on top, or when only watched quests are shown."],
+                     order = 6,
+                     width = COLUMN_WIDTH,
+                     disabled = function() return not mod.db.profile.showAllQuests end,
+                  },
+                  markForeverQuests = {
+                     type = "toggle",
+                     name = L["Mark new Forever quests"],
+                     desc = L["Show an infinity sign after quests that were not in original Classic."],
+                     order = 7,
+                     width = COLUMN_WIDTH,
+                     hidden = function() return not mod.IS_FOREVER end,
+                  },
                },
-               sorting = { "normal", "first", "last" },
-               order = 18,
-               width = DROPDOWN_WIDTH,
             },
-            completedSection = {
-               type = "select",
-               name = L["Completed section"],
-               desc = L["Show completed quests in their own section below the section on top: all of them, or only those in the current zone and its sub-areas. Zone headers show how many of their quests are complete."],
-               values = {
-                  none = L["Disabled"],
-                  all = L["All"],
-                  current = L["Current zone"],
+            navigation = {
+               type = "group",
+               name = L["Distance and navigation"],
+               order = 40,
+               args = {
+                  blizzardFocus = {
+                     type = "toggle",
+                     name = L["Use Blizzard quest focus"],
+                     desc = L["Let the tracker focus (super track) quests for Blizzard's navigation, and show the quest POI buttons. Focusing quests from an addon can cause harmless errors about blocked or tainted actions in Blizzard's UI; turn this off to avoid them."],
+                     order = 1,
+                     width = COLUMN_WIDTH,
+                  },
+                  showPOIButtons = {
+                     type = "toggle",
+                     name = L["Show quest POI buttons"],
+                     desc = L["Show the quest map icon next to each quest, like the built-in tracker. Click it to focus the quest. Follows the game's quest POI setting."],
+                     order = 2,
+                     width = COLUMN_WIDTH,
+                     disabled = function() return not mod.db.profile.blizzardFocus end,
+                  },
+                  poiTomTom = {
+                     type = "toggle",
+                     name = L["Quest icon sets TomTom waypoint"],
+                     desc = L["Clicking a quest's icon also sets the TomTom waypoint, like ctrl-clicking its title. Unfocusing a quest leaves the waypoint alone."],
+                     order = 3,
+                     width = COLUMN_WIDTH,
+                     hidden = function() return not mod:HasTomTom() end,
+                     disabled = function() return not mod.db.profile.blizzardFocus end,
+                  },
+                  waypointMode = {
+                     type = "select",
+                     name = L["Ctrl-click navigation"],
+                     desc = L["What ctrl-clicking a quest does: set a TomTom waypoint, focus the quest for Blizzard's navigation, or both."],
+                     values = {
+                        tomtom = L["TomTom"],
+                        blizzard = L["Blizzard"],
+                        both = L["Both"],
+                     },
+                     order = 4,
+                     -- Without TomTom, ctrl-click always uses Blizzard's navigation.
+                     hidden = function() return not mod:HasTomTom() end,
+                     disabled = function() return not mod.db.profile.blizzardFocus end,
+                     width = COLUMN_WIDTH,
+                  },
+                  mapClicks = {
+                     type = "toggle",
+                     name = L["Left-click opens map"],
+                     desc = L["Left-clicking a quest opens it on the map. Opening the map from an addon can cause harmless errors about blocked actions when the map is next opened in combat; turn this off to avoid them. The right-click menu can still show quests on the map."],
+                     order = 5,
+                     width = COLUMN_WIDTH,
+                  },
+                  showDistance = {
+                     type = "toggle",
+                     name = L["Show distance"],
+                     desc = L["Show the straight-line distance to each quest's next location on the map."],
+                     order = 6,
+                     width = COLUMN_WIDTH,
+                     set = SetAndUpdateDistance,
+                  },
+                  distanceUnits = {
+                     type = "select",
+                     name = L["Distance units"],
+                     desc = L["Show distances in yards or meters, optionally switching to miles or kilometers for long distances."],
+                     values = {
+                        yards = L["Yards"],
+                        meters = L["Meters"],
+                        imperial = L["Yards / miles"],
+                        metric = L["Meters / kilometers"],
+                     },
+                     sorting = { "yards", "imperial", "meters", "metric" },
+                     order = 7,
+                     width = COLUMN_WIDTH,
+                     disabled = function()
+                        local profile = mod.db.profile
+                        return not (profile.showDistance or profile.showDirection)
+                     end,
+                  },
+                  showDirection = {
+                     type = "toggle",
+                     name = L["Show direction"],
+                     desc = L["Show an arrow pointing toward each quest's next location on the map. Not available in instances."],
+                     order = 8,
+                     width = COLUMN_WIDTH,
+                     set = SetAndUpdateDistance,
+                  },
+                  arrowSize = {
+                     type = "range",
+                     name = L["Arrow size"],
+                     min = 8, max = 32, step = 1,
+                     order = 9,
+                     width = COLUMN_WIDTH,
+                     disabled = function() return not mod.db.profile.showDirection end,
+                  },
+                  arrowMaxDistance = {
+                     type = "range",
+                     -- Saved in yards, shown in the selected distance units.
+                     name = function()
+                        return format(L["Arrow max distance (%s)"], UsesMeters() and L["m"] or L["yd"])
+                     end,
+                     desc = L["Only show arrows for quests in other zones within this distance. Quests in the current zone always get an arrow. 0 shows arrows at any distance."],
+                     min = 0, max = 5000, step = 50, bigStep = 250,
+                     order = 10,
+                     width = COLUMN_WIDTH,
+                     disabled = function() return not mod.db.profile.showDirection end,
+                     get = function()
+                        local yards = mod.db.profile.arrowMaxDistance
+                        return UsesMeters() and math.floor(yards * METERS_PER_YARD / 50 + 0.5) * 50 or yards
+                     end,
+                     set = function(_, val)
+                        mod.db.profile.arrowMaxDistance = UsesMeters() and val / METERS_PER_YARD or val
+                        mod:RequestUpdate()
+                     end,
+                  },
                },
-               sorting = { "none", "all", "current" },
-               order = 19,
-               width = DROPDOWN_WIDTH,
             },
-            focusedPosition = {
-               type = "select",
-               name = L["Section on top position"],
-               desc = L["Where the Focused / Tracked section goes: above or below the zones."],
-               values = { top = L["Above the zones"], bottom = L["Below the zones"] },
-               sorting = { "top", "bottom" },
-               order = 17.1,
-               width = DROPDOWN_WIDTH,
-               disabled = function() return mod.db.profile.focusedSection == "none" end,
-            },
-            completedPosition = {
-               type = "select",
-               name = L["Completed section position"],
-               desc = L["Where the Completed section goes: above or below the zones (and the Focused / Tracked section)."],
-               values = { top = L["Above the zones"], bottom = L["Below the zones"] },
-               sorting = { "top", "bottom" },
-               order = 19.1,
-               width = DROPDOWN_WIDTH,
-               get = function()
-                  local profile = mod.db.profile
-                  return profile.completedPosition or (profile.completedSort == "last" and "bottom" or "top")
-               end,
-               disabled = function() return mod.db.profile.completedSection == "none" end,
-            },
-            zoneSort = {
-               type = "select",
-               name = L["Zone sort order"],
-               desc = L["How zones are ordered. Level sorts zones by their lowest level quest, distance by their nearest quest."],
-               values = SORT_VALUES,
-               order = 15,
-               width = DROPDOWN_WIDTH,
-               set = SetAndUpdateDistance,
-            },
-            questSort = {
-               type = "select",
-               name = L["Quest sort order"],
-               desc = L["How quests are ordered within each zone. Distance sorts by straight-line distance to the quest's next location on the map; quests without one are listed last."],
-               values = SORT_VALUES,
-               order = 16,
-               width = DROPDOWN_WIDTH,
-               set = SetAndUpdateDistance,
-            },
-            showDistance = {
-               type = "toggle",
-               name = L["Show distance"],
-               desc = L["Show the straight-line distance to each quest's next location on the map."],
-               order = 31,
-               width = COLUMN_WIDTH,
-               set = SetAndUpdateDistance,
-            },
-            distanceUnits = {
-               type = "select",
-               name = L["Distance units"],
-               desc = L["Show distances in yards or meters, optionally switching to miles or kilometers for long distances."],
-               values = {
-                  yards = L["Yards"],
-                  meters = L["Meters"],
-                  imperial = L["Yards / miles"],
-                  metric = L["Meters / kilometers"],
+            buttons = {
+               type = "group",
+               name = L["Buttons"],
+               order = 50,
+               args = {
+                  showItemButtons = {
+                     type = "toggle",
+                     name = L["Show quest item buttons"],
+                     desc = L["Show a button to use the quest item next to quests that have one. While a button is shown, the tracker does not update or scroll during combat."],
+                     order = 1,
+                     width = COLUMN_WIDTH,
+                  },
+                  showFindGroupButton = {
+                     type = "toggle",
+                     name = L["Show find group buttons"],
+                     desc = L["Show the group finder button on quests that support it, like the built-in tracker."],
+                     order = 2,
+                     width = COLUMN_WIDTH,
+                     hidden = function() return mod.IS_FOREVER end,
+                  },
+                  showPlayButton = {
+                     type = "toggle",
+                     name = function()
+                        if mod:GetQuestVoice() then return L["Show quest voiceover buttons"] end
+                        return L["Show quest voiceover buttons (needs Spoken Quests)"]
+                     end,
+                     desc = L["Show a play button on quests that have a voiceover, to hear the quest text read aloud. Needs the Spoken Quests addon."],
+                     order = 3,
+                     width = COLUMN_WIDTH,
+                     disabled = function() return not mod:GetQuestVoice() end,
+                     hidden = function() return not mod.IS_FOREVER end,
+                  },
                },
-               sorting = { "yards", "imperial", "meters", "metric" },
-               order = 33,
-               width = COLUMN_WIDTH,
-               disabled = function()
-                  local profile = mod.db.profile
-                  return not (profile.showDistance or profile.showDirection)
-               end,
             },
-            showDirection = {
-               type = "toggle",
-               name = L["Show direction"],
-               desc = L["Show an arrow pointing toward each quest's next location on the map. Not available in instances."],
-               order = 32,
-               width = COLUMN_WIDTH,
-               set = SetAndUpdateDistance,
-            },
-            arrowSize = {
-               type = "range",
-               name = L["Arrow size"],
-               min = 8, max = 32, step = 1,
-               order = 34,
-               width = COLUMN_WIDTH,
-               disabled = function() return not mod.db.profile.showDirection end,
-            },
-            arrowMaxDistance = {
-               type = "range",
-               -- Saved in yards, shown in the selected distance units.
-               name = function()
-                  return format(L["Arrow max distance (%s)"], UsesMeters() and L["m"] or L["yd"])
-               end,
-               desc = L["Only show arrows for quests in other zones within this distance. Quests in the current zone always get an arrow. 0 shows arrows at any distance."],
-               min = 0, max = 5000, step = 50, bigStep = 250,
-               order = 36,
-               width = COLUMN_WIDTH,
-               disabled = function() return not mod.db.profile.showDirection end,
-               get = function()
-                  local yards = mod.db.profile.arrowMaxDistance
-                  return UsesMeters() and math.floor(yards * METERS_PER_YARD / 50 + 0.5) * 50 or yards
-               end,
-               set = function(_, val)
-                  mod.db.profile.arrowMaxDistance = UsesMeters() and val / METERS_PER_YARD or val
-                  mod:RequestUpdate()
-               end,
-            },
-            showLevel = {
-               type = "toggle",
-               name = L["Show quest level"],
-               desc = L["Prefix quest titles with their level. + marks elite and group quests, D dungeon, R raid and H heroic quests."],
-               order = 21,
-               width = COLUMN_WIDTH,
-            },
-            waypointMode = {
-               type = "select",
-               name = L["Ctrl-click navigation"],
-               desc = L["What ctrl-clicking a quest does: set a TomTom waypoint, focus the quest for Blizzard's navigation, or both."],
-               values = {
-                  tomtom = L["TomTom"],
-                  blizzard = L["Blizzard"],
-                  both = L["Both"],
+            other = {
+               type = "group",
+               name = L["Other"],
+               order = 60,
+               args = {
+                  hideInCombat = {
+                     type = "select",
+                     name = L["Hide in combat"],
+                     desc = L["Hide the tracker while in combat: never, only inside instances (dungeons, raids, battlegrounds, ...), or always."],
+                     values = {
+                        never = L["Never"],
+                        instances = L["In instances"],
+                        always = L["Always"],
+                     },
+                     order = 1,
+                     width = COLUMN_WIDTH,
+                     set = function(_, val)
+                        mod.db.profile.hideInCombat = val
+                        mod:UpdateCombatVisibility()
+                     end,
+                  },
+                  hideInInstances = {
+                     type = "select",
+                     name = L["Hide in instances"],
+                     desc = L["Hide the tracker inside instances (dungeons, raids, battlegrounds, ...): never, when none of your quests are for the instance, or always."],
+                     values = {
+                        never = L["Never"],
+                        noQuests = L["Without quests there"],
+                        always = L["Always"],
+                     },
+                     order = 2,
+                     width = COLUMN_WIDTH,
+                  },
+                  hideBlizzardTracker = {
+                     type = "toggle",
+                     name = L["Hide Blizzard tracker"],
+                     desc = L["Hide the built-in objective tracker. Note that this hides all of its sections, including scenarios and bonus objectives."],
+                     order = 3,
+                     width = COLUMN_WIDTH,
+                     set = function(_, val)
+                        mod.db.profile.hideBlizzardTracker = val
+                        mod:SetBlizzardTrackerHidden(val)
+                     end,
+                  },
+                  cmdHeader = { type = "header", name = L["Commands"], order = 90 },
+                  cmdDesc = {
+                     type = "description",
+                     name = L["/mqt toggle  - show/hide the tracker"] .. "\n"
+                        .. L["/mqt config  - open settings"] .. "\n"
+                        .. L["/mqt wizard  - run the setup wizard"] .. "\n"
+                        .. L["/mqt new     - show what's new"],
+                     order = 5,
+                     fontSize = "medium",
+                  },
                },
-               order = 37,
-               -- Without TomTom, ctrl-click always uses Blizzard's navigation.
-               hidden = function() return not mod:HasTomTom() end,
-               disabled = function() return not mod.db.profile.blizzardFocus end,
-               width = COLUMN_WIDTH,
-            },
-            blizzardFocus = {
-               type = "toggle",
-               name = L["Use Blizzard quest focus"],
-               desc = L["Let the tracker focus (super track) quests for Blizzard's navigation, and show the quest POI buttons. Focusing quests from an addon can cause harmless errors about blocked or tainted actions in Blizzard's UI; turn this off to avoid them."],
-               order = 35,
-               width = COLUMN_WIDTH,
-            },
-            poiTomTom = {
-               type = "toggle",
-               name = L["Quest icon sets TomTom waypoint"],
-               desc = L["Clicking a quest's icon also sets the TomTom waypoint, like ctrl-clicking its title. Unfocusing a quest leaves the waypoint alone."],
-               order = 38,
-               width = COLUMN_WIDTH,
-               hidden = function() return not mod:HasTomTom() end,
-               disabled = function() return not mod.db.profile.blizzardFocus end,
-            },
-            mapClicks = {
-               type = "toggle",
-               name = L["Left-click opens map"],
-               desc = L["Left-clicking a quest opens it on the map. Opening the map from an addon can cause harmless errors about blocked actions when the map is next opened in combat; turn this off to avoid them. The right-click menu can still show quests on the map."],
-               order = 37,
-               width = COLUMN_WIDTH,
-            },
-            markForeverQuests = {
-               type = "toggle",
-               name = L["Mark new Forever quests"],
-               desc = L["Show an infinity sign after quests that were not in original Classic."],
-               order = 25,
-               width = COLUMN_WIDTH,
-               hidden = function() return not mod.IS_FOREVER end,
-            },
-            markWatchedQuests = {
-               type = "toggle",
-               name = L["Mark tracked quests"],
-               desc = L["Show a check mark after quests on the built-in watch list. Not shown in the section on top, or when only watched quests are shown."],
-               order = 26,
-               width = COLUMN_WIDTH,
-               disabled = function() return not mod.db.profile.showAllQuests end,
-            },
-            showQuestTags = {
-               type = "toggle",
-               name = L["Show quest type"],
-               desc = L["Append the quest type, such as Elite, Dungeon, Raid or Daily, to quest titles."],
-               order = 22,
-               width = COLUMN_WIDTH,
-            },
-            colorByDifficulty = {
-               type = "toggle",
-               name = L["Color by difficulty"],
-               desc = L["Color quest titles by their difficulty relative to your level."],
-               order = 23,
-               width = COLUMN_WIDTH,
-            },
-            colorCompleteQuests = {
-               type = "toggle",
-               name = L["Color completed quests"],
-               desc = L["Color the titles of completed quests with the Completed quest color, instead of by difficulty."],
-               order = 27,
-               width = COLUMN_WIDTH,
-            },
-            showCompletedObjectives = {
-               type = "toggle",
-               name = L["Show completed objectives"],
-               desc = L["Show finished objectives of incomplete quests, dimmed."],
-               order = 24,
-               width = COLUMN_WIDTH,
-            },
-            showRecipes = {
-               type = "toggle",
-               name = L["Show tracked recipes"],
-               desc = L["Show recipes tracked from the professions window in a separate section."],
-               order = 41,
-               width = COLUMN_WIDTH,
-            },
-            showAchievements = {
-               type = "toggle",
-               name = L["Show tracked achievements"],
-               desc = L["Show tracked achievements in a separate section."],
-               order = 41.5,
-               width = COLUMN_WIDTH,
-               hidden = function() return not (C_ContentTracking and GetAchievementInfo) end,
-            },
-            showWorldQuests = {
-               type = "toggle",
-               name = L["Show world quests"],
-               desc = L["Show world quests in the current area and tracked world quests in a separate section."],
-               order = 42,
-               width = COLUMN_WIDTH,
-               hidden = function() return mod.IS_FOREVER or not GetTasksTable end,
-            },
-            showBonusObjectives = {
-               type = "toggle",
-               name = L["Show bonus objectives"],
-               desc = L["Show bonus objectives in the current area in a separate section."],
-               order = 43,
-               width = COLUMN_WIDTH,
-               hidden = function() return mod.IS_FOREVER or not GetTasksTable end,
-            },
-            showItemButtons = {
-               type = "toggle",
-               name = L["Show quest item buttons"],
-               desc = L["Show a button to use the quest item next to quests that have one. While a button is shown, the tracker does not update or scroll during combat."],
-               order = 51,
-               width = COLUMN_WIDTH,
-            },
-            showPOIButtons = {
-               type = "toggle",
-               name = L["Show quest POI buttons"],
-               desc = L["Show the quest map icon next to each quest, like the built-in tracker. Click it to focus the quest. Follows the game's quest POI setting."],
-               order = 52,
-               width = COLUMN_WIDTH,
-               disabled = function() return not mod.db.profile.blizzardFocus end,
-            },
-            showFindGroupButton = {
-               type = "toggle",
-               name = L["Show find group buttons"],
-               desc = L["Show the group finder button on quests that support it, like the built-in tracker."],
-               order = 53,
-               width = COLUMN_WIDTH,
-               hidden = function() return mod.IS_FOREVER end,
-            },
-            showPlayButton = {
-               type = "toggle",
-               name = function()
-                  if mod:GetQuestVoice() then return L["Show quest voiceover buttons"] end
-                  return L["Show quest voiceover buttons (needs Spoken Quests)"]
-               end,
-               desc = L["Show a play button on quests that have a voiceover, to hear the quest text read aloud. Needs the Spoken Quests addon."],
-               order = 54,
-               width = COLUMN_WIDTH,
-               disabled = function() return not mod:GetQuestVoice() end,
-               hidden = function() return not mod.IS_FOREVER end,
-            },
-            hideBlizzardTracker = {
-               type = "toggle",
-               name = L["Hide Blizzard tracker"],
-               desc = L["Hide the built-in objective tracker. Note that this hides all of its sections, including scenarios and bonus objectives."],
-               order = 64,
-               width = COLUMN_WIDTH,
-               set = function(_, val)
-                  mod.db.profile.hideBlizzardTracker = val
-                  mod:SetBlizzardTrackerHidden(val)
-               end,
-            },
-            hideInCombat = {
-               type = "select",
-               name = L["Hide in combat"],
-               desc = L["Hide the tracker while in combat: never, only inside instances (dungeons, raids, battlegrounds, ...), or always."],
-               values = {
-                  never = L["Never"],
-                  instances = L["In instances"],
-                  always = L["Always"],
-               },
-               order = 62,
-               width = COLUMN_WIDTH,
-               set = function(_, val)
-                  mod.db.profile.hideInCombat = val
-                  mod:UpdateCombatVisibility()
-               end,
-            },
-            hideInInstances = {
-               type = "select",
-               name = L["Hide in instances"],
-               desc = L["Hide the tracker inside instances (dungeons, raids, battlegrounds, ...): never, when none of your quests are for the instance, or always."],
-               values = {
-                  never = L["Never"],
-                  noQuests = L["Without quests there"],
-                  always = L["Always"],
-               },
-               order = 63,
-               width = COLUMN_WIDTH,
-            },
-            wizard = {
-               type = "execute",
-               name = L["Run setup wizard"],
-               desc = L["Pick Blizzard's look or one of the themes, then choose the features. Changes apply right away; cancel to put everything back."],
-               order = 0.5,
-               width = COLUMN_WIDTH,
-               func = function()
-                  -- The settings would cover the tracker the wizard previews.
-                  if InCombatLockdown() then return mod:ShowWizard() end
-                  mod:CloseConfig()
-                  mod:ShowWizard()
-               end,
-            },
-            cmdHeader = { type = "header", name = L["Commands"], order = 90 },
-            cmdDesc = {
-               type = "description",
-               name = L["/mqt toggle  - show/hide the tracker"] .. "\n"
-                  .. L["/mqt config  - open settings"] .. "\n"
-                  .. L["/mqt wizard  - run the setup wizard"] .. "\n"
-                  .. L["/mqt new     - show what's new"],
-               order = 91,
-               fontSize = "medium",
             },
          },
       },
