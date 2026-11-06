@@ -340,6 +340,7 @@ L["What's new in Magic Quest Tracker"] = "Что нового в Magic Quest Tra
 L["Run setup wizard"] = "Запустить мастер настройки"
 L["Don't show again"] = "Больше не показывать"
 L["Your quest log is almost full (%d/%d)."] = "Журнал заданий почти заполнен (%d/%d)."
+L["With a full quest log you can't accept escort or shared quests."] = "При заполненном журнале нельзя принимать задания на сопровождение и задания от группы."
 L["Close"] = "Закрыть"
 L["/mqt wizard  - run the setup wizard"] = "/mqt wizard  - запустить мастер настройки"
 L["/mqt new     - show what's new"] = "/mqt new     - показать, что нового"

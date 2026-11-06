@@ -435,12 +435,16 @@ end
 -- the quest log is the same as when the warning was last shown.
 local LOG_WARN_SLOTS = 2
 
-function mod:CheckQuestLogFull()
-   if self.logFullChecked or not C_QuestLog.GetMaxNumQuestsCanAccept then return end
+-- force: show the warning whatever the log holds (for testing).
+function mod:CheckQuestLogFull(force)
+   if not force and self.logFullChecked then return end
+   if not C_QuestLog.GetMaxNumQuestsCanAccept then return end
    local _, count = C_QuestLog.GetNumQuestLogEntries()
    local max = C_QuestLog.GetMaxNumQuestsCanAccept()
-   if not count or not max or max <= 0 or count < max - LOG_WARN_SLOTS then return end
-   self.logFullChecked = true
+   if not count or not max or max <= 0 then return end
+   if force then count = max - LOG_WARN_SLOTS
+   elseif count < max - LOG_WARN_SLOTS then return end
+   if not force then self.logFullChecked = true end
    local ids = {}
    for i = 1, C_QuestLog.GetNumQuestLogEntries() do
       local info = C_QuestLog.GetInfo(i)
@@ -448,11 +452,16 @@ function mod:CheckQuestLogFull()
    end
    table.sort(ids)
    local signature = table.concat(ids, ",")
-   if self.db.char.fullLogWarned == signature then return end
-   self.db.char.fullLogWarned = signature
+   if not force then
+      if self.db.char.fullLogWarned == signature then return end
+      self.db.char.fullLogWarned = signature
+   end
    local text = format(L["Your quest log is almost full (%d/%d)."], count, max)
    self:Print("|cffffd100" .. text .. "|r")
+   self:Print(L["With a full quest log you can't accept escort or shared quests."])
    if UIErrorsFrame then UIErrorsFrame:AddMessage(text, 1, 0.82, 0) end
+   local sound = SOUNDKIT and (SOUNDKIT.ALARM_CLOCK_WARNING_2 or SOUNDKIT.RAID_WARNING)
+   if sound then PlaySound(sound) end
 end
 
 function mod:RunUpdate()
@@ -742,6 +751,9 @@ function mod:ChatCommand(input)
    elseif cmd == "welcome" then
       -- The popup new installs get (for testing).
       self:ShowWelcome()
+   elseif cmd == "logfull" then
+      -- The quest log warning, shown whatever the log holds (for testing).
+      self:CheckQuestLogFull(true)
    else
       self:PrintHelp()
    end
