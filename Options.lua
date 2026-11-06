@@ -310,7 +310,7 @@ local function FoldPositionOption(name, key, order, styleKey)
       sorting = { "left", "after", "right" },
       order = order,
       width = DROPDOWN_WIDTH,
-      disabled = function() return mod.db.profile[styleKey] == "none" or (styleKey == "zoneFold" and mod.db.profile.hideZoneHeaders) end,
+      disabled = function() return mod.db.profile[styleKey] == "none" or (styleKey == "zoneFold" and mod:GetZoneHeaderMode() == "always") end,
       get = function() return mod.db.profile[key] end,
       set = function(_, val)
          mod.db.profile[key] = val
@@ -376,7 +376,7 @@ local function BuildOptions()
                desc = L["When showing all quests, fold every zone except the current one whenever you enter a new zone. Zones you unfold stay open until the next zone change."],
                order = 14,
                width = COLUMN_WIDTH,
-               disabled = function() return mod:GetView() == "zone" or mod.db.profile.hideZoneHeaders end,
+               disabled = function() return mod:GetView() == "zone" or mod:GetZoneHeaderMode() == "always" end,
                set = function(_, val)
                   mod.db.profile.autoFoldZones = val
                   mod.db.char.autoFoldZone = nil  -- apply right away
@@ -396,14 +396,22 @@ local function BuildOptions()
                desc = L["Leave the quest and completed counts out of zone headers."],
                order = 14.06,
                width = COLUMN_WIDTH,
-               disabled = function() return mod.db.profile.hideZoneHeaders end,
+               disabled = function() return mod:GetZoneHeaderMode() == "always" end,
             },
             hideZoneHeaders = {
-               type = "toggle",
-               name = L["Hide zone headers"],
-               desc = L["List the quests of all zones together, without zone headers. This also hides the headers of the Completed and Focused / Tracked sections."],
+               type = "select",
+               name = L["Zone headers"],
+               desc = L["Show or hide the zone headers. Without them the quests of all zones are listed together. This also affects the headers of the Completed and Focused / Tracked sections."],
+               values = {
+                  never = L["Show"],
+                  single = L["Hide when only one is shown"],
+                  always = L["Hide"],
+               },
+               sorting = { "never", "single", "always" },
                order = 14.07,
-               width = COLUMN_WIDTH,
+               width = DROPDOWN_WIDTH,
+               get = function() return mod:GetZoneHeaderMode() end,
+               set = function(_, val) mod:SetZoneHeaderMode(val) end,
             },
             zoneFold = FoldStyleOption(L["Zone fold icon"], "zoneFold", 14.1),
             zoneFoldPosition = FoldPositionOption(L["Zone fold icon position"], "zoneFoldPosition", 14.2, "zoneFold"),
@@ -447,6 +455,30 @@ local function BuildOptions()
                sorting = { "none", "all", "current" },
                order = 19,
                width = DROPDOWN_WIDTH,
+            },
+            focusedPosition = {
+               type = "select",
+               name = L["Section on top position"],
+               desc = L["Where the Focused / Tracked section goes: above or below the zones."],
+               values = { top = L["Above the zones"], bottom = L["Below the zones"] },
+               sorting = { "top", "bottom" },
+               order = 17.1,
+               width = DROPDOWN_WIDTH,
+               disabled = function() return mod.db.profile.focusedSection == "none" end,
+            },
+            completedPosition = {
+               type = "select",
+               name = L["Completed section position"],
+               desc = L["Where the Completed section goes: above or below the zones (and the Focused / Tracked section)."],
+               values = { top = L["Above the zones"], bottom = L["Below the zones"] },
+               sorting = { "top", "bottom" },
+               order = 19.1,
+               width = DROPDOWN_WIDTH,
+               get = function()
+                  local profile = mod.db.profile
+                  return profile.completedPosition or (profile.completedSort == "last" and "bottom" or "top")
+               end,
+               disabled = function() return mod.db.profile.completedSection == "none" end,
             },
             zoneSort = {
                type = "select",
@@ -669,6 +701,7 @@ local function BuildOptions()
                desc = L["Show the group finder button on quests that support it, like the built-in tracker."],
                order = 53,
                width = COLUMN_WIDTH,
+               hidden = function() return mod.IS_FOREVER end,
             },
             hideBlizzardTracker = {
                type = "toggle",
@@ -709,11 +742,26 @@ local function BuildOptions()
                order = 63,
                width = COLUMN_WIDTH,
             },
+            wizard = {
+               type = "execute",
+               name = L["Run setup wizard"],
+               desc = L["Pick Blizzard's look or one of the themes, then choose the features. Changes apply right away; cancel to put everything back."],
+               order = 0.5,
+               width = COLUMN_WIDTH,
+               func = function()
+                  -- The settings would cover the tracker the wizard previews.
+                  if InCombatLockdown() then return mod:ShowWizard() end
+                  mod:CloseConfig()
+                  mod:ShowWizard()
+               end,
+            },
             cmdHeader = { type = "header", name = L["Commands"], order = 90 },
             cmdDesc = {
                type = "description",
                name = L["/mqt toggle  - show/hide the tracker"] .. "\n"
-                  .. L["/mqt config  - open settings"],
+                  .. L["/mqt config  - open settings"] .. "\n"
+                  .. L["/mqt wizard  - run the setup wizard"] .. "\n"
+                  .. L["/mqt new     - show what's new"],
                order = 91,
                fontSize = "medium",
             },

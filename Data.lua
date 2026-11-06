@@ -422,6 +422,110 @@ local function SeparateCompletedQuests(sections, profile, currentOnly)
    return sections
 end
 
+-- Puts the focused / tracked and the completed section above or below the
+-- zones, as the profile says (together, the focused one comes first).
+local function PlaceSpecialSections(sections, profile)
+   local pinned, completed
+   local zones = new()
+   for _, section in ipairs(sections) do
+      if section.isPinned then
+         pinned = section
+      elseif section.foldKey == mod.COMPLETED_FOLD_KEY then
+         completed = section
+      else
+         tinsert(zones, section)
+      end
+   end
+   local completedBottom = profile.completedPosition == "bottom"
+      or (profile.completedPosition == nil and profile.completedSort == "last")
+   local result = new()
+   if pinned and profile.focusedPosition ~= "bottom" then tinsert(result, pinned) end
+   if completed and not completedBottom then tinsert(result, completed) end
+   for _, section in ipairs(zones) do tinsert(result, section) end
+   if pinned and profile.focusedPosition == "bottom" then tinsert(result, pinned) end
+   if completed and completedBottom then tinsert(result, completed) end
+   del(sections)
+   del(zones)
+   return result
+end
+
+-- Sorts the zones and their quests, pins the focused / tracked quests and
+-- separates the completed ones, as the profile says. Also used by the setup
+-- wizard's preview with made-up quests.
+local function ArrangeSections(sections, profile)
+   -- Zones with quests in the current zone (filed elsewhere) sort right
+   -- after the current zone and its sub-areas.
+   for _, section in ipairs(sections) do
+      if section.zoneRank == 0 and section.hasLocalQuests then
+         section.zoneRank = 0.5
+      end
+   end
+
+   for _, section in ipairs(sections) do
+      SortQuests(section.quests, profile)
+   end
+
+   for _, section in ipairs(sections) do
+      GroupCompleted(section.quests, profile.completedSort)
+   end
+
+   -- A zone's distance is that of its nearest quest.
+   for _, section in ipairs(sections) do
+      for _, quest in ipairs(section.quests) do
+         if quest.distance and (not section.distance or quest.distance < section.distance) then
+            section.distance = quest.distance
+         end
+      end
+   end
+
+   local zoneSorter = zoneSorters[profile.zoneSort] or zoneSorters.level
+   if profile.zoneSort == "distance" then
+      if profile.currentZoneFirst then
+         -- Current zone (and its sub-areas) first, then the rest by distance.
+         local current, others = new(), new()
+         for _, section in ipairs(sections) do
+            tinsert(section.zoneRank > 0 and current or others, section)
+         end
+         sort(current, CurrentZoneFirstByLevel)
+         SortByDistance(others, ZoneKey, zoneRanks, zoneSorters.level)
+         for _, section in ipairs(others) do
+            tinsert(current, section)
+         end
+         del(others)
+         del(sections)
+         sections = current
+      else
+         SortByDistance(sections, ZoneKey, zoneRanks, zoneSorters.level)
+      end
+   elseif profile.currentZoneFirst then
+      activeZoneSorter = zoneSorter
+      sort(sections, CurrentZoneFirst)
+   else
+      sort(sections, zoneSorter)
+   end
+
+   local pinMode = profile.focusedSection == "focused" or profile.focusedSection == "tracked"
+   if pinMode then
+      -- Showing only watched quests, Tracked would take every quest out of
+      -- its zone: only the focused quest goes on top then.
+      local includeWatched = profile.focusedSection == "tracked" and profile.showAllQuests
+      sections = PinFocusedQuests(sections, includeWatched, profile.completedSort)
+   end
+   if profile.completedSection == "all" or profile.completedSection == "current" then
+      sections = SeparateCompletedQuests(sections, profile, profile.completedSection == "current")
+   end
+   sections = PlaceSpecialSections(sections, profile)
+   for _, section in ipairs(sections) do
+      local numComplete = 0
+      for _, quest in ipairs(section.quests) do
+         if quest.isComplete then numComplete = numComplete + 1 end
+      end
+      section.numComplete = numComplete
+   end
+   return sections
+end
+mod.ArrangeSections = ArrangeSections
+
 function mod:CollectQuests()
    local profile = self.db.profile
    local zoneNames = GetCurrentZoneNames()
@@ -490,73 +594,7 @@ function mod:CollectQuests()
       end
    end
 
-   -- Zones with quests in the current zone (filed elsewhere) sort right
-   -- after the current zone and its sub-areas.
-   for _, section in ipairs(sections) do
-      if section.zoneRank == 0 and section.hasLocalQuests then
-         section.zoneRank = 0.5
-      end
-   end
-
-   for _, section in ipairs(sections) do
-      SortQuests(section.quests, profile)
-   end
-
-   for _, section in ipairs(sections) do
-      GroupCompleted(section.quests, profile.completedSort)
-   end
-
-   -- A zone's distance is that of its nearest quest.
-   for _, section in ipairs(sections) do
-      for _, quest in ipairs(section.quests) do
-         if quest.distance and (not section.distance or quest.distance < section.distance) then
-            section.distance = quest.distance
-         end
-      end
-   end
-
-   local zoneSorter = zoneSorters[profile.zoneSort] or zoneSorters.level
-   if profile.zoneSort == "distance" then
-      if profile.currentZoneFirst then
-         -- Current zone (and its sub-areas) first, then the rest by distance.
-         local current, others = new(), new()
-         for _, section in ipairs(sections) do
-            tinsert(section.zoneRank > 0 and current or others, section)
-         end
-         sort(current, CurrentZoneFirstByLevel)
-         SortByDistance(others, ZoneKey, zoneRanks, zoneSorters.level)
-         for _, section in ipairs(others) do
-            tinsert(current, section)
-         end
-         del(others)
-         del(sections)
-         sections = current
-      else
-         SortByDistance(sections, ZoneKey, zoneRanks, zoneSorters.level)
-      end
-   elseif profile.currentZoneFirst then
-      activeZoneSorter = zoneSorter
-      sort(sections, CurrentZoneFirst)
-   else
-      sort(sections, zoneSorter)
-   end
-
-   if pinMode then
-      -- Showing only watched quests, Tracked would take every quest out of
-      -- its zone: only the focused quest goes on top then.
-      local includeWatched = profile.focusedSection == "tracked" and profile.showAllQuests
-      sections = PinFocusedQuests(sections, includeWatched, profile.completedSort)
-   end
-   if profile.completedSection == "all" or profile.completedSection == "current" then
-      sections = SeparateCompletedQuests(sections, profile, profile.completedSection == "current")
-   end
-   for _, section in ipairs(sections) do
-      local numComplete = 0
-      for _, quest in ipairs(section.quests) do
-         if quest.isComplete then numComplete = numComplete + 1 end
-      end
-      section.numComplete = numComplete
-   end
+   sections = ArrangeSections(sections, profile)
 
    del(byName)
    mod.deepDel(pois)  -- POIs of quests that weren't shown

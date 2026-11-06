@@ -32,6 +32,8 @@ local InCombatLockdown = InCombatLockdown
 -- Saved variable defaults
 ----------------------------------------------------------------
 
+local IS_FOREVER = (select(4, GetBuildInfo()) or 0) >= 16000 and (select(4, GetBuildInfo()) or 0) < 17000
+
 local function FontDefaults(size, outline)
    return { face = "Friz Quadrata TT", size = size, outline = outline or "" }
 end
@@ -122,15 +124,17 @@ mod.defaults = {
       hideBlizzardTracker = true,
       hideInCombat = "never",        -- never | instances | always
       hideInInstances = "never",     -- never | noQuests | always
-      showAllQuests = true,          -- false = only quests on the built-in watch list (see mod:GetView)
+      showAllQuests = false,         -- false = only quests on the built-in watch list (see mod:GetView)
       currentZoneFirst = true,
       onlyCurrentZone = false,
       autoFoldZones = false,
-      focusedSection = "focused",    -- section pinned on top: none | focused | tracked
-      completedSort = "first",       -- completed quests within a section: normal | first | last
+      focusedSection = "none",       -- section pinned on top: none | focused | tracked
+      completedSort = "normal",      -- completed quests within a section: normal | first | last
       completedSection = "none",     -- completed quests in their own section: none | all | current
-      zoneSort = "level",            -- level | name | distance
-      questSort = "level",           -- level | name | distance
+      focusedPosition = "top",       -- the focused / tracked section: top | bottom (of the zones)
+      -- completedPosition: top | bottom; unset follows completedSort ("last" = bottom)
+      zoneSort = "distance",         -- level | name | distance
+      questSort = "distance",        -- level | name | distance
       showDistance = false,
       distanceUnits = "yards",       -- yards | meters | imperial (yd/mi) | metric (m/km)
       showDirection = false,
@@ -140,14 +144,14 @@ mod.defaults = {
       poiTomTom = true,              -- clicking a quest's POI button also sets the TomTom waypoint
       blizzardFocus = true,          -- focus (super track) quests; off avoids taint errors
       mapClicks = true,              -- left-click opens the quest on the map (taints the map)
-      showLevel = true,
-      showQuestTags = true,
-      markForeverQuests = true,
-      markWatchedQuests = true,      -- check mark on quests on the built-in watch list
-      colorByDifficulty = true,
-      simpleSectionHeaders = false,  -- no quest counts in section headers (Quests, World Quests, ...)
+      showLevel = IS_FOREVER,        -- like the built-in tracker: Forever shows levels, retail does not
+      showQuestTags = false,
+      markForeverQuests = false,
+      markWatchedQuests = false,     -- check mark on quests on the built-in watch list
+      colorByDifficulty = false,
+      simpleSectionHeaders = true,  -- no quest counts in section headers (Quests, World Quests, ...)
       simpleZoneHeaders = false,     -- no quest counts in zone headers
-      hideZoneHeaders = false,       -- quests of all zones in one list, without zone headers
+      hideZoneHeaders = true,        -- no zone headers: true = always, "single" = when only one is shown, false = never
       zoneFold = "triangle",         -- fold icon of zone headers: none | blizzard | triangle | chevron | box | plusminus
       zoneFoldPosition = "left",     -- left | after (right of the title) | right
       sectionFold = "blizzard",      -- fold icon of section headers (Quests, World Quests, ...)
@@ -184,11 +188,49 @@ mod.defaults = {
 -- Lifecycle
 ----------------------------------------------------------------
 
+-- The defaults above follow the built-in tracker. These are the values they
+-- replaced (defaults version 1); profiles that existed before keep them, so an
+-- update doesn't change how the tracker looks for anyone already using it.
+local DEFAULTS_VERSION = 1
+local OLD_DEFAULTS = {
+   showAllQuests = true,
+   focusedSection = "focused",
+   completedSort = "first",
+   zoneSort = "level",
+   questSort = "level",
+   showLevel = true,
+   showQuestTags = true,
+   colorByDifficulty = true,
+   simpleSectionHeaders = false,
+   hideZoneHeaders = false,
+   markForeverQuests = true,
+   markWatchedQuests = true,
+}
+
+-- Returns true for a profile that was never used (a fresh install).
+function mod:MigrateDefaults()
+   local profile = self.db.profile
+   if profile.defaultsVersion then return false end
+   local saved = self.db.sv.profiles[self.db.keys.profile]
+   local fresh = not (saved and next(saved) ~= nil)
+   if not fresh then
+      for key, value in pairs(OLD_DEFAULTS) do
+         if saved[key] == nil then saved[key] = value end
+      end
+   end
+   profile.defaultsVersion = DEFAULTS_VERSION
+   return fresh
+end
+
 function mod:OnInitialize()
    self.db = LibStub("AceDB-3.0"):New("MagicQuestTrackerDB", self.defaults, "Default")
    self.db.RegisterCallback(self, "OnProfileChanged", "ApplyProfile")
    self.db.RegisterCallback(self, "OnProfileCopied", "ApplyProfile")
    self.db.RegisterCallback(self, "OnProfileReset", "ApplyProfile")
+   -- A fresh install gets the welcome prompt; anyone else who hasn't seen the
+   -- "what's new" window yet gets that (see Wizard.lua).
+   local fresh = self:MigrateDefaults()
+   self.freshInstall = fresh and self.db.global.whatsNewSeen == nil
    -- Profiles without saved geometry are placed over Blizzard's tracker once
    -- its position is known (see MatchBlizzardOnFirstLoad).
    if self.db.profile.geometryMatched == nil then
@@ -277,6 +319,7 @@ function mod:OnDisable()
 end
 
 function mod:ApplyProfile()
+   self:MigrateDefaults()
    -- "log" sort order was removed; fall back to level.
    local profile = self.db.profile
    if profile.zoneSort ~= "name" and profile.zoneSort ~= "distance" then profile.zoneSort = "level" end
@@ -291,6 +334,9 @@ end
 
 function mod:PLAYER_ENTERING_WORLD()
    self:MatchBlizzardOnFirstLoad()
+   if not self.startupDialogShown then
+      C_Timer.After(3, function() self:ShowStartupDialogs() end)
+   end
    -- Blizzard's tracker initializes on PLAYER_ENTERING_WORLD; re-apply afterwards.
    self:SetBlizzardTrackerHidden(self.db.profile.hideBlizzardTracker)
    self:UpdateCombatVisibility()
@@ -628,6 +674,15 @@ end
 -- Slash command
 ----------------------------------------------------------------
 
+function mod:CloseConfig()
+   if SettingsPanel and SettingsPanel:IsShown() then
+      HideUIPanel(SettingsPanel)
+   end
+   if InterfaceOptionsFrame and InterfaceOptionsFrame:IsShown() then
+      InterfaceOptionsFrame:Hide()
+   end
+end
+
 function mod:OpenConfig()
    self:InterfaceOptionsFrame_OpenToCategory(self.optionsEnd)
    self:InterfaceOptionsFrame_OpenToCategory(self.optionsMain)
@@ -637,6 +692,8 @@ function mod:PrintHelp()
    self:info(L["Available commands:"])
    self:info(L["/mqt toggle  - show/hide the tracker"])
    self:info(L["/mqt config  - open settings"])
+   self:info(L["/mqt wizard  - run the setup wizard"])
+   self:info(L["/mqt new     - show what's new"])
 end
 
 function mod:ChatCommand(input)
@@ -645,6 +702,13 @@ function mod:ChatCommand(input)
       self:ToggleMinimized()
    elseif cmd == "config" then
       self:OpenConfig()
+   elseif cmd == "wizard" or cmd == "setup" then
+      self:ShowWizard()
+   elseif cmd == "new" or cmd == "whatsnew" then
+      self:ShowWhatsNew(true)
+   elseif cmd == "welcome" then
+      -- The popup new installs get (for testing).
+      self:ShowWelcome()
    else
       self:PrintHelp()
    end

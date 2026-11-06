@@ -62,6 +62,7 @@ end
 
 --- Returns the { point, x, y, width, maxHeight, scale } of the active layout.
 function mod:GetLayoutSettings()
+   if self.previewing then return self.previewLayout end
    local profile = self.db.profile
    local layouts = profile.layouts
    local name = GetLayoutName()
@@ -81,6 +82,7 @@ function mod:GetLayoutSettings()
 end
 
 function mod:ApplyPosition()
+   if self.previewing then return end
    local frame = self.frame
    local pos = self:GetLayoutSettings()
    frame:ClearAllPoints()

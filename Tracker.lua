@@ -125,7 +125,7 @@ function mod:UpdateFonts()
       local cfg = self:GetFonts()[role]
       local font = fontObjects[role]
       if not font then
-         font = CreateFont("MagicQuestTrackerFont_" .. role)
+         font = CreateFont((mod.fontPrefix or "MagicQuestTrackerFont_") .. role)
          fontObjects[role] = font
       end
       local path = media:Fetch("font", cfg.face) or STANDARD_TEXT_FONT
@@ -137,6 +137,57 @@ function mod:UpdateFonts()
          font:SetShadowOffset(0, 0)
       end
    end
+end
+
+----------------------------------------------------------------
+-- Preview views
+--
+-- The setup wizard shows a second tracker frame with made-up quests (see
+-- Preview.lua). Rendering works on shared state: mod.frame, mod.lines, the
+-- profile, the font objects and the theme colors. A preview is rendered by
+-- swapping that state for the preview's while one function runs; mod.previewing
+-- is set meanwhile, for the few places that must behave differently (no
+-- secure buttons, no clicks, no combat or instance rules, no real fold state).
+----------------------------------------------------------------
+
+-- Fold state: the character's, or in a preview none, or with the profile's
+-- previewFolded flag one zone and one section folded (to show both icons).
+local PREVIEW_FOLDED = { collapsedZones = { Westfall = true }, collapsedSections = { recipes = true } }
+local NOT_FOLDED = {}
+function mod:GetCollapsedMap(name)
+   if not self.previewing then return self.db.char[name] end
+   return self.db.profile.previewFolded and PREVIEW_FOLDED[name] or NOT_FOLDED
+end
+
+function mod:RunInView(view, func, ...)
+   local saved = {
+      frame = self.frame, lines = self.lines, numLinesUsed = self.numLinesUsed,
+      profile = self.db.profile, fontObjects = fontObjects, fontPrefix = self.fontPrefix,
+      scrollbarReserved = self.scrollbarReserved, headerBarExtend = self.headerBarExtend,
+      itemEntries = self.itemEntries,
+   }
+   self.frame, self.lines, self.numLinesUsed = view.frame, view.lines, view.numLinesUsed or 0
+   self.db.profile = view.profile
+   fontObjects = view.fontObjects
+   self.fontPrefix = "MagicQuestTrackerPreviewFont_"
+   self.scrollbarReserved, self.headerBarExtend = view.scrollbarReserved, view.headerBarExtend
+   self.itemEntries = {}
+   self.previewing, self.previewLayout = true, view.layout
+   self:RefreshTheme()
+
+   local ok, err = pcall(func, self, ...)
+
+   view.numLinesUsed = self.numLinesUsed
+   view.scrollbarReserved, view.headerBarExtend = self.scrollbarReserved, self.headerBarExtend
+   self.frame, self.lines, self.numLinesUsed = saved.frame, saved.lines, saved.numLinesUsed
+   self.db.profile = saved.profile
+   fontObjects = saved.fontObjects
+   self.fontPrefix = saved.fontPrefix
+   self.scrollbarReserved, self.headerBarExtend = saved.scrollbarReserved, saved.headerBarExtend
+   self.itemEntries = saved.itemEntries
+   self.previewing, self.previewLayout = nil, nil
+   self:RefreshTheme()
+   if not ok then geterrorhandler()(err) end
 end
 
 ----------------------------------------------------------------
@@ -260,7 +311,7 @@ end
 function mod:ApplyLayout()
    local frame = self.frame
    if not frame then return end
-   if self:IsItemLayoutLocked() then
+   if not self.previewing and self:IsItemLayoutLocked() then
       -- Would move the tracker out from under the frozen item buttons.
       self.applyLayoutDeferred = true
       return
@@ -291,6 +342,7 @@ function mod:ApplyLayout()
    title:SetPoint("TOPLEFT", padding, -padding)
    title:SetPoint("TOPRIGHT", -padding, -padding)
    frame.scroll:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -padding, padding)
+   if self.previewing then return end
    frame.title:EnableMouse(true)
    self:UpdateMinimizeButton()
    self:RequestUpdate()
@@ -351,6 +403,19 @@ function mod:SetView(view)
    profile.showAllQuests = view ~= "tracked"
    profile.onlyCurrentZone = view == "zone"
    self:NotifyOptionsChanged()
+   self:RequestUpdate()
+end
+
+-- Zone headers: "never" hidden, "single" hidden while only one is shown,
+-- "always" hidden. Kept in profile.hideZoneHeaders (true / "single" / false).
+function mod:GetZoneHeaderMode()
+   local hidden = self.db.profile.hideZoneHeaders
+   if hidden == "single" then return "single" end
+   return hidden and "always" or "never"
+end
+
+function mod:SetZoneHeaderMode(mode)
+   self.db.profile.hideZoneHeaders = (mode == "always") or (mode == "single" and "single") or false
    self:RequestUpdate()
 end
 
@@ -485,7 +550,9 @@ local function ApplyFoldIcon(line, def, side, collapsed, color, isBar, x, textWi
       end
    end
    local center = FOLD_SLOT / 2 - 1
-   local y = isBar and 0 or -(mod:GetFonts()[role].size + 2) / 2
+   local y = isBar and 0 or -(mod:GetFonts()[role].size - 2) / 2
+   -- A down pointing triangle / chevron sits visually high: nudge it down.
+   if def.rotate and not collapsed then y = y - 2 end
    local anchor = isBar and "" or "TOP"
    if side == "left" then
       icon:SetPoint("CENTER", line, anchor .. "LEFT", x + center, y)
@@ -528,7 +595,7 @@ local function AddLine(kind, data, text, role, indent, spacing, color, highlight
    line.data = data
    line.color = color
    line.highlightColor = highlightColor
-   line:EnableMouse(highlightColor ~= nil)
+   line:EnableMouse(highlightColor ~= nil and not mod.previewing)
 
    local width = layout.width - indent - (layout.rightInset or 0) - foldLeft - foldRight
    if rightText then
@@ -548,6 +615,7 @@ local function AddLine(kind, data, text, role, indent, spacing, color, highlight
    line.collapseIcon:Hide()
    if line.poiButton then line.poiButton:Hide() end
    if line.groupButton then line.groupButton:Hide() end
+   if line.previewItem then line.previewItem:Hide() end
    if line.bar then line.bar:Hide() end
    if arrowTarget then
       -- Arrow sits left of the distance text, centered on the first text
@@ -559,6 +627,11 @@ local function AddLine(kind, data, text, role, indent, spacing, color, highlight
       line.arrow:SetVertexColor(unpack(colors.arrow))
       line.arrow:ClearAllPoints()
       line.arrow:SetPoint("CENTER", line, "TOPRIGHT", -offset - size / 2, -lineHeight / 2)
+      if mod.previewing then
+         -- Not updated by UpdateArrows: show it pointing somewhere.
+         line.arrow:SetRotation(math.pi / 4)
+         line.arrow:Show()
+      end
       width = width - size - 3
    else
       line.arrow:Hide()
@@ -881,6 +954,30 @@ local function AttachPOIButton(line, quest)
    button:UpdateButtonStyle()
    button:ClearAllPoints()
    button:SetPoint("TOPRIGHT", line.text, "TOPLEFT", -4, 4)
+   button:EnableMouse(not mod.previewing)
+   button:Show()
+end
+
+-- Preview only: the quest item button without the secure parts.
+local function AttachPreviewItemButton(line, quest)
+   local size = mod.ITEM_BUTTON_SIZE
+   local button = line.previewItem
+   if not button then
+      button = CreateFrame("Button", nil, line)
+      button:SetSize(size, size)
+      button.icon = button:CreateTexture(nil, "BORDER")
+      button.icon:SetAllPoints()
+      button:SetNormalAtlas("UI-QuestTrackerButton-QuestItem-Frame")
+      local normal = button:GetNormalTexture()
+      normal:ClearAllPoints()
+      normal:SetPoint("CENTER")
+      normal:SetSize(size * 42 / 26, size * 42 / 26)
+      button:EnableMouse(false)
+      line.previewItem = button
+   end
+   button.icon:SetTexture(quest.itemTexture)
+   button:ClearAllPoints()
+   button:SetPoint("TOPRIGHT", line, "TOPRIGHT", 0, 0)
    button:Show()
 end
 
@@ -892,7 +989,8 @@ local function AttachGroupButton(line, quest, rightOffset)
       button:SetSize(GROUP_BUTTON_SIZE, GROUP_BUTTON_SIZE)
       line.groupButton = button
    end
-   button:SetUp(quest.questID)
+   if not mod.previewing then button:SetUp(quest.questID) end
+   button:EnableMouse(not mod.previewing)
    button:ClearAllPoints()
    button:SetPoint("TOPRIGHT", line, "TOPRIGHT", -rightOffset, 4)
    button:Show()
@@ -954,7 +1052,7 @@ function mod:RenderQuest(quest, profile)
       titleColor = colors.completeQuest
    end
    local itemSize = (profile.showItemButtons and quest.hasItem) and self.ITEM_BUTTON_SIZE or 0
-   local groupSize = (profile.showFindGroupButton and CanFindGroup(quest)) and GROUP_BUTTON_SIZE or 0
+   local groupSize = (profile.showFindGroupButton and not self.IS_FOREVER and (self.previewing and quest.previewGroup or not self.previewing and CanFindGroup(quest))) and GROUP_BUTTON_SIZE or 0
    layout.rightInset = itemSize + groupSize
    local showPOI = POIButtonsEnabled(profile)
    local questIndent = showPOI and POI_QUEST_INDENT or QUEST_INDENT
@@ -978,7 +1076,9 @@ function mod:RenderQuest(quest, profile)
    if groupSize > 0 then
       AttachGroupButton(titleLine, quest, itemSize)
    end
-   if itemSize > 0 then
+   if itemSize > 0 and self.previewing then
+      AttachPreviewItemButton(titleLine, quest)
+   elseif itemSize > 0 then
       tinsert(self.itemEntries, self.newHash("line", titleLine, "quest", quest))
    end
 
@@ -1019,7 +1119,7 @@ function mod:HeaderWithCount(name, count)
 end
 
 function mod:RenderSectionHeader(key, text, profile)
-   local collapsed = self.db.char.collapsedSections[key]
+   local collapsed = self:GetCollapsedMap("collapsedSections")[key]
    AddLine("section", SECTION_DATA[key], text, "module", 0, spacing.sectionSpacing, colors.section, Brighten(colors.section),
       "section", nil, nil, collapsed and true or false)
    if not collapsed then
@@ -1073,6 +1173,7 @@ end
 
 -- Unregistered when not shown, so hidden widgets don't keep updating.
 local function ReleaseUnusedWidgetBlocks()
+   if mod.previewing then return end
    for _, container in pairs(widgetBlocks) do
       if not container.used then
          container:UnregisterForWidgetSet()
@@ -1154,7 +1255,8 @@ function mod:RenderPass(reserveScrollbar, sections, numQuests, numShown, recipes
    local frame = self.frame
    local profile = self.db.profile
 
-   if self.combatHidden then
+   local preview = self.previewing
+   if self.combatHidden and not preview then
       -- Hidden for combat; render when it ends.
       self.layoutDeferred = true
       return false
@@ -1162,7 +1264,7 @@ function mod:RenderPass(reserveScrollbar, sections, numQuests, numShown, recipes
    -- Scenarios MQT doesn't show (Mythic+, ...): Blizzard's scenario block
    -- takes this spot, so hide fully, even when item buttons hold the layout
    -- during combat.
-   if self:IsBlizzardScenario() and not self:IsInEditMode() then
+   if not preview and self:IsBlizzardScenario() and not self:IsInEditMode() then
       frame:Hide()
       if self:IsItemLayoutLocked() then
          self.layoutDeferred = true  -- item buttons follow once combat ends
@@ -1174,7 +1276,7 @@ function mod:RenderPass(reserveScrollbar, sections, numQuests, numShown, recipes
       self:RequestItemButtonLayout()
       return true
    end
-   if self:IsItemLayoutLocked() then
+   if not preview and self:IsItemLayoutLocked() then
       -- Secure item buttons can't move during combat; re-render afterwards.
       -- The caller keeps the previous data, which the lines still show.
       self.layoutDeferred = true
@@ -1190,12 +1292,12 @@ function mod:RenderPass(reserveScrollbar, sections, numQuests, numShown, recipes
    local view = self:GetView()
    frame.title.text:SetText(view == "tracked" and L["Tracked Objectives"]
       or view == "zone" and L["Zone Objectives"] or L["All Objectives"])
-   wipe(timerLines)
+   if not preview then wipe(timerLines) end
 
    local hasContent = numQuests > 0 or scenario or (recipes and #recipes > 0)
       or (achievements and #achievements > 0)
       or (tasks and (#tasks.worldQuests > 0 or #tasks.bonus > 0))
-   if (not hasContent or self:ShouldHideInInstance(sections, scenario)) and not self:IsInEditMode() then
+   if (not hasContent or (not preview and self:ShouldHideInInstance(sections, scenario))) and not self:IsInEditMode() then
       frame:Hide()
       self.numLinesUsed = 0
       ReleaseUnusedLines(0)
@@ -1222,7 +1324,7 @@ function mod:RenderPass(reserveScrollbar, sections, numQuests, numShown, recipes
 
    -- Title, gap below it and the padding on both ends.
    local titleHeight = frame.title:GetHeight() + 4 + 2 * spacing.padding
-   if self.db.char.minimized then
+   if self.db.char.minimized and not preview then
       ReleaseUnusedLines(0)
       ReleaseUnusedWidgetBlocks()
       frame.scroll:Hide()
@@ -1248,10 +1350,11 @@ function mod:RenderPass(reserveScrollbar, sections, numQuests, numShown, recipes
       end
       if self:RenderSectionHeader("quests", header, profile) then
          -- Zone headers: plain text under the section bar.
-         local collapsedZones = self.db.char.collapsedZones
+         local collapsedZones = self:GetCollapsedMap("collapsedZones")
          local zoneColor, currentZoneColor = colors.zone, colors.currentZone
+         local headerMode = self:GetZoneHeaderMode()
+         local hideHeader = headerMode == "always" or (headerMode == "single" and #sections == 1)
          for _, section in ipairs(sections) do
-            local hideHeader = profile.hideZoneHeaders
             local collapsed = not hideHeader and collapsedZones[section.foldKey or section.name]
             local count = #section.quests
             if section.foldKey ~= mod.COMPLETED_FOLD_KEY and section.numComplete and section.numComplete > 0 then
@@ -1310,7 +1413,7 @@ function mod:RenderPass(reserveScrollbar, sections, numQuests, numShown, recipes
    end
    self:UpdateScrollBar()
    self:RequestItemButtonLayout()
-   if profile.showDirection then
+   if profile.showDirection and not preview then
       self:UpdateArrows()
    end
    return true, contentHeight > maxContent

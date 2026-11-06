@@ -4,7 +4,7 @@
 ## Author: NeoTron
 ## Version: @project-version@
 ## DefaultState: enabled
-## IconTexture: Interface\Icons\INV_Misc_Book_08
+## IconTexture: Interface\AddOns\MagicQuestTracker\Textures\Icon.png
 ## X-Category: Quests
 ## X-eMail: neotron@gmail.com
 ## X-Date: @project-date-integer@
@@ -25,3 +25,5 @@ Themes.lua
 Tracker.lua
 EditMode.lua
 Options.lua
+Preview.lua
+Wizard.lua

@@ -202,6 +202,7 @@ local function RunPendingItemLayout()
 end
 
 function mod:RequestItemButtonLayout()
+   if self.previewing then return end
    if self.itemLayoutPending then return end
    self.itemLayoutPending = true
    C_Timer.After(0, RunPendingItemLayout)
