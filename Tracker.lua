@@ -772,26 +772,37 @@ local function AddProgressBar(data, percent, indent, gap)
    return line
 end
 
--- Difficulty (a QuestDifficultyColors key) depends on the player's level;
--- cached per (quest, player) level. The theme supplies the color.
-local difficulties = {}
+-- Difficulty (a QuestDifficultyColors key) as Blizzard's quest log computes
+-- it: the server-side C_PlayerInfo.GetContentDifficultyQuestForPlayer, mapped
+-- through GetDifficultyColor. Falls back to the level based
+-- GetQuestDifficultyColor. The theme supplies the color. Not cached: both calls
+-- are cheap and the result changes with player level and quest state.
 local difficultyByColor
-local function DifficultyColor(level)
-   -- World quests / bonus objectives have no level.
-   if not (level and GetQuestDifficultyColor) then return colors.quest end
-   local key = level * 1000 + UnitLevel("player")
-   local difficulty = difficulties[key]
-   if difficulty == nil then
-      if not difficultyByColor then
-         difficultyByColor = {}
-         for name, c in pairs(QuestDifficultyColors or {}) do
-            difficultyByColor[c] = name
-         end
+local function DifficultyName(color)
+   if not color then return nil end
+   if not difficultyByColor then
+      difficultyByColor = {}
+      for name, c in pairs(QuestDifficultyColors or {}) do
+         difficultyByColor[c] = name
       end
-      difficulty = difficultyByColor[GetQuestDifficultyColor(level)] or false
-      difficulties[key] = difficulty
    end
-   return difficulty and colors[difficulty] or colors.quest
+   return difficultyByColor[color]
+end
+
+local function DifficultyColor(quest, previewing)
+   local name
+   local questID = quest.questID
+   if questID and not previewing and GetDifficultyColor and C_PlayerInfo and C_PlayerInfo.GetContentDifficultyQuestForPlayer then
+      local ok, difficulty = pcall(C_PlayerInfo.GetContentDifficultyQuestForPlayer, questID)
+      if ok and difficulty ~= nil then
+         name = DifficultyName((GetDifficultyColor(difficulty)))
+      end
+   end
+   -- World quests / bonus objectives have no level.
+   if not name and quest.difficultyLevel and GetQuestDifficultyColor then
+      name = DifficultyName((GetQuestDifficultyColor(quest.difficultyLevel, quest.isScaling)))
+   end
+   return name and colors[name] or colors.quest
 end
 
 -- Level suffix by quest tag ID (Enum.QuestTag values).
@@ -1091,7 +1102,7 @@ end
 
 function mod:RenderQuest(quest, profile)
    local normal = colors.objective
-   local titleColor = profile.colorByDifficulty and DifficultyColor(quest.difficultyLevel) or colors.quest
+   local titleColor = profile.colorByDifficulty and DifficultyColor(quest, self.previewing) or colors.quest
    if profile.colorCompleteQuests and quest.isComplete then
       titleColor = colors.completeQuest
    end

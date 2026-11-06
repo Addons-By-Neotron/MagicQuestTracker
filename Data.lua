@@ -151,6 +151,7 @@ local function BuildQuest(info)
    quest.title = info.title
    quest.level = info.level
    quest.difficultyLevel = (info.difficultyLevel and info.difficultyLevel > 0) and info.difficultyLevel or info.level
+   quest.isScaling = info.isScaling
    quest.suggestedGroup = info.suggestedGroup
    quest.frequency = info.frequency
    quest.isOnMap = info.isOnMap
