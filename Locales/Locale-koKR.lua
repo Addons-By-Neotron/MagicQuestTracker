@@ -64,6 +64,8 @@ L["Color the titles of completed quests with the Completed quest color, instead 
 L["Show completed objectives"] = "완료한 목표 표시"
 L["Show timer bars"] = "타이머 바 표시"
 L["Show time limits as a bar that empties as time runs out, instead of a line of text."] = "제한 시간을 텍스트 줄 대신 시간이 지날수록 줄어드는 바로 표시합니다."
+L["Timer bars"] = "타이머 바"
+L["Timed quests show the time left as a bar that empties as time runs out, red in the last minute. Turn it off for a line of text instead."] = "제한 시간이 있는 퀘스트의 남은 시간을 시간이 지날수록 줄어드는 바로 표시하며, 마지막 1분에는 빨간색이 됩니다. 끄면 대신 텍스트 줄로 표시합니다."
 L["Show finished objectives of incomplete quests, dimmed."] = "미완료 퀘스트의 완료된 목표를 흐리게 표시합니다."
 L["Show tracked recipes"] = "추적 중인 제조법 표시"
 L["Show recipes tracked from the professions window in a separate section."] = "전문 기술 창에서 추적 중인 제조법을 별도의 구역에 표시합니다."

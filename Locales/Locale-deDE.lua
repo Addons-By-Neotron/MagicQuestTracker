@@ -64,6 +64,8 @@ L["Color the titles of completed quests with the Completed quest color, instead 
 L["Show completed objectives"] = "Abgeschlossene Ziele anzeigen"
 L["Show timer bars"] = "Zeitleisten anzeigen"
 L["Show time limits as a bar that empties as time runs out, instead of a line of text."] = "Zeitlimits als Leiste anzeigen, die sich mit ablaufender Zeit leert, statt als Textzeile."
+L["Timer bars"] = "Zeitleisten"
+L["Timed quests show the time left as a bar that empties as time runs out, red in the last minute. Turn it off for a line of text instead."] = "Quests mit Zeitlimit zeigen die verbleibende Zeit als Leiste, die sich mit ablaufender Zeit leert und in der letzten Minute rot wird. Ausgeschaltet wird stattdessen eine Textzeile angezeigt."
 L["Show finished objectives of incomplete quests, dimmed."] = "Zeigt abgeschlossene Ziele unvollständiger Quests abgedunkelt an."
 L["Show tracked recipes"] = "Verfolgte Rezepte anzeigen"
 L["Show recipes tracked from the professions window in a separate section."] = "Zeigt im Berufefenster verfolgte Rezepte in einem eigenen Abschnitt an."

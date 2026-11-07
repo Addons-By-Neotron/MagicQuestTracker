@@ -64,6 +64,8 @@ L["Color the titles of completed quests with the Completed quest color, instead 
 L["Show completed objectives"] = "顯示已完成的目標"
 L["Show timer bars"] = "顯示計時條"
 L["Show time limits as a bar that empties as time runs out, instead of a line of text."] = "以隨時間流逝而縮短的計時條顯示時間限制，而不是一行文字。"
+L["Timer bars"] = "計時條"
+L["Timed quests show the time left as a bar that empties as time runs out, red in the last minute. Turn it off for a line of text instead."] = "限時任務以隨時間流逝而縮短的計時條顯示剩餘時間，最後一分鐘變為紅色。關閉後改為顯示一行文字。"
 L["Show finished objectives of incomplete quests, dimmed."] = "以淡化方式顯示未完成任務中已完成的目標。"
 L["Show tracked recipes"] = "顯示已追蹤的配方"
 L["Show recipes tracked from the professions window in a separate section."] = "在獨立的區塊中顯示從專業技能視窗追蹤的配方。"

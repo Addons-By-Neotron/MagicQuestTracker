@@ -110,7 +110,7 @@ local function QuestLog()
          focused = true, completionText = "Return to Remy \"Two Times\"" } },
       { "Elwynn Forest", true, {
          title = "The Fargodeep Mine", level = 10, distance = 810, elite = true, tag = "Group",
-         forever = true, group = true, objectives = { Objective("Fargodeep Mine explored") } } },
+         forever = true, group = true, timeLeft = 1385, timeTotal = 1800, objectives = { Objective("Fargodeep Mine explored") } } },
       { "Westfall", false, {
          title = "The Defias Brotherhood", level = 12, distance = 2100, watched = true,
          objectives = { Objective("Defias Pillager slain: 4/8"), Objective("Progress", false, 45) } } },
@@ -145,6 +145,7 @@ local function BuildQuest(zone, isCurrent, def)
       isElite = def.elite or false, tagName = def.tag,
       isForeverQuest = def.forever and mod.IS_FOREVER or false,
       completionText = def.completionText,
+      timerEnd = def.timeLeft and GetTime() + def.timeLeft, timerTotal = def.timeTotal,
       hasItem = def.hasItem, itemTexture = def.itemTexture, previewGroup = def.group,
       objectives = def.objectives or {},
       zoneName = zone, inCurrentZone = isCurrent,
