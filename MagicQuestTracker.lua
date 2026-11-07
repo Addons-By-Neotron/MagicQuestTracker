@@ -782,6 +782,10 @@ function mod:ChatCommand(input)
       self:ShowWizard()
    elseif cmd == "new" or cmd == "whatsnew" then
       self:ShowWhatsNew(true)
+   elseif cmd == "newdebug" or cmd:match("^newdebug %d+$") then
+      -- Every entry, including those for other game versions, or only the
+      -- ones after the given version (what an update from it shows). For testing.
+      self:ShowWhatsNew(tonumber(cmd:match("%d+")) or true, true)
    elseif cmd == "welcome" then
       -- The popup new installs get (for testing).
       self:ShowWelcome()

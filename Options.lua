@@ -820,6 +820,15 @@ local function BuildOptions()
                         mod:SetBlizzardTrackerHidden(val)
                      end,
                   },
+                  showWhatsNew = {
+                     type = "toggle",
+                     name = L["Show what's new after updates"],
+                     desc = L["Show the list of new features when an update adds some. Turned off by the window's Don't show again button."],
+                     order = 4,
+                     width = COLUMN_WIDTH,
+                     get = function() return not mod.db.global.whatsNewDisabled end,
+                     set = function(_, val) mod.db.global.whatsNewDisabled = not val or nil end,
+                  },
                   cmdHeader = { type = "header", name = L["Commands"], order = 90 },
                   cmdDesc = {
                      type = "description",

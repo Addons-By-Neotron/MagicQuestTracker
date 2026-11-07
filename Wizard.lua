@@ -868,12 +868,14 @@ function mod:ShowWelcome()
    frame:Show()
 end
 
---- Lists the features added since the version last seen.
-function mod:ShowWhatsNew(all)
-   local seen = all and 0 or (self.db.global.whatsNewSeen or 0)
+--- Lists the features added since the version last seen. all: every entry,
+--- or a number to list those added after that version. showHidden also lists
+--- entries for other game versions (for testing).
+function mod:ShowWhatsNew(all, showHidden)
+   local seen = type(all) == "number" and all or all and 0 or (self.db.global.whatsNewSeen or 0)
    local entries = {}
    for _, entry in ipairs(WHATS_NEW) do
-      if entry[1] > seen and (not entry[7] or entry[7]()) then entries[#entries + 1] = entry end
+      if entry[1] > seen and (showHidden or not entry[7] or entry[7]()) then entries[#entries + 1] = entry end
    end
    if #entries == 0 then return end
 
@@ -902,6 +904,8 @@ function mod:ShowWhatsNew(all)
       frame.child = CreateFrame("Frame", nil, scroll)
       frame.child:SetSize(1, 1)
       scroll:SetScrollChild(frame.child)
+      -- The template then hides the bar whenever there is nothing to scroll.
+      scroll.scrollBarHideable = true
       frame.scroll = scroll
    end
 
@@ -952,7 +956,11 @@ function mod:ShowWhatsNew(all)
    for _, refresh in ipairs(refreshers) do refresh() end
    frame.child:SetSize(width, y)
    frame.scroll:SetVerticalScroll(0)
-   frame:SetHeight(math.min(y + 112, math.floor(UIParent:GetHeight() * 0.75)))
+   -- Up to 3/4 of the screen; the scroll bar only when the list doesn't fit.
+   local height = math.min(y + 112, math.floor(UIParent:GetHeight() * 0.75))
+   frame:SetHeight(height)
+   local scrollBar = frame.scroll.ScrollBar or _G[(frame.scroll:GetName() or "") .. "ScrollBar"]
+   if scrollBar then scrollBar:SetShown(y > height - 108) end
    frame:Show()
 end
 
