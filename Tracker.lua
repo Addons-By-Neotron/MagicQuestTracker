@@ -252,7 +252,7 @@ function mod:CreateTracker()
    title:RegisterForClicks("LeftButtonUp", "RightButtonUp", "MiddleButtonUp")
    title:SetScript("OnClick", function(_, button)
       if button == "RightButton" then
-         mod:OpenConfig()
+         mod:ShowTitleMenu(title)
       elseif button == "MiddleButton" then
          mod:CycleView()
       end
@@ -1210,9 +1210,22 @@ end
 -- Section headers (Quests, World Quests, ...) look like Blizzard's module
 -- headers: header bar, fold icon (see FOLD_STYLES), click to fold.
 -- Returns true when the section is expanded.
+-- Section header counts: "none", "count" (no maximum) or "full". Kept in
+-- profile.simpleSectionHeaders (true / "count" / false).
+function mod:GetSectionCountMode()
+   local simple = self.db.profile.simpleSectionHeaders
+   if simple == "count" then return "count" end
+   return simple and "none" or "full"
+end
+
+function mod:SetSectionCountMode(mode)
+   self.db.profile.simpleSectionHeaders = mode == "none" or (mode == "count" and "count") or false
+   self:RequestUpdate()
+end
+
 -- Section header text, with the number of entries unless headers are simple.
 function mod:HeaderWithCount(name, count)
-   if self.db.profile.simpleSectionHeaders then return name end
+   if self:GetSectionCountMode() == "none" then return name end
    return format("%s (%d)", name, count)
 end
 
@@ -1439,8 +1452,16 @@ function mod:RenderPass(reserveScrollbar, sections, numQuests, numShown, recipes
       local maxQuests = C_QuestLog.GetMaxNumQuestsCanAccept and C_QuestLog.GetMaxNumQuestsCanAccept() or numQuests
       local questsLabel = TRACKER_HEADER_QUESTS or L["Quests"]
       local header
-      if profile.simpleSectionHeaders then
+      local countMode = self:GetSectionCountMode()
+      if countMode == "none" then
          header = questsLabel
+      elseif countMode == "count" then
+         -- No maximum: shown / in the log when filtered, else the log count.
+         if numShown ~= numQuests then
+            header = format("%s (%d/%d)", questsLabel, numShown, numQuests)
+         else
+            header = format("%s (%d)", questsLabel, numQuests)
+         end
       elseif view == "tracked" then
          -- Tracked quests count against the game's watch limit, not the log's.
          local maxWatches = Constants and Constants.QuestWatchConsts and Constants.QuestWatchConsts.MAX_QUEST_WATCHES or 25
@@ -1609,6 +1630,25 @@ local function AddFocusButton(root, questID)
          mod:SetSuperTrackedQuest(0)
       end)
    end
+end
+
+-- Title bar menu: the view (which quests are shown), then the settings.
+local VIEW_LABELS = {
+   all = L["All quests"],
+   zone = L["Current zone only"],
+   tracked = L["Tracked quests only"],
+}
+function mod:ShowTitleMenu(owner)
+   MenuUtil.CreateContextMenu(owner, function(_, root)
+      root:CreateTitle(L["Quests shown"])
+      for _, view in ipairs(VIEW_ORDER) do
+         root:CreateRadio(VIEW_LABELS[view],
+            function() return mod:GetView() == view end,
+            function() mod:SetView(view) end)
+      end
+      root:CreateDivider()
+      root:CreateButton(L["Open settings"], function() mod:OpenConfig() end)
+   end)
 end
 
 local function ShowTaskMenu(owner, quest)

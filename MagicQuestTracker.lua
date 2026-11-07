@@ -150,7 +150,7 @@ mod.defaults = {
       markForeverQuests = false,
       markWatchedQuests = false,     -- check mark on quests on the built-in watch list
       colorByDifficulty = false,
-      simpleSectionHeaders = true,  -- no quest counts in section headers (Quests, World Quests, ...)
+      simpleSectionHeaders = true,  -- counts in section headers (Quests, World Quests, ...): true none, "count" no maximum, false all
       simpleZoneHeaders = false,     -- no quest counts in zone headers
       hideZoneHeaders = true,        -- no zone headers: true = always, "single" = when only one is shown, false = never
       zoneFold = "triangle",         -- fold icon of zone headers: none | blizzard | triangle | chevron | box | plusminus

@@ -443,12 +443,20 @@ local function BuildOptions()
                            width = COLUMN_WIDTH,
                            disabled = function() return mod:GetZoneHeaderMode() == "always" end,
                         },
-                        simpleSectionHeaders = {
-                           type = "toggle",
-                           name = L["Simple section headers"],
-                           desc = L["Leave the quest counts out of section headers like Quests and World Quests."],
-                           order = 8,
-                           width = COLUMN_WIDTH,
+                        sectionCounts = {
+                           type = "select",
+                           name = L["Section header counts"],
+                           desc = L["What section headers like Quests and World Quests show after the name: the number of quests and, for Quests, the most you can have; only the number; or nothing."],
+                           values = {
+                              full = L["Count and maximum"],
+                              count = L["Count only"],
+                              none = L["None"],
+                           },
+                           sorting = { "full", "count", "none" },
+                           order = 3.7,
+                           width = DROPDOWN_WIDTH,
+                           get = function() return mod:GetSectionCountMode() end,
+                           set = function(_, val) mod:SetSectionCountMode(val) end,
                         },
                         -- Rows: zone dropdowns, section dropdowns, then the toggles.
                         zoneFold = FoldStyleOption(L["Zone fold icon"], "zoneFold", 2),

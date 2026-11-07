@@ -202,6 +202,11 @@ local function GetOpt(key)
       local hidden = work.hideZoneHeaders
       if hidden == "single" then return "single" end
       return hidden and "always" or "never"
+   elseif key == "sectionCounts" then
+      -- See mod:GetSectionCountMode.
+      local simple = work.simpleSectionHeaders
+      if simple == "count" then return "count" end
+      return simple and "none" or "full"
    end
    return work[key]
 end
@@ -214,6 +219,8 @@ local function SetOpt(key, value)
       workAutoTrack = value and true or false
    elseif key == "zoneHeaders" then
       work.hideZoneHeaders = (value == "always") or (value == "single" and "single") or false
+   elseif key == "sectionCounts" then
+      work.simpleSectionHeaders = value == "none" or (value == "count" and "count") or false
    else
       work[key] = value
    end
@@ -465,13 +472,15 @@ pageBuilders[2] = function(page)
       { "single", L["Hide when only one is shown"] },
       { "always", L["Hide"] },
    }, 170)
-   page:Check(L["Quest counts in headers"],
-      L["Show the number of quests in section and zone headers, like Quests (10/25)."],
-      function() return not GetOpt("simpleSectionHeaders") end,
-      function(value)
-         SetOpt("simpleSectionHeaders", not value)
-         SetOpt("simpleZoneHeaders", not value)
-      end)
+   page:Check(L["Quest counts in zone headers"],
+      L["Show the number of quests and completed quests in zone headers."],
+      function() return not GetOpt("simpleZoneHeaders") end,
+      function(value) SetOpt("simpleZoneHeaders", not value) end)
+   page:Choice(L["Section header counts"], "sectionCounts", {
+      { "full", L["Count and maximum"] },
+      { "count", L["Count only"] },
+      { "none", L["None"] },
+   }, 170)
 end
 
 pageBuilders[3] = function(page)
@@ -769,7 +778,7 @@ end
 -- is switched on by updating.
 ----------------------------------------------------------------
 
-mod.WHATS_NEW_VERSION = 3
+mod.WHATS_NEW_VERSION = 4
 
 -- { version, title, desc, get, set, enabled, visible } (get and set only for
 -- features with a switch; the switch is grayed out unless enabled() says so,
@@ -788,13 +797,6 @@ local WHATS_NEW = {
       L["List the quests of all zones together, without zone headers. The settings also let you hide them only while a single zone is shown."],
       function() return mod:GetWizardOption("zoneHeaders") == "always" end,
       function(value) mod:SetWizardOption("zoneHeaders", value and "always" or "never") end },
-   { 1, L["Simple headers"],
-      L["Leave the quest counts out of section and zone headers."],
-      function() return mod:GetWizardOption("simpleSectionHeaders") end,
-      function(value)
-         mod:SetWizardOption("simpleSectionHeaders", value)
-         mod:SetWizardOption("simpleZoneHeaders", value)
-      end },
    { 1, L["Fold icons"],
       L["Choose how folded headers look: a triangle, chevron, plus / minus, or Blizzard's button, on the left, right or after the title. See the General settings."] },
    { 2, L["Spacing settings"],
@@ -809,6 +811,9 @@ local WHATS_NEW = {
       function(value) mod:SetWizardOption("showPlayButton", value) end,
       function() return mod:GetQuestVoice() ~= nil end,
       function() return mod.IS_FOREVER end },
+   -- Replaces the version 1 "Simple headers" switch (now a dropdown).
+   { 4, L["Header counts"],
+      L["Choose what section headers show: the count and maximum, like Quests (12/25), only the count, like Quests (12), or nothing. Zone header counts can be turned off separately. See the General settings, Quests tab."] },
 }
 
 function mod:MarkWhatsNewSeen()
