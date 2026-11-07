@@ -665,12 +665,40 @@ local function HookModule(_, module)
    end
 end
 
+-- Blizzard's quest timer box (Blizzard_QuestTimer, Forever / Classic) lists
+-- the same timers MQT shows. Its parent differs by build (the tracker or
+-- UIParent), so it is hidden on its own, the same alpha-only way. Its timer
+-- buttons are pooled and appear when a timer starts, so their mouse is turned
+-- off again after each update.
+local function ApplyQuestTimerVisibility()
+   local frame = QuestTimerFrame
+   if not frame then return end
+   if not mod.questTimerHooked then
+      mod.questTimerHooked = true
+      hooksecurefunc(frame, "SetAlpha", function(f, alpha)
+         if mod.blizzardHidden and alpha ~= 0 then f:SetAlpha(0) end
+      end)
+      if frame.UpdateQuestTimers then
+         hooksecurefunc(frame, "UpdateQuestTimers", function(f)
+            if mod.blizzardHidden then SetTrackerMouse(false, InCombatLockdown(), f) end
+         end)
+      end
+   end
+   local inCombat = InCombatLockdown()
+   frame:SetAlpha(mod.blizzardHidden and 0 or 1)
+   SetTrackerMouse(true, inCombat, frame)
+   if mod.blizzardHidden then
+      SetTrackerMouse(false, inCombat, frame)
+   end
+end
+
 -- Catches protected frames skipped during combat.
 function mod:UpdateBlizzardTrackerMouse()
    local tracker = ObjectiveTrackerFrame
    if tracker and self.trackerMousePending then
       self.trackerMousePending = nil
       ApplyTrackerVisibility(tracker)
+      ApplyQuestTimerVisibility()
    end
 end
 
@@ -712,6 +740,7 @@ function mod:SetBlizzardTrackerHidden(hide)
       end
    end
    ApplyTrackerVisibility(tracker)
+   ApplyQuestTimerVisibility()
 end
 
 ----------------------------------------------------------------

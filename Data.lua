@@ -142,6 +142,22 @@ local function GetQuestDistance(questID)
    end
 end
 
+-- Classic-style quest timers (Forever): questID -> absolute GetTime() end.
+-- C_QuestLog.GetTimeAllowed returns nothing for these; Blizzard's quest timer
+-- frame reads them from C_QuestLog.GetQuestTimers. Refreshed per collect.
+local questTimerEnds = {}
+local function RefreshQuestTimers()
+   wipe(questTimerEnds)
+   local timers = C_QuestLog.GetQuestTimers and C_QuestLog.GetQuestTimers()
+   if not timers then return end
+   local now = GetTime()
+   for _, timer in ipairs(timers) do
+      if timer.questID and timer.questTimer and timer.questTimer > 0 then
+         questTimerEnds[timer.questID] = now + timer.questTimer
+      end
+   end
+end
+
 local function BuildQuest(info)
    local questID = info.questID
    local logIndex = info.questLogIndex
@@ -167,6 +183,8 @@ local function BuildQuest(info)
    local timeTotal, timeElapsed = C_QuestLog.GetTimeAllowed and C_QuestLog.GetTimeAllowed(questID)
    if timeTotal and timeElapsed and timeElapsed < timeTotal and not quest.isFailed then
       quest.timerEnd = GetTime() - timeElapsed + timeTotal
+   elseif not quest.isFailed then
+      quest.timerEnd = questTimerEnds[questID]
    end
    -- Quest tag: tag ID 1 is "Elite" in classic content ("Group" in the retail enum).
    local tagInfo = C_QuestLog.GetQuestTagInfo and C_QuestLog.GetQuestTagInfo(questID)
@@ -529,6 +547,7 @@ mod.ArrangeSections = ArrangeSections
 
 function mod:CollectQuests()
    local profile = self.db.profile
+   RefreshQuestTimers()
    local zoneNames = GetCurrentZoneNames()
    -- In instances, isOnMap can be true for quests of the surrounding zone.
    local useOnMap = not IsInInstance()
