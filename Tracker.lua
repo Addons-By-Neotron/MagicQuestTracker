@@ -84,12 +84,27 @@ local function FormatTimeLeft(seconds)
    return format(L["Time left: %s"], clock)
 end
 
--- Returns false once the timer has run out.
+-- Timer lines are progress bars (the fill is the time left) or text lines,
+-- in the failed color under TIMER_WARNING. Returns false once the timer has
+-- run out.
 local function UpdateTimerLine(line)
    local remaining = math.max(0, math.floor(line.timerEnd - GetTime()))
-   line.text:SetText(FormatTimeLeft(remaining))
-   line.color = remaining < TIMER_WARNING and colors.failed or colors.timeLeft
-   line.text:SetTextColor(unpack(line.color))
+   if not line.isTimerBar then
+      line.text:SetText(FormatTimeLeft(remaining))
+      line.color = remaining < TIMER_WARNING and colors.failed or colors.objective
+      line.text:SetTextColor(unpack(line.color))
+      return remaining > 0
+   end
+   local bar = line.bar
+   local total = line.timerTotal
+   bar:SetValue(total and total > 0 and math.min(100, remaining * 100 / total) or 100)
+   bar.label:SetText(FormatTimeLeft(remaining))
+   if remaining < TIMER_WARNING then
+      bar:SetStatusBarColor(unpack(colors.failed))
+   else
+      local c = bar.fillColor
+      bar:SetStatusBarColor(c.r, c.g, c.b, c.a)
+   end
    return remaining > 0
 end
 
@@ -120,22 +135,31 @@ end })
 local FONT_ROLES = { "title", "module", "zone", "quest", "objective" }
 local fontObjects = {}
 
+-- Progress and timer bar labels: the objective font, a bit smaller.
+local BAR_FONT_SHRINK = 2
+local BAR_FONT_MIN = 8
+
 function mod:UpdateFonts()
    for _, role in ipairs(FONT_ROLES) do
-      local cfg = self:GetFonts()[role]
-      local font = fontObjects[role]
-      if not font then
-         font = CreateFont((mod.fontPrefix or "MagicQuestTrackerFont_") .. role)
-         fontObjects[role] = font
-      end
-      local path = media:Fetch("font", cfg.face) or STANDARD_TEXT_FONT
-      font:SetFont(path, cfg.size, cfg.outline or "")
-      if cfg.outline == nil or cfg.outline == "" then
-         font:SetShadowColor(0, 0, 0, 1)
-         font:SetShadowOffset(1, -1)
-      else
-         font:SetShadowOffset(0, 0)
-      end
+      self:UpdateFont(role, self:GetFonts()[role])
+   end
+   local cfg = self:GetFonts().objective
+   self:UpdateFont("bar", cfg, math.max(BAR_FONT_MIN, cfg.size - BAR_FONT_SHRINK))
+end
+
+function mod:UpdateFont(role, cfg, size)
+   local font = fontObjects[role]
+   if not font then
+      font = CreateFont((mod.fontPrefix or "MagicQuestTrackerFont_") .. role)
+      fontObjects[role] = font
+   end
+   local path = media:Fetch("font", cfg.face) or STANDARD_TEXT_FONT
+   font:SetFont(path, size or cfg.size, cfg.outline or "")
+   if cfg.outline == nil or cfg.outline == "" then
+      font:SetShadowColor(0, 0, 0, 1)
+      font:SetShadowOffset(1, -1)
+   else
+      font:SetShadowOffset(0, 0)
    end
 end
 
@@ -681,6 +705,7 @@ local BAR_MARKER_WIDTH = 1
 -- frame (the segments are its markers), Blizzard's fill and font.
 local BLIZZARD_BAR = {
    width = 191, height = 17,
+   lineHeight = 25,  -- the frame atlas is much taller than what it draws; overlap it
    frameAtlas = "bonusobjectives-bar-frame-5",
    frameOffsetX = -8, frameOffsetY = -1,  -- frame relative to the bar's left edge
    texture = [[Interface\TargetingFrame\UI-StatusBar]],
@@ -689,13 +714,14 @@ local BLIZZARD_BAR = {
    textColor = { r = 1, g = 1, b = 1, a = 1 },
 }
 
-local function AddProgressBar(data, percent, indent, gap)
+-- label: bar text, defaults to the percentage.
+local function AddProgressBar(data, percent, indent, gap, label)
    local line = AddLine("objective", data, "", "objective", indent, gap, colors.objective)
    local bar = line.bar
    if not bar then
       bar = CreateFrame("StatusBar", nil, line)
       bar:SetMinMaxValues(0, 100)
-      bar.bg = bar:CreateTexture(nil, "BACKGROUND")
+      bar.bg = bar:CreateTexture(nil, "BACKGROUND", nil, -1)
       bar.bg:SetAllPoints()
       bar.label = bar:CreateFontString(nil, "OVERLAY")
       bar.label:SetPoint("CENTER")
@@ -723,7 +749,9 @@ local function AddProgressBar(data, percent, indent, gap)
       end
       if bar.frame then bar.frame:SetShown(frameInfo and true or false) end
       bar:SetStatusBarTexture(texture)
-      bar:SetStatusBarColor(c.r, c.g, c.b, c.a)
+      -- Fill under the frame (ARTWORK), like Blizzard's drawLayer="BACKGROUND".
+      bar:GetStatusBarTexture():SetDrawLayer("BACKGROUND", 0)
+      bar.fillColor = c
       bar.bg:SetTexture(texture)
       bar.bg:SetVertexColor(bg.r, bg.g, bg.b, bg.a)
       bar.label:SetTextColor(tc.r, tc.g, tc.b, tc.a)
@@ -735,10 +763,12 @@ local function AddProgressBar(data, percent, indent, gap)
       bar.styleVersion = mod.themeVersion
    end
    local frameInfo = bar.frameInfo
-   bar.label:SetFontObject(frameInfo and GameFontHighlightMedium or fontObjects.objective)
+   bar.label:SetFontObject(frameInfo and GameFontHighlight or fontObjects.bar)
    local tc = (frameInfo and BLIZZARD_BAR or mod:GetProgressBarSettings()).textColor
    bar.label:SetTextColor(tc.r, tc.g, tc.b, tc.a)
-   bar.label:SetFormattedText("%d%%", percent)
+   local fc = bar.fillColor
+   bar:SetStatusBarColor(fc.r, fc.g, fc.b, fc.a)
+   bar.label:SetText(label or format("%d%%", percent))
    bar:SetValue(percent)
    local available = layout.width - indent - (layout.rightInset or 0)
    local width, height, lineHeight
@@ -747,7 +777,7 @@ local function AddProgressBar(data, percent, indent, gap)
       -- The frame reaches past the bar; keep it inside the line.
       local scale = math.min(1, available / frameInfo.width)
       width, height = BLIZZARD_BAR.width * scale, BLIZZARD_BAR.height
-      lineHeight = frameInfo.height
+      lineHeight = BLIZZARD_BAR.lineHeight
       local left = -BLIZZARD_BAR.frameOffsetX * scale
       bar:SetPoint("TOPLEFT", indent + left, -(lineHeight - height) / 2)
       bar.frame:SetSize(frameInfo.width * scale, frameInfo.height)
@@ -1070,10 +1100,18 @@ local function FormatDistance(yards, units)
    return format(L["%d yd"], math.floor(yards + 0.5))
 end
 
-local function AddTimerLine(data, timerEnd, indent)
-   local line = AddLine("objective", data, FormatTimeLeft(math.max(0, timerEnd - GetTime())), "objective",
-      indent, spacing.objectiveSpacing, colors.timeLeft)
+-- timerTotal: full duration in seconds, nil if unknown (the bar shows full).
+local function AddTimerLine(data, timerEnd, timerTotal, indent)
+   local text = FormatTimeLeft(math.max(0, timerEnd - GetTime()))
+   local line
+   if mod.db.profile.timerBars then
+      line = AddProgressBar(data, 100, indent, spacing.objectiveSpacing, text)
+   else
+      line = AddLine("objective", data, text, "objective", indent, spacing.objectiveSpacing, colors.objective)
+   end
+   line.isTimerBar = mod.db.profile.timerBars
    line.timerEnd = timerEnd
+   line.timerTotal = timerTotal
    UpdateTimerLine(line)
    tinsert(timerLines, line)
 end
@@ -1092,7 +1130,7 @@ local function RenderObjectives(data, objectives, indent, profile)
             AddProgressBar(data, objective.percent, indent, spacing.objectiveSpacing)
          end
          if objective.timerEnd then
-            AddTimerLine(data, objective.timerEnd, indent)
+            AddTimerLine(data, objective.timerEnd, objective.timerTotal, indent)
          end
       elseif hasText and profile.showCompletedObjectives then
          AddLine("objective", data, "- " .. objective.text, "objective", indent, spacing.objectiveSpacing, complete)
@@ -1155,7 +1193,7 @@ function mod:RenderQuest(quest, profile)
       RenderObjectives(quest, quest.objectives, objectiveIndent, profile)
    end
    if quest.timerEnd then
-      AddTimerLine(quest, quest.timerEnd, objectiveIndent)
+      AddTimerLine(quest, quest.timerEnd, quest.timerTotal, objectiveIndent)
    end
    if quest.timeLeftText then
       AddLine("objective", quest, quest.timeLeftText, "objective", objectiveIndent, spacing.objectiveSpacing,

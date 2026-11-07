@@ -145,6 +145,8 @@ end
 -- Classic-style quest timers (Forever): questID -> absolute GetTime() end.
 -- C_QuestLog.GetTimeAllowed returns nothing for these; Blizzard's quest timer
 -- frame reads them from C_QuestLog.GetQuestTimers. Refreshed per collect.
+-- Only the time left is known; the duration is the most ever seen for the
+-- quest (the full time once it was tracked when accepted), saved globally.
 local questTimerEnds = {}
 local function RefreshQuestTimers()
    wipe(questTimerEnds)
@@ -154,6 +156,8 @@ local function RefreshQuestTimers()
    for _, timer in ipairs(timers) do
       if timer.questID and timer.questTimer and timer.questTimer > 0 then
          questTimerEnds[timer.questID] = now + timer.questTimer
+         local durations = mod.db.global.questTimerDurations
+         durations[timer.questID] = math.max(durations[timer.questID] or 0, timer.questTimer)
       end
    end
 end
@@ -183,8 +187,10 @@ local function BuildQuest(info)
    local timeTotal, timeElapsed = C_QuestLog.GetTimeAllowed and C_QuestLog.GetTimeAllowed(questID)
    if timeTotal and timeElapsed and timeElapsed < timeTotal and not quest.isFailed then
       quest.timerEnd = GetTime() - timeElapsed + timeTotal
-   elseif not quest.isFailed then
+      quest.timerTotal = timeTotal
+   elseif not quest.isFailed and questTimerEnds[questID] then
       quest.timerEnd = questTimerEnds[questID]
+      quest.timerTotal = mod.db.global.questTimerDurations[questID]
    end
    -- Quest tag: tag ID 1 is "Elite" in classic content ("Group" in the retail enum).
    local tagInfo = C_QuestLog.GetQuestTagInfo and C_QuestLog.GetQuestTagInfo(questID)
@@ -823,6 +829,7 @@ local function AddCriteria(list, info)
    if info.duration and not issecretvalue(info.duration) and info.duration > 0
       and info.elapsed and info.elapsed <= info.duration then
       objective.timerEnd = GetTime() - info.elapsed + info.duration
+      objective.timerTotal = info.duration
    end
    tinsert(list, objective)
 end
@@ -925,6 +932,7 @@ function mod:CollectAchievements()
                objective.failed = not eligible
                if duration and elapsed and elapsed < duration then
                   objective.timerEnd = GetTime() - elapsed + duration
+                  objective.timerTotal = duration
                end
                tinsert(objectives, objective)
                numShown = numShown + 1
@@ -938,6 +946,7 @@ function mod:CollectAchievements()
                if timer.achievementID == achievementID then
                   if GetTime() <= timer.timerEnd then
                      objective.timerEnd = timer.timerEnd
+                     objective.timerTotal = timer.duration
                   else
                      objective.failed = true
                   end

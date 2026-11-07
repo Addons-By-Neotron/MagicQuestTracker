@@ -159,6 +159,7 @@ mod.defaults = {
       sectionFoldPosition = "right",
       colorCompleteQuests = false,   -- completed quest titles use the completeQuest color
       showCompletedObjectives = true,
+      timerBars = true,              -- time limits as a bar (else a text line)
       showRecipes = true,
       showAchievements = true,
       showWorldQuests = true,
@@ -177,6 +178,7 @@ mod.defaults = {
    },
    global = {
       themes = {},  -- [name] = { title, section, zone, background, layout, fonts }, shared by all profiles
+      questTimerDurations = {},  -- [questID] = seconds; Forever's quest timers only report the time left
    },
    char = {
       collapsedZones = {},    -- [zoneName] = true
@@ -304,6 +306,7 @@ function mod:TRACKED_ACHIEVEMENT_UPDATE(_, achievementID, criteriaID, elapsed, d
       local timer = self.achievementTimers[criteriaID] or {}
       timer.achievementID = achievementID
       timer.timerEnd = GetTime() - elapsed + duration
+      timer.duration = duration
       self.achievementTimers[criteriaID] = timer
    end
    self:RequestUpdate()
