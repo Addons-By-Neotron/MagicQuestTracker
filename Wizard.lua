@@ -439,14 +439,20 @@ function Page:Radio(label, choices, get, set, columnWidth)
 end
 
 --- A slider bound to a wizard option key; format(value) gives the text
---- shown next to it.
+--- shown next to it. label can be a function (re-read on refresh). Pages
+--- are built before the working copy exists: values are set on refresh.
 function Page:Slider(label, key, minValue, maxValue, step, format)
-   if label then self:Subheading(label) end
+   local heading
+   if label then
+      self:Gap(4)
+      heading = self:Text("GameFontNormal", type(label) == "function" and label() or label)
+      self.y = self.y + heading:GetStringHeight() + 4
+   end
    local slider = CreateFrame("Frame", nil, self.frame, "MinimalSliderWithSteppersTemplate")
    slider:SetSize(260, 20)
    slider:SetPoint("TOPLEFT", 4, -self.y)
    local steps = math.floor((maxValue - minValue) / step + 0.5)
-   slider:Init(GetOpt(key), minValue, maxValue, steps, {
+   slider:Init(minValue, minValue, maxValue, steps, {
       [MinimalSliderWithSteppersMixin.Label.Right] = format or tostring,
    })
    local refreshing
@@ -458,6 +464,7 @@ function Page:Slider(label, key, minValue, maxValue, step, format)
    end, slider)
    self.y = self.y + 28
    self.refreshers[#self.refreshers + 1] = function()
+      if heading and type(label) == "function" then heading:SetText(label()) end
       refreshing = true
       slider:SetValue(GetOpt(key))
       refreshing = false
@@ -702,10 +709,11 @@ pageBuilders[7] = function(page)
    end)
    -- Saved in yards, shown in the selected distance units.
    local function UsesMeters()
-      local units = GetOpt("distanceUnits")
+      local units = work and GetOpt("distanceUnits")
       return units == "meters" or units == "metric"
    end
-   page:Slider(format(L["Max distance (%s)"], UsesMeters() and L["m"] or L["yd"]), "questBarMaxDistance", 0, 2000, 50,
+   page:Slider(function() return format(L["Max distance (%s)"], UsesMeters() and L["m"] or L["yd"]) end,
+      "questBarMaxDistance", 0, 2000, 50,
       function(yards)
          if yards <= 0 then return L["Any distance"] end
          return tostring(UsesMeters() and math.floor(yards * 0.9144 + 0.5) or yards)
