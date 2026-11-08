@@ -104,8 +104,142 @@ local function SaveTopAnchoredPosition(frame, layoutName)
    mod:ApplyPosition()
 end
 
+-- Closest snap line to any of the sources (edges and center): the offset
+-- and the line, or nil when none is within range.
+local function SnapDelta(sources, targets, range)
+   local best, line
+   for _, source in ipairs(sources) do
+      for _, target in pairs(targets) do
+         local delta = target - source
+         if math.abs(delta) <= range and (not best or math.abs(delta) < math.abs(best)) then
+            best, line = delta, target
+         end
+      end
+   end
+   return best, line
+end
+
+-- Snap offsets and lines (in UIParent units) for a frame where it is now, or
+-- nil while Blizzard's "Snap" option is off. Like Blizzard's frames: edges or
+-- center to the screen edges and center lines, and to the grid when shown.
+local function GetSnap(frame)
+   local manager = EditModeManagerFrame
+   if not (manager and manager.IsSnapEnabled and manager:IsSnapEnabled()) then return end
+   local left, bottom, width, height = frame:GetRect()
+   if not left then return end
+   local scale = frame:GetEffectiveScale() / UIParent:GetEffectiveScale()
+   left, bottom, width, height = left * scale, bottom * scale, width * scale, height * scale
+   local screenWidth, screenHeight = UIParent:GetSize()
+   local magnetism = EditModeMagnetismManager
+   local range = (magnetism and magnetism.magnetismRange or 8) / UIParent:GetEffectiveScale()
+
+   local xTargets = { 0, screenWidth / 2, screenWidth }
+   local yTargets = { 0, screenHeight / 2, screenHeight }
+   local grid = magnetism and magnetism.magneticGridLines
+   if grid then
+      for _, x in pairs(grid.vertical) do xTargets[#xTargets + 1] = x end
+      for _, y in pairs(grid.horizontal) do yTargets[#yTargets + 1] = y end
+   end
+   local dx, xLine = SnapDelta({ left, left + width / 2, left + width }, xTargets, range)
+   local dy, yLine = SnapDelta({ bottom, bottom + height / 2, bottom + height }, yTargets, range)
+   return left, bottom, scale, dx, xLine, dy, yLine
+end
+
+--- Snaps a dropped Edit Mode frame (LibEditMode doesn't). Leaves the frame
+--- anchored BOTTOMLEFT; callers re-save it.
+function mod:SnapEditModeFrame(frame)
+   local left, bottom, scale, dx, _, dy = GetSnap(frame)
+   if not left or not (dx or dy) then return end
+   frame:ClearAllPoints()
+   frame:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", (left + (dx or 0)) / scale, (bottom + (dy or 0)) / scale)
+end
+
+-- Snap guide lines shown while a frame is dragged, like Blizzard's.
+local snapOverlay
+local SNAP_LINE_COLOR = { 0.35, 0.75, 1, 0.9 }
+local function GetSnapOverlay()
+   if snapOverlay then return snapOverlay end
+   snapOverlay = CreateFrame("Frame", nil, UIParent)
+   snapOverlay:SetAllPoints()
+   snapOverlay:SetFrameStrata("TOOLTIP")
+   snapOverlay:Hide()
+   local function Line()
+      local line = snapOverlay:CreateTexture(nil, "OVERLAY")
+      line:SetColorTexture(unpack(SNAP_LINE_COLOR))
+      line:Hide()
+      return line
+   end
+   snapOverlay.vertical, snapOverlay.horizontal = Line(), Line()
+   snapOverlay:SetScript("OnUpdate", function(self)
+      local _, _, _, _, xLine, _, yLine = GetSnap(self.target)
+      local vertical, horizontal = self.vertical, self.horizontal
+      local thickness = 2 / UIParent:GetEffectiveScale()  -- pixels
+      if xLine then
+         vertical:ClearAllPoints()
+         vertical:SetPoint("TOPLEFT", UIParent, "TOPLEFT", xLine - thickness / 2, 0)
+         vertical:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", xLine - thickness / 2, 0)
+         vertical:SetWidth(thickness)
+      end
+      if yLine then
+         horizontal:ClearAllPoints()
+         horizontal:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", 0, yLine - thickness / 2)
+         horizontal:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMRIGHT", 0, yLine - thickness / 2)
+         horizontal:SetHeight(thickness)
+      end
+      vertical:SetShown(xLine ~= nil)
+      horizontal:SetShown(yLine ~= nil)
+   end)
+   return snapOverlay
+end
+
+--- Shows snap guide lines while LibEditMode drags the frame.
+function mod:AddSnapGuides(frame)
+   local selection = LEM and LEM.frameSelections and LEM.frameSelections[frame]
+   if not selection then return end
+   selection:HookScript("OnDragStart", function()
+      if InCombatLockdown() then return end
+      local overlay = GetSnapOverlay()
+      overlay.target = frame
+      overlay:Show()
+   end)
+   selection:HookScript("OnDragStop", function()
+      if snapOverlay then snapOverlay:Hide() end
+   end)
+end
+
+--- The nearest anchor (corner, edge or center of the screen) and offsets for
+--- a frame, in its own scaled units, so it keeps its place when the screen
+--- size changes.
+function mod:GetNearestAnchor(frame)
+   local scale = frame:GetEffectiveScale() / UIParent:GetEffectiveScale()
+   local left, right = frame:GetLeft() * scale, frame:GetRight() * scale
+   local bottom, top = frame:GetBottom() * scale, frame:GetTop() * scale
+   local screenWidth, screenHeight = UIParent:GetSize()
+   local centerX, centerY = (left + right) / 2, (bottom + top) / 2
+   local h, x, v, y
+   -- Within a few pixels of the center line counts as centered.
+   if math.abs(centerX - screenWidth / 2) < 1 or (left >= screenWidth / 3 and right <= screenWidth * 2 / 3) then
+      h, x = "", centerX - screenWidth / 2
+   elseif centerX < screenWidth / 2 then
+      h, x = "LEFT", left
+   else
+      h, x = "RIGHT", right - screenWidth
+   end
+   if math.abs(centerY - screenHeight / 2) < 1 or (bottom >= screenHeight / 3 and top <= screenHeight * 2 / 3) then
+      v, y = "", centerY - screenHeight / 2
+   elseif centerY < screenHeight / 2 then
+      v, y = "BOTTOM", bottom
+   else
+      v, y = "TOP", top - screenHeight
+   end
+   local point = v .. h
+   if point == "" then point = "CENTER" end
+   return point, x / scale, y / scale
+end
+
 local function OnPositionChanged(frame, layoutName)
    if layoutName then
+      mod:SnapEditModeFrame(frame)
       SaveTopAnchoredPosition(frame, layoutName)
    end
 end
@@ -186,6 +320,7 @@ function mod:SetupEditMode()
 
    frame.editModeName = "Magic Quest Tracker"
    LEM:AddFrame(frame, OnPositionChanged, DEFAULT_LAYOUT)
+   self:AddSnapGuides(frame)
    LEM:AddFrameSettings(frame, {
       SizeSetting("width", L["Width"], 150, 600, 1),
       SizeSetting("maxHeight", L["Maximum height"], 100, 1200, 10, nil,

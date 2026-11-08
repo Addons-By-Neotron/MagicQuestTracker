@@ -171,6 +171,14 @@ mod.defaults = {
       showFindGroupButton = true,
       showPlayButton = false, -- Spoken Quests voiceover play button (Forever)
       buttonsOnHover = false, -- POI, find group and play buttons only while the mouse is over the tracker
+      questBar = false,       -- separate quest item bar (QuestBar.lua)
+      questBarButtons = 5,
+      questBarSpacing = 4,
+      questBarVertical = false,
+      questBarMaxDistance = 500, -- yards; items of quests farther away are hidden (0 = any distance)
+      questBarAlign = "center", -- buttons when fewer than slots: start (left / top) | center | end
+      questBarLayouts = {},   -- [layoutName] = { point, x, y, scale }
+      questBarLastLayout = nil,
 
       -- Layout (position is per Edit Mode layout)
       layouts = {},           -- [layoutName] = { point, x, y, width, maxHeight, scale }
@@ -344,6 +352,7 @@ function mod:ApplyProfile()
    self:UpdateDistanceTimer()
    self:UpdateCombatVisibility()
    self:ApplyLayout()
+   self:ApplyQuestBar()
    self:SetBlizzardTrackerHidden(self.db.profile.hideBlizzardTracker)
    self:RequestUpdate()
 end
@@ -418,6 +427,7 @@ function mod:PLAYER_REGEN_ENABLED()
    end
    self:ApplyPendingSuperTrack()
    self:UpdateBlizzardTrackerMouse()
+   self:QuestBarCombatEnded()
    if self.applyLayoutDeferred then
       self.applyLayoutDeferred = nil
       self:ApplyLayout()
@@ -477,6 +487,7 @@ function mod:RunUpdate()
    if not self.frame then return end
    self:CheckQuestLogFull()
    local sections, numQuests, numShown = self:CollectQuests()
+   self:UpdateQuestBar()
    local recipes = self.db.profile.showRecipes and self:CollectRecipes() or nil
    local tasks = self:CollectTasks()
    local scenario = self:CollectScenario()
@@ -795,6 +806,11 @@ function mod:ChatCommand(input)
    elseif cmd == "logfull" then
       -- The quest log warning, shown whatever the log holds (for testing).
       self:CheckQuestLogFull(true)
+   elseif cmd == "bardebug" then
+      self:DumpQuestBar()
+   elseif cmd == "testbar" then
+      -- The quest item bar filled with bag items (for testing without quests).
+      self:ToggleQuestBarTest()
    else
       self:PrintHelp()
    end

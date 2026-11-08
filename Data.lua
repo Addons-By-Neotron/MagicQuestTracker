@@ -141,6 +141,7 @@ local function GetQuestDistance(questID)
       return math.sqrt(distanceSq)
    end
 end
+mod.GetQuestDistance = GetQuestDistance
 
 -- Classic-style quest timers (Forever): questID -> absolute GetTime() end.
 -- C_QuestLog.GetTimeAllowed returns nothing for these; Blizzard's quest timer

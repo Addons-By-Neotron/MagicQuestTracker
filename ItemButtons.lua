@@ -75,7 +75,14 @@ local function Button_OnUpdate(button, elapsed)
 
    local logIndex = GetLogIndex(button)
    local inRange = logIndex and IsQuestLogSpecialItemInRange(logIndex)
-   if inRange == 0 then
+   if button.hasBinding then
+      -- Bound key text (quest bar): red when out of range.
+      if inRange == 0 then
+         button.HotKey:SetVertexColor(1.0, 0.1, 0.1)
+      else
+         button.HotKey:SetVertexColor(0.6, 0.6, 0.6)
+      end
+   elseif inRange == 0 then
       button.HotKey:SetVertexColor(1.0, 0.1, 0.1)
       button.HotKey:Show()
    elseif inRange == 1 then
@@ -95,9 +102,10 @@ local function Button_OnEnter(button)
    end
 end
 
-local function CreateButton(index)
-   local button = CreateFrame("Button", "MagicQuestTrackerItemButton" .. index, holder, "SecureActionButtonTemplate")
-   button:SetSize(BUTTON_SIZE, BUTTON_SIZE)
+--- Creates a secure quest item button (tracker and quest bar).
+function mod:CreateQuestItemButton(name, parent, size)
+   local button = CreateFrame("Button", name, parent, "SecureActionButtonTemplate")
+   button:SetSize(size, size)
    button:RegisterForClicks("AnyUp", "AnyDown")
    button:SetAttribute("type1", "item")
 
@@ -109,7 +117,7 @@ local function CreateButton(index)
    local normal = button:GetNormalTexture()
    normal:ClearAllPoints()
    normal:SetPoint("CENTER")
-   normal:SetSize(BUTTON_SIZE * 42 / 26, BUTTON_SIZE * 42 / 26)
+   normal:SetSize(size * 42 / 26, size * 42 / 26)
    button:SetPushedAtlas("UI-QuestTrackerButton-QuestItem-Frame")
    button:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
 
@@ -129,11 +137,17 @@ local function CreateButton(index)
    button:SetScript("OnUpdate", Button_OnUpdate)
    button:SetScript("OnEnter", Button_OnEnter)
    button:SetScript("OnLeave", GameTooltip_Hide)
+   return button
+end
 
+local function CreateButton(index)
+   local button = mod:CreateQuestItemButton("MagicQuestTrackerItemButton" .. index, holder, BUTTON_SIZE)
    buttons[index] = button
    return button
 end
 
+--- Points a quest item button at a quest's item ({ questID, itemID,
+--- itemTexture, itemCharges }). Out of combat only.
 local function SetupButton(button, quest)
    local item = "item:" .. quest.itemID
    if button:GetAttribute("item1") ~= item then
@@ -150,6 +164,8 @@ local function SetupButton(button, quest)
    button.rangeTimer = 0
    UpdateCooldown(button)
 end
+mod.SetupQuestItemButton = SetupButton
+mod.UpdateQuestItemCooldown = UpdateCooldown
 
 local holderCombatHidden = false
 

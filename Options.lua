@@ -803,6 +803,92 @@ local function BuildOptions()
                      order = 4,
                      width = COLUMN_WIDTH,
                   },
+                  questBarGroup = {
+                     type = "group",
+                     name = L["Quest item bar"],
+                     inline = true,
+                     order = 10,
+                     hidden = function() return not GetQuestLogSpecialItemInfo end,
+                     set = function(info, val)
+                        mod.db.profile[info[#info]] = val
+                        mod:ApplyQuestBar()
+                     end,
+                     disabled = function(info)
+                        return info[#info] ~= "questBar" and info[#info] ~= "questBarHelp" and not mod.db.profile.questBar
+                     end,
+                     args = {
+                        questBarHelp = {
+                           type = "description",
+                           name = L["A separate bar with the items of the quests in your log, with key bindings (Key Bindings, Magic Quest Tracker section). The first button holds the focused quest's item, or else the nearest one; the others follow the quest log order. Move it in Edit Mode."],
+                           order = 0,
+                        },
+                        questBar = {
+                           type = "toggle",
+                           name = L["Show quest item bar"],
+                           order = 1,
+                           width = COLUMN_WIDTH,
+                        },
+                        questBarMaxDistance = {
+                           type = "range",
+                           -- Saved in yards, shown in the selected distance units.
+                           name = function()
+                              return format(L["Max distance (%s)"], UsesMeters() and L["m"] or L["yd"])
+                           end,
+                           desc = L["Only show the items of quests whose objective area is within this distance. The focused quest's item is always shown. 0 shows items at any distance."],
+                           min = 0, max = 2000, step = 50, bigStep = 100,
+                           order = 1.5,
+                           width = COLUMN_WIDTH,
+                           get = function()
+                              local yards = mod.db.profile.questBarMaxDistance
+                              return UsesMeters() and math.floor(yards * METERS_PER_YARD / 50 + 0.5) * 50 or yards
+                           end,
+                           set = function(_, val)
+                              mod.db.profile.questBarMaxDistance = UsesMeters() and val / METERS_PER_YARD or val
+                              mod:ApplyQuestBar()
+                           end,
+                        },
+                        questBarVertical = {
+                           type = "toggle",
+                           name = L["Vertical"],
+                           order = 2,
+                           width = COLUMN_WIDTH,
+                        },
+                        questBarAlign = {
+                           type = "select",
+                           name = L["Alignment"],
+                           desc = L["Where the buttons go when there are fewer items than buttons."],
+                           values = function() return mod:GetQuestBarAlignLabels() end,
+                           sorting = { "start", "center", "end" },
+                           order = 2.5,
+                           width = DROPDOWN_WIDTH,
+                        },
+                        questBarBreak = { type = "description", name = "", order = 2.9, width = "full" },
+                        questBarButtons = {
+                           type = "range",
+                           name = L["Buttons"],
+                           min = 1, max = mod.QUEST_BAR_MAX_BUTTONS or 5, step = 1,
+                           order = 3,
+                        },
+                        questBarSpacing = {
+                           type = "range",
+                           name = L["Spacing"],
+                           min = 0, max = 20, step = 1,
+                           order = 4,
+                        },
+                        questBarScale = {
+                           type = "range",
+                           name = L["Scale"],
+                           desc = L["Saved per Edit Mode layout, like the position."],
+                           min = 0.5, max = 2, step = 0.05, isPercent = true,
+                           order = 5,
+                           get = function() return mod:GetQuestBarLayout().scale end,
+                           set = function(_, val)
+                              mod:GetQuestBarLayout().scale = val
+                              mod:ApplyQuestBarLayout()
+                           end,
+                        },
+                     },
+                  },
                },
             },
             other = {

@@ -179,6 +179,73 @@ local function StartWork()
    matchBlizzard = false
 end
 
+-- Made-up quest items for the quest item bar preview.
+local BAR_PREVIEW_ICONS = {
+   "Interface\\Icons\\INV_Misc_Note_01",
+   "Interface\\Icons\\INV_Misc_Bag_10",
+   "Interface\\Icons\\INV_Potion_51",
+}
+local BAR_PREVIEW_SIZE = 32
+
+-- The quest item bar's scale in the working copy (per Edit Mode layout).
+local function WorkQuestBarScale()
+   local layout = work.questBarLayouts and work.questBarLayouts[mod:GetEditModeLayoutName() or ""]
+   return layout and layout.scale or 1
+end
+
+-- The quest item bar as the working copy sets it up (on its wizard page,
+-- in place of the tracker preview).
+local function UpdateBarPreview(show)
+   local bar = wizard.barPreview
+   bar:SetShown(show)
+   wizard.preview.frame:SetShown(not show)
+   if not show then return end
+   local count = work.questBarButtons or mod.QUEST_BAR_MAX_BUTTONS
+   local used = math.min(count, #BAR_PREVIEW_ICONS)
+   local spacing = work.questBarSpacing or 4
+   local step = BAR_PREVIEW_SIZE + spacing
+   local length = count * BAR_PREVIEW_SIZE + (count - 1) * spacing
+   local vertical = work.questBarVertical
+   if vertical then bar:SetSize(BAR_PREVIEW_SIZE, length) else bar:SetSize(length, BAR_PREVIEW_SIZE) end
+   local free = count - used
+   local shift = work.questBarAlign == "end" and free or work.questBarAlign == "center" and free / 2 or 0
+   for i, button in ipairs(bar.buttons) do
+      local position = (i - 1 + shift) * step
+      button:ClearAllPoints()
+      button:SetPoint("TOPLEFT", bar, "TOPLEFT", vertical and 0 or position, vertical and -position or 0)
+      button:SetShown(i <= used)
+   end
+   bar:SetScale(WorkQuestBarScale())
+   -- Dimmed while the bar is turned off.
+   bar:SetAlpha(work.questBar and 1 or 0.4)
+end
+
+local function CreateBarPreview(panel)
+   local bar = CreateFrame("Frame", nil, panel)
+   bar:SetPoint("CENTER")
+   bar.buttons = {}
+   local frameSize = BAR_PREVIEW_SIZE * 42 / 26
+   -- The bar's full length, for the button count and alignment.
+   local extent = bar:CreateTexture(nil, "BACKGROUND")
+   extent:SetPoint("TOPLEFT", -3, 3)
+   extent:SetPoint("BOTTOMRIGHT", 3, -3)
+   extent:SetColorTexture(1, 1, 1, 0.08)
+   for i, texture in ipairs(BAR_PREVIEW_ICONS) do
+      local button = CreateFrame("Frame", nil, bar)
+      button:SetSize(BAR_PREVIEW_SIZE, BAR_PREVIEW_SIZE)
+      local icon = button:CreateTexture(nil, "BORDER")
+      icon:SetAllPoints()
+      icon:SetTexture(texture)
+      local border = button:CreateTexture(nil, "ARTWORK")
+      border:SetAtlas("UI-QuestTrackerButton-QuestItem-Frame")
+      border:SetPoint("CENTER")
+      border:SetSize(frameSize, frameSize)
+      bar.buttons[i] = button
+   end
+   bar:Hide()
+   return bar
+end
+
 local function RefreshPreview()
    if wizard and wizard.preview then
       -- Pages can show the preview differently (e.g. zone headers always on
@@ -188,6 +255,10 @@ local function RefreshPreview()
       local overrides = page and page.previewOverrides
       wizard.preview.profile = overrides and setmetatable(CopyTable(overrides), { __index = work }) or work
       mod:UpdatePreview(wizard.preview)
+   end
+   if wizard and wizard.barPreview then
+      local page = wizard.pages and wizard.pages[wizard.pageIndex or 1]
+      UpdateBarPreview(page and page.showBarPreview or false)
    end
 end
 
@@ -203,6 +274,8 @@ local function GetOpt(key)
       local hidden = work.hideZoneHeaders
       if hidden == "single" then return "single" end
       return hidden and "always" or "never"
+   elseif key == "questBarScale" then
+      return WorkQuestBarScale()
    elseif key == "sectionCounts" then
       -- See mod:GetSectionCountMode.
       local simple = work.simpleSectionHeaders
@@ -220,6 +293,18 @@ local function SetOpt(key, value)
       workAutoTrack = value and true or false
    elseif key == "zoneHeaders" then
       work.hideZoneHeaders = (value == "always") or (value == "single" and "single") or false
+   elseif key == "questBarScale" then
+      -- Saved per Edit Mode layout, like the position (see mod:GetQuestBarLayout).
+      local name = mod:GetEditModeLayoutName()
+      if name then
+         work.questBarLayouts = work.questBarLayouts or {}
+         local layout = work.questBarLayouts[name]
+         if not layout then
+            layout = CopyTable(mod:GetQuestBarLayout())
+            work.questBarLayouts[name] = layout
+         end
+         layout.scale = value
+      end
    elseif key == "sectionCounts" then
       work.simpleSectionHeaders = value == "none" or (value == "count" and "count") or false
    else
@@ -351,6 +436,38 @@ function Page:Radio(label, choices, get, set, columnWidth)
          button:SetChecked(button.value == get())
       end
    end
+end
+
+--- A slider bound to a wizard option key; format(value) gives the text
+--- shown next to it.
+function Page:Slider(label, key, minValue, maxValue, step, format)
+   if label then self:Subheading(label) end
+   local slider = CreateFrame("Frame", nil, self.frame, "MinimalSliderWithSteppersTemplate")
+   slider:SetSize(260, 20)
+   slider:SetPoint("TOPLEFT", 4, -self.y)
+   local steps = math.floor((maxValue - minValue) / step + 0.5)
+   slider:Init(GetOpt(key), minValue, maxValue, steps, {
+      [MinimalSliderWithSteppersMixin.Label.Right] = format or tostring,
+   })
+   local refreshing
+   slider:RegisterCallback(MinimalSliderWithSteppersMixin.Event.OnValueChanged, function(_, value)
+      if refreshing then return end
+      -- Snap to the step (the slider can land between steps when dragged).
+      value = minValue + math.floor((value - minValue) / step + 0.5) * step
+      if GetOpt(key) ~= value then SetOpt(key, value) end
+   end, slider)
+   self.y = self.y + 28
+   self.refreshers[#self.refreshers + 1] = function()
+      refreshing = true
+      slider:SetValue(GetOpt(key))
+      refreshing = false
+   end
+end
+
+--- Small gray text under the previous widget.
+function Page:Note(text)
+   local fs = self:Text("GameFontHighlightSmall", text, PAGE_WIDTH, { 0.6, 0.6, 0.6 })
+   self.y = self.y + fs:GetStringHeight() + 6
 end
 
 function Page:Refresh()
@@ -566,6 +683,37 @@ pageBuilders[6] = function(page)
 end
 
 pageBuilders[7] = function(page)
+   page:Heading(L["Quest item bar"])
+   page.showBarPreview = true
+   page:Paragraph(L["A separate bar with the items of the quests in your log, with key bindings (Key Bindings, Magic Quest Tracker section). The first button holds the focused quest's item, or else the nearest one; the others follow the quest log order. Move it in Edit Mode."])
+   page:Option(L["Show quest item bar"], nil, "questBar")
+   page:Choice(L["Direction"], "questBarVertical", {
+      { false, L["Horizontal"] },
+      { true, L["Vertical"] },
+   }, 170)
+   page:Choice(L["Alignment"], "questBarAlign", {
+      { "start", L["Left / top"] },
+      { "center", L["Center"] },
+      { "end", L["Right / bottom"] },
+   }, 170)
+   page:Slider(L["Buttons"], "questBarButtons", 1, mod.QUEST_BAR_MAX_BUTTONS, 1)
+   page:Slider(L["Scale"], "questBarScale", 0.5, 2, 0.05, function(value)
+      return format("%d%%", value * 100 + 0.5)
+   end)
+   -- Saved in yards, shown in the selected distance units.
+   local function UsesMeters()
+      local units = GetOpt("distanceUnits")
+      return units == "meters" or units == "metric"
+   end
+   page:Slider(format(L["Max distance (%s)"], UsesMeters() and L["m"] or L["yd"]), "questBarMaxDistance", 0, 2000, 50,
+      function(yards)
+         if yards <= 0 then return L["Any distance"] end
+         return tostring(UsesMeters() and math.floor(yards * 0.9144 + 0.5) or yards)
+      end)
+   page:Note(L["Only show the items of quests whose objective area is within this distance. The focused quest's item is always shown. 0 shows items at any distance."])
+end
+
+pageBuilders[8] = function(page)
    page:Heading(L["Fold icons"])
    page.previewOverrides = {
       hideZoneHeaders = false, showAllQuests = true, onlyCurrentZone = false, showRecipes = true, previewFolded = true,
@@ -586,7 +734,7 @@ pageBuilders[7] = function(page)
    }, 170)
 end
 
-pageBuilders[8] = function(page)
+pageBuilders[9] = function(page)
    page:Heading(L["All done"])
    page:Paragraph(L["That's it. Keep these settings on the current profile, or save them to a new profile and leave the current one as it was."])
    local nameBox
@@ -672,6 +820,7 @@ local function CreateWizard()
    panel.label:SetText(L["Preview with made-up quests"])
    frame.preview = mod:CreatePreview(panel)
    frame.preview.frame:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -20, -16)
+   frame.barPreview = CreateBarPreview(panel)
 
    frame.pages = {}
    for i = 1, NUM_PAGES do
@@ -826,6 +975,14 @@ local WHATS_NEW = {
       L["Hide the quest markers, find group and voiceover buttons until the mouse is over the tracker, for a cleaner look. The focused quest's marker and quest item buttons stay visible."],
       function() return mod:GetWizardOption("buttonsOnHover") end,
       function(value) mod:SetWizardOption("buttonsOnHover", value) end },
+   { 5, L["Quest item bar"],
+      L["A separate bar for quest items, with up to five buttons you can bind keys to. The first holds the focused or nearest quest's item. Move and size it in Edit Mode."],
+      function() return mod:GetWizardOption("questBar") end,
+      function(value)
+         mod:SetWizardOption("questBar", value)
+         mod:ApplyQuestBar()
+      end,
+      function() return GetQuestLogSpecialItemInfo ~= nil end },
 }
 
 function mod:MarkWhatsNewSeen()

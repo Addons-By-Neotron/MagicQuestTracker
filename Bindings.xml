@@ -1,0 +1,8 @@
+<Bindings>
+	<!-- Their own section in Key Bindings, named by BINDING_HEADER_MAGICQUESTTRACKER (QuestBar.lua). -->
+	<Binding name="CLICK MagicQuestTrackerBarButton1:LeftButton" category="BINDING_HEADER_MAGICQUESTTRACKER"/>
+	<Binding name="CLICK MagicQuestTrackerBarButton2:LeftButton" category="BINDING_HEADER_MAGICQUESTTRACKER"/>
+	<Binding name="CLICK MagicQuestTrackerBarButton3:LeftButton" category="BINDING_HEADER_MAGICQUESTTRACKER"/>
+	<Binding name="CLICK MagicQuestTrackerBarButton4:LeftButton" category="BINDING_HEADER_MAGICQUESTTRACKER"/>
+	<Binding name="CLICK MagicQuestTrackerBarButton5:LeftButton" category="BINDING_HEADER_MAGICQUESTTRACKER"/>
+</Bindings>

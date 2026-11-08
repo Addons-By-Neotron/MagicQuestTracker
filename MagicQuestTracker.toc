@@ -24,6 +24,7 @@ Data.lua
 Themes.lua
 Tracker.lua
 EditMode.lua
+QuestBar.lua
 Options.lua
 Preview.lua
 Wizard.lua
