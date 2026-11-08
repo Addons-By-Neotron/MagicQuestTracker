@@ -808,6 +808,8 @@ function mod:ChatCommand(input)
       self:CheckQuestLogFull(true)
    elseif cmd == "bardebug" then
       self:DumpQuestBar()
+   elseif cmd == "zonedebug" then
+      self:DumpZones()
    elseif cmd == "testbar" then
       -- The quest item bar filled with bag items (for testing without quests).
       self:ToggleQuestBarTest()

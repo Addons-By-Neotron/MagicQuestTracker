@@ -51,8 +51,26 @@ local function add(name)
    end
 end
 
+-- Dungeons whose quest log header (the old zone name) differs from the
+-- instance name: instance ID (GetInstanceInfo) -> area IDs, so the
+-- localized header comes from C_Map.GetAreaInfo.
+local INSTANCE_AREAS = {
+   [34] = { 717 },    -- Stormwind Stockade: "The Stockade"
+   [36] = { 1581 },   -- Deadmines: "The Deadmines"
+   [109] = { 1477 },  -- Sunken Temple: "The Temple of Atal'Hakkar"
+}
+
+-- Last word of the instance name, for headers like "The Stockade" in
+-- "Stormwind Stockade" that the alias table doesn't know (in instances only).
+local instanceTail
+
+local function LastWord(name)
+   return name and name:match("([^%s]+)%s*$")
+end
+
 local function GetCurrentZoneNames()
    wipe(zoneNames)
+   instanceTail = nil
    -- Neighborhood quests are filed under a generic "Neighborhood" header;
    -- the global is a label with a trailing colon.
    if C_Housing and C_Housing.IsOnNeighborhoodMap() and HOUSING_CORNERSTONE_NEIGHBORHOOD then
@@ -64,9 +82,18 @@ local function GetCurrentZoneNames()
    local mapID = C_Map.GetBestMapForUnit("player")
    if IsInInstance() then
       -- Dungeon/raid maps have the outdoor zone as parent; don't climb into it.
-      add((GetInstanceInfo()))
+      local instanceName, _, _, _, _, _, _, instanceID = GetInstanceInfo()
+      add(instanceName)
       local info = mapID and C_Map.GetMapInfo(mapID)
       add(info and info.name)
+      local areas = instanceID and INSTANCE_AREAS[instanceID]
+      if areas and C_Map.GetAreaInfo then
+         for _, areaID in ipairs(areas) do
+            add(C_Map.GetAreaInfo(areaID))
+         end
+      end
+      local tail = LastWord(instanceName)
+      if tail and #tail >= 4 then instanceTail = tail:lower() end
       return zoneNames
    end
    local zoneType = Enum.UIMapType and Enum.UIMapType.Zone or 3
@@ -92,7 +119,46 @@ local function GetZoneRank(header, zoneNames)
    if parentZone and zoneNames[parentZone] then
       return 1
    end
+   local tail = instanceTail and LastWord(header)
+   if tail and tail:lower() == instanceTail then
+      return 2
+   end
    return 0
+end
+
+--- /mqt zonedebug: what the current zone is matched against, and how
+--- each quest log header ranks (for testing).
+function mod:DumpZones()
+   local print = function(...) self:Print(...) end
+   local names = {}
+   for name in pairs(GetCurrentZoneNames()) do tinsert(names, name) end
+   sort(names)
+   print("zone names: " .. table.concat(names, " | "))
+   print(format("real=%s zone=%s sub=%s inInstance=%s", tostring(GetRealZoneText()),
+      tostring(GetZoneText()), tostring(GetSubZoneText()), tostring(IsInInstance())))
+   local iname, itype, diff, _, _, _, _, instanceID, _, lfgID = GetInstanceInfo()
+   print(format("instance: name=%s type=%s difficulty=%s id=%s lfg=%s", tostring(iname),
+      tostring(itype), tostring(diff), tostring(instanceID), tostring(lfgID)))
+   local mapID = C_Map.GetBestMapForUnit("player")
+   while mapID and mapID > 0 do
+      local info = C_Map.GetMapInfo(mapID)
+      if not info then break end
+      print(format("map %d: %s (type %s)", mapID, tostring(info.name), tostring(info.mapType)))
+      mapID = info.parentMapID
+   end
+   local header
+   for i = 1, C_QuestLog.GetNumQuestLogEntries() do
+      local info = C_QuestLog.GetInfo(i)
+      if info and info.isHeader then
+         header = info.title
+         print(format("header '%s' rank=%d", tostring(header), GetZoneRank(header or "", zoneNames)))
+      elseif info and not info.isHidden then
+         local questMap = GetQuestUiMapID and GetQuestUiMapID(info.questID)
+         local mapInfo = questMap and questMap > 0 and C_Map.GetMapInfo(questMap)
+         print(format("  %d %s onMap=%s questMap=%s (%s)", info.questID, tostring(info.title),
+            tostring(info.isOnMap), tostring(questMap), tostring(mapInfo and mapInfo.name)))
+      end
+   end
 end
 
 ----------------------------------------------------------------
