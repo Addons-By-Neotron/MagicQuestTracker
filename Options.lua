@@ -350,7 +350,7 @@ local function BuildOptions()
             view = {
                type = "select",
                name = L["Quests shown"],
-               desc = L["All quests in the quest log, only those in your current zone or on the current map, or only the quests you track (the built-in watch list). Middle-click the tracker title to cycle through them."],
+               desc = L["All quests in the quest log, only those in your current zone, or only the quests you track (the built-in watch list). The current zone also includes quests with objectives shown on its map, which can reach into a neighboring zone. Middle-click the tracker title to cycle through them."],
                values = {
                   all = L["All quests"],
                   zone = L["Current zone only"],
@@ -395,6 +395,20 @@ local function BuildOptions()
                         mod.db.char.autoFoldZone = nil  -- apply right away
                         mod:RequestUpdate()
                      end,
+                  },
+                  hideRedQuests = {
+                     type = "toggle",
+                     name = L["Hide red quests"],
+                     desc = L["Hide quests that are too difficult for your level. The focused quest is always shown. Also in the right-click menu of the title and the Quests header."],
+                     order = 3.1,
+                     width = COLUMN_WIDTH,
+                  },
+                  hideGrayQuests = {
+                     type = "toggle",
+                     name = L["Hide gray quests"],
+                     desc = L["Hide quests that are too easy to give much experience. The focused quest is always shown. Also in the right-click menu of the title and the Quests header."],
+                     order = 3.2,
+                     width = COLUMN_WIDTH,
                   },
                   zoneSort = {
                      type = "select",
@@ -734,7 +748,7 @@ local function BuildOptions()
                      name = function()
                         return format(L["Arrow max distance (%s)"], UsesMeters() and L["m"] or L["yd"])
                      end,
-                     desc = L["Only show arrows for quests in other zones within this distance. Quests in the current zone always get an arrow. 0 shows arrows at any distance."],
+                     desc = L["Only show arrows for quests in other zones within this distance. Quests in the current zone, including those with objectives shown on its map, always get an arrow. 0 shows arrows at any distance."],
                      min = 0, max = 5000, step = 50, bigStep = 250,
                      order = 10,
                      width = COLUMN_WIDTH,
@@ -781,6 +795,13 @@ local function BuildOptions()
                      width = COLUMN_WIDTH,
                      disabled = function() return not mod:GetQuestVoice() end,
                      hidden = function() return not mod.IS_FOREVER end,
+                  },
+                  buttonsOnHover = {
+                     type = "toggle",
+                     name = L["Show buttons on mouseover"],
+                     desc = L["Hide the quest markers, find group and voiceover buttons until the mouse is over the tracker, for a cleaner look. The focused quest's marker and quest item buttons stay visible."],
+                     order = 4,
+                     width = COLUMN_WIDTH,
                   },
                },
             },

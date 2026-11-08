@@ -162,6 +162,47 @@ local function RefreshQuestTimers()
    end
 end
 
+-- Difficulty (a QuestDifficultyColors key such as "impossible" or "trivial")
+-- as Blizzard's quest log computes it: the server-side
+-- C_PlayerInfo.GetContentDifficultyQuestForPlayer, mapped through
+-- GetDifficultyColor. Falls back to the level based GetQuestDifficultyColor.
+-- Not cached: both calls are cheap and the result changes with player level
+-- and quest state.
+local difficultyByColor
+local function DifficultyName(color)
+   if not color then return nil end
+   if not difficultyByColor then
+      difficultyByColor = {}
+      for name, c in pairs(QuestDifficultyColors or {}) do
+         difficultyByColor[c] = name
+      end
+   end
+   return difficultyByColor[color]
+end
+
+--- Returns the difficulty name of a quest, or nil (world quests and bonus
+--- objectives have no level). levelOnly skips the server lookup (previews).
+function mod:GetQuestDifficulty(questID, difficultyLevel, isScaling, levelOnly)
+   local name
+   if questID and not levelOnly and GetDifficultyColor and C_PlayerInfo and C_PlayerInfo.GetContentDifficultyQuestForPlayer then
+      local ok, difficulty = pcall(C_PlayerInfo.GetContentDifficultyQuestForPlayer, questID)
+      if ok and difficulty ~= nil then
+         name = DifficultyName((GetDifficultyColor(difficulty)))
+      end
+   end
+   if not name and difficultyLevel and GetQuestDifficultyColor then
+      name = DifficultyName((GetQuestDifficultyColor(difficultyLevel, isScaling)))
+   end
+   return name
+end
+
+--- True when the difficulty filters (hideRedQuests / hideGrayQuests) hide a
+--- quest of this difficulty.
+function mod:IsDifficultyFiltered(difficulty, profile)
+   return (difficulty == "impossible" and profile.hideRedQuests)
+      or (difficulty == "trivial" and profile.hideGrayQuests) or false
+end
+
 local function BuildQuest(info)
    local questID = info.questID
    local logIndex = info.questLogIndex
@@ -566,6 +607,7 @@ function mod:CollectQuests()
    local focusedID = pinMode and C_SuperTrack and C_SuperTrack.GetSuperTrackedQuestID() or nil
    -- The "All" completed section lists every completed quest, whatever the filters.
    local allCompleted = profile.completedSection == "all"
+   local filterDifficulty = profile.hideRedQuests or profile.hideGrayQuests
 
    for i = 1, C_QuestLog.GetNumQuestLogEntries() do
       local info = C_QuestLog.GetInfo(i)
@@ -582,6 +624,12 @@ function mod:CollectQuests()
             end
             if visible and not profile.showAllQuests and C_QuestLog.GetQuestWatchType(info.questID) == nil then
                visible = false
+            end
+            if visible and filterDifficulty then
+               local level = (info.difficultyLevel and info.difficultyLevel > 0) and info.difficultyLevel or info.level
+               if mod:IsDifficultyFiltered(mod:GetQuestDifficulty(info.questID, level, info.isScaling), profile) then
+                  visible = false
+               end
             end
             if info.questID == focusedID or (allCompleted and C_QuestLog.IsComplete(info.questID)) then
                visible = true

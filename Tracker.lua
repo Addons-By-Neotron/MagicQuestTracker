@@ -321,6 +321,14 @@ function mod:CreateTracker()
       if bar:IsShown() then
          FadeToward(bar, hovered and 1 or 0, elapsed, hovered)
       end
+      -- Quest buttons (POI, find group, voiceover) with buttonsOnHover.
+      local target = (hovered or not mod.db.profile.buttonsOnHover) and 1 or 0
+      local alpha = mod.buttonAlpha
+      if alpha ~= target then
+         local step = elapsed / (hovered and FADE_IN or FADE_OUT)
+         alpha = alpha < target and math.min(target, alpha + step) or math.max(target, alpha - step)
+         mod:SetQuestButtonAlpha(alpha)
+      end
    end)
 
    self.lines = {}
@@ -802,36 +810,10 @@ local function AddProgressBar(data, percent, indent, gap, label)
    return line
 end
 
--- Difficulty (a QuestDifficultyColors key) as Blizzard's quest log computes
--- it: the server-side C_PlayerInfo.GetContentDifficultyQuestForPlayer, mapped
--- through GetDifficultyColor. Falls back to the level based
--- GetQuestDifficultyColor. The theme supplies the color. Not cached: both calls
--- are cheap and the result changes with player level and quest state.
-local difficultyByColor
-local function DifficultyName(color)
-   if not color then return nil end
-   if not difficultyByColor then
-      difficultyByColor = {}
-      for name, c in pairs(QuestDifficultyColors or {}) do
-         difficultyByColor[c] = name
-      end
-   end
-   return difficultyByColor[color]
-end
-
+-- Title color by difficulty (see mod:GetQuestDifficulty); the theme supplies
+-- the color.
 local function DifficultyColor(quest, previewing)
-   local name
-   local questID = quest.questID
-   if questID and not previewing and GetDifficultyColor and C_PlayerInfo and C_PlayerInfo.GetContentDifficultyQuestForPlayer then
-      local ok, difficulty = pcall(C_PlayerInfo.GetContentDifficultyQuestForPlayer, questID)
-      if ok and difficulty ~= nil then
-         name = DifficultyName((GetDifficultyColor(difficulty)))
-      end
-   end
-   -- World quests / bonus objectives have no level.
-   if not name and quest.difficultyLevel and GetQuestDifficultyColor then
-      name = DifficultyName((GetQuestDifficultyColor(quest.difficultyLevel, quest.isScaling)))
-   end
+   local name = mod:GetQuestDifficulty(quest.questID, quest.difficultyLevel, quest.isScaling, previewing)
    return name and colors[name] or colors.quest
 end
 
@@ -970,6 +952,23 @@ local function POIButton_OnClick(button, mouseButton)
    end
 end
 
+-- Alpha of the quest buttons on the tracker (faded by buttonsOnHover). Quest
+-- item buttons are not faded, so usable items are never missed.
+mod.buttonAlpha = 1
+local function QuestButtonAlpha()
+   return mod.previewing and 1 or mod.buttonAlpha
+end
+
+function mod:SetQuestButtonAlpha(alpha)
+   self.buttonAlpha = alpha
+   for i = 1, self.numLinesUsed do
+      local line = self.lines[i]
+      if line.groupButton then line.groupButton:SetAlpha(alpha) end
+      if line.playButton then line.playButton:SetAlpha(alpha) end
+      if line.poiButton and not line.poiButton.keepVisible then line.poiButton:SetAlpha(alpha) end
+   end
+end
+
 -- Quest POI button (same as Blizzard's tracker): shows in progress / complete,
 -- highlighted when focused; clicking it focuses (super tracks) the quest.
 local function AttachPOIButton(line, quest)
@@ -997,6 +996,9 @@ local function AttachPOIButton(line, quest)
    button:ClearAllPoints()
    button:SetPoint("TOPRIGHT", line.text, "TOPLEFT", -4, 4)
    button:EnableMouse(not mod.previewing)
+   -- The focused quest's button stays visible with buttonsOnHover.
+   button.keepVisible = quest.isSuperTracked
+   button:SetAlpha(button.keepVisible and 1 or QuestButtonAlpha())
    button:Show()
 end
 
@@ -1035,6 +1037,7 @@ local function AttachGroupButton(line, quest, rightOffset)
    button:EnableMouse(not mod.previewing)
    button:ClearAllPoints()
    button:SetPoint("TOPRIGHT", line, "TOPRIGHT", -rightOffset, 4)
+   button:SetAlpha(QuestButtonAlpha())
    button:Show()
 end
 
@@ -1077,6 +1080,7 @@ local function AttachPlayButton(ui, line, quest, rightOffset)
    end
    button:ClearAllPoints()
    button:SetPoint("TOPRIGHT", line, "TOPRIGHT", -rightOffset, 2)
+   button:SetAlpha(QuestButtonAlpha())
    button:Show()
    pcall(ui.SetPlayButtonState, ui, button)
 end
@@ -1638,15 +1642,43 @@ local VIEW_LABELS = {
    zone = L["Current zone only"],
    tracked = L["Tracked quests only"],
 }
+local function ToggleFilter(key)
+   mod.db.profile[key] = not mod.db.profile[key]
+   mod:RequestUpdate()
+end
+
+-- View radios and the quest filters, shared by the title and Quests header menus.
+local function AddQuestFilterItems(root)
+   root:CreateTitle(L["Quests shown"])
+   for _, view in ipairs(VIEW_ORDER) do
+      root:CreateRadio(VIEW_LABELS[view],
+         function() return mod:GetView() == view end,
+         function() mod:SetView(view) end)
+   end
+   root:CreateDivider()
+   root:CreateCheckbox(L["Hide red quests"],
+      function() return mod.db.profile.hideRedQuests end,
+      function() ToggleFilter("hideRedQuests") end)
+   root:CreateCheckbox(L["Hide gray quests"],
+      function() return mod.db.profile.hideGrayQuests end,
+      function() ToggleFilter("hideGrayQuests") end)
+end
+
 function mod:ShowTitleMenu(owner)
    MenuUtil.CreateContextMenu(owner, function(_, root)
-      root:CreateTitle(L["Quests shown"])
-      for _, view in ipairs(VIEW_ORDER) do
-         root:CreateRadio(VIEW_LABELS[view],
-            function() return mod:GetView() == view end,
-            function() mod:SetView(view) end)
-      end
+      AddQuestFilterItems(root)
       root:CreateDivider()
+      root:CreateButton(L["Open settings"], function() mod:OpenConfig() end)
+   end)
+end
+
+local function ShowQuestsHeaderMenu(owner)
+   MenuUtil.CreateContextMenu(owner, function(_, root)
+      AddQuestFilterItems(root)
+      root:CreateDivider()
+      if ToggleQuestLog then
+         root:CreateButton(L["Open quest log"], function() ToggleQuestLog() end)
+      end
       root:CreateButton(L["Open settings"], function() mod:OpenConfig() end)
    end)
 end
@@ -1791,10 +1823,10 @@ mod.lineClickHandlers = {
       self:RequestUpdate()
    end,
 
-   section = function(self, _, section, button)
-      -- Right-click on the Quests header opens the quest log.
-      if button == "RightButton" and section.key == "quests" and ToggleQuestLog then
-         ToggleQuestLog()
+   section = function(self, line, section, button)
+      -- Right-click on the Quests header: views, filters and the quest log.
+      if button == "RightButton" and section.key == "quests" then
+         ShowQuestsHeaderMenu(line)
          return
       end
       local collapsed = self.db.char.collapsedSections

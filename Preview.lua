@@ -167,6 +167,9 @@ local function BuildPreviewData(profile)
       local visible = true
       if profile.onlyCurrentZone and not isCurrent then visible = false end
       if visible and not profile.showAllQuests and not quest.isWatched then visible = false end
+      if visible and mod:IsDifficultyFiltered(mod:GetQuestDifficulty(nil, quest.difficultyLevel, quest.isScaling, true), profile) then
+         visible = false
+      end
       if (pinMode and quest.isSuperTracked) or (allCompleted and quest.isComplete) then visible = true end
       if visible then
          local section = byName[zone]

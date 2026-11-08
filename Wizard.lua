@@ -145,6 +145,7 @@ local BLIZZARD_STYLE = {
    showItemButtons = true,
    showPOIButtons = true,
    showFindGroupButton = true,
+   buttonsOnHover = false,
    sectionFold = "blizzard",
    sectionFoldPosition = "right",
    autoTrack = true,
@@ -551,6 +552,9 @@ pageBuilders[6] = function(page)
       page:Option(L["Show find group buttons"],
          L["Show the group finder button on quests that support it, like the built-in tracker."], "showFindGroupButton")
    end
+   page:Option(L["Show buttons on mouseover"],
+      L["Hide the quest markers, find group and voiceover buttons until the mouse is over the tracker, for a cleaner look. The focused quest's marker and quest item buttons stay visible."],
+      "buttonsOnHover")
    page:Option(L["Hide Blizzard tracker"],
       L["Hide the built-in objective tracker. Note that this hides all of its sections, including scenarios and bonus objectives."],
       "hideBlizzardTracker")
@@ -778,7 +782,7 @@ end
 -- is switched on by updating.
 ----------------------------------------------------------------
 
-mod.WHATS_NEW_VERSION = 4
+mod.WHATS_NEW_VERSION = 5
 
 -- { version, title, desc, get, set, enabled, visible } (get and set only for
 -- features with a switch; the switch is grayed out unless enabled() says so,
@@ -814,6 +818,14 @@ local WHATS_NEW = {
    -- Replaces the version 1 "Simple headers" switch (now a dropdown).
    { 4, L["Header counts"],
       L["Choose what section headers show: the count and maximum, like Quests (12/25), only the count, like Quests (12), or nothing. Zone header counts can be turned off separately. See the General settings, Quests tab."] },
+   { 5, L["Hide red quests"],
+      L["Hide quests that are too difficult for your level. Gray quests can be hidden too. Right-click the title or the Quests header to switch the filters and the view."],
+      function() return mod:GetWizardOption("hideRedQuests") end,
+      function(value) mod:SetWizardOption("hideRedQuests", value) end },
+   { 5, L["Show buttons on mouseover"],
+      L["Hide the quest markers, find group and voiceover buttons until the mouse is over the tracker, for a cleaner look. The focused quest's marker and quest item buttons stay visible."],
+      function() return mod:GetWizardOption("buttonsOnHover") end,
+      function(value) mod:SetWizardOption("buttonsOnHover", value) end },
 }
 
 function mod:MarkWhatsNewSeen()

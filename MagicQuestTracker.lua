@@ -128,6 +128,8 @@ mod.defaults = {
       showAllQuests = false,         -- false = only quests on the built-in watch list (see mod:GetView)
       currentZoneFirst = true,
       onlyCurrentZone = false,
+      hideRedQuests = false,         -- difficulty filters (the focused quest is always shown)
+      hideGrayQuests = false,
       autoFoldZones = false,
       focusedSection = "none",       -- section pinned on top: none | focused | tracked
       completedSort = "normal",      -- completed quests within a section: normal | first | last
@@ -168,6 +170,7 @@ mod.defaults = {
       showPOIButtons = true,
       showFindGroupButton = true,
       showPlayButton = false, -- Spoken Quests voiceover play button (Forever)
+      buttonsOnHover = false, -- POI, find group and play buttons only while the mouse is over the tracker
 
       -- Layout (position is per Edit Mode layout)
       layouts = {},           -- [layoutName] = { point, x, y, width, maxHeight, scale }
