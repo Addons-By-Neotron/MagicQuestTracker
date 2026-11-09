@@ -170,8 +170,7 @@ mod.defaults = {
       showPOIButtons = true,
       showFindGroupButton = true,
       showPlayButton = false, -- Spoken Quests voiceover play button (Forever)
-      buttonsOnHover = false, -- POI, find group and play buttons only while the mouse is over the tracker
-      questBar = false,       -- separate quest item bar (QuestBar.lua)
+      buttonsOnHover = false, -- POI, find group and play buttons only while the mouse is over the tracker      questBar = false,       -- separate quest item bar (QuestBar.lua)
       questBarButtons = 5,
       questBarSpacing = 4,
       questBarVertical = false,

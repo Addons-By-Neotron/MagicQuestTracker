@@ -392,7 +392,7 @@ L["Hide quests that are too difficult for your level. The focused quest is alway
 L["Hide quests that are too easy to give much experience. The focused quest is always shown. Also in the right-click menu of the title and the Quests header."] = "경험치를 거의 주지 않을 만큼 쉬운 퀘스트를 숨깁니다. 주시 중인 퀘스트는 항상 표시됩니다. 제목과 퀘스트 머리글의 오른쪽 클릭 메뉴에서도 설정할 수 있습니다."
 L["Open quest log"] = "퀘스트 목록 열기"
 L["Show buttons on mouseover"] = "마우스를 올릴 때 버튼 표시"
-L["Hide the quest markers, find group and voiceover buttons until the mouse is over the tracker, for a cleaner look. The focused quest's marker and quest item buttons stay visible."] = "마우스를 추적기 위에 올릴 때까지 퀘스트 표시와 파티 찾기, 음성 버튼을 숨겨 더 깔끔하게 보이게 합니다. 주시 중인 퀘스트의 표시와 퀘스트 아이템 버튼은 계속 보입니다."
+L["Hide the quest markers, find group and voiceover buttons until the mouse is over the tracker, for a cleaner look; the quests move into the space they leave. Quest item buttons stay visible."] = "마우스를 추적기 위에 올릴 때까지 퀘스트 표시와 파티 찾기, 음성 버튼을 숨겨 더 깔끔하게 보이게 합니다. 퀘스트가 비워진 자리를 채웁니다. 퀘스트 아이템 버튼은 계속 보입니다."
 L["Hide quests that are too difficult for your level. Gray quests can be hidden too. Right-click the title or the Quests header to switch the filters and the view."] = "레벨에 비해 너무 어려운 퀘스트를 숨깁니다. 회색 퀘스트도 숨길 수 있습니다. 제목이나 퀘스트 머리글을 오른쪽 클릭하여 필터와 보기를 바꿀 수 있습니다."
 L["Quest item %d"] = "퀘스트 아이템 %d"
 L["Quest item bar"] = "퀘스트 아이템 바"

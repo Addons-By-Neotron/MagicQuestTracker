@@ -394,7 +394,7 @@ L["Hide quests that are too difficult for your level. The focused quest is alway
 L["Hide quests that are too easy to give much experience. The focused quest is always shown. Also in the right-click menu of the title and the Quests header."] = true
 L["Open quest log"] = true
 L["Show buttons on mouseover"] = true
-L["Hide the quest markers, find group and voiceover buttons until the mouse is over the tracker, for a cleaner look. The focused quest's marker and quest item buttons stay visible."] = true
+L["Hide the quest markers, find group and voiceover buttons until the mouse is over the tracker, for a cleaner look; the quests move into the space they leave. Quest item buttons stay visible."] = true
 L["Hide quests that are too difficult for your level. Gray quests can be hidden too. Right-click the title or the Quests header to switch the filters and the view."] = true
 L["Quest item %d"] = true
 L["Quest item bar"] = true

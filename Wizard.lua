@@ -677,7 +677,7 @@ pageBuilders[6] = function(page)
          L["Show the group finder button on quests that support it, like the built-in tracker."], "showFindGroupButton")
    end
    page:Option(L["Show buttons on mouseover"],
-      L["Hide the quest markers, find group and voiceover buttons until the mouse is over the tracker, for a cleaner look. The focused quest's marker and quest item buttons stay visible."],
+      L["Hide the quest markers, find group and voiceover buttons until the mouse is over the tracker, for a cleaner look; the quests move into the space they leave. Quest item buttons stay visible."],
       "buttonsOnHover")
    page:Option(L["Hide Blizzard tracker"],
       L["Hide the built-in objective tracker. Note that this hides all of its sections, including scenarios and bonus objectives."],
@@ -980,7 +980,7 @@ local WHATS_NEW = {
       function() return mod:GetWizardOption("hideRedQuests") end,
       function(value) mod:SetWizardOption("hideRedQuests", value) end },
    { 5, L["Show buttons on mouseover"],
-      L["Hide the quest markers, find group and voiceover buttons until the mouse is over the tracker, for a cleaner look. The focused quest's marker and quest item buttons stay visible."],
+      L["Hide the quest markers, find group and voiceover buttons until the mouse is over the tracker, for a cleaner look; the quests move into the space they leave. Quest item buttons stay visible."],
       function() return mod:GetWizardOption("buttonsOnHover") end,
       function(value) mod:SetWizardOption("buttonsOnHover", value) end },
    { 5, L["Quest item bar"],

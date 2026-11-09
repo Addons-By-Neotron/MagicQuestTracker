@@ -392,7 +392,7 @@ L["Hide quests that are too difficult for your level. The focused quest is alway
 L["Hide quests that are too easy to give much experience. The focused quest is always shown. Also in the right-click menu of the title and the Quests header."] = "隐藏过于简单、给不了多少经验的任务。聚焦的任务总是显示。也可在标题和“任务”标题栏的右键菜单中切换。"
 L["Open quest log"] = "打开任务日志"
 L["Show buttons on mouseover"] = "鼠标悬停时显示按钮"
-L["Hide the quest markers, find group and voiceover buttons until the mouse is over the tracker, for a cleaner look. The focused quest's marker and quest item buttons stay visible."] = "在鼠标移到追踪器上之前隐藏任务标记以及寻找队伍和配音按钮，让外观更简洁。聚焦任务的标记和任务物品按钮保持可见。"
+L["Hide the quest markers, find group and voiceover buttons until the mouse is over the tracker, for a cleaner look; the quests move into the space they leave. Quest item buttons stay visible."] = "在鼠标移到追踪器上之前隐藏任务标记以及寻找队伍和配音按钮，让外观更简洁；任务会占用空出的位置。任务物品按钮保持可见。"
 L["Hide quests that are too difficult for your level. Gray quests can be hidden too. Right-click the title or the Quests header to switch the filters and the view."] = "隐藏对你的等级来说过难的任务。也可以隐藏灰色任务。右键点击标题或“任务”标题栏可切换过滤器和视图。"
 L["Quest item %d"] = "任务物品 %d"
 L["Quest item bar"] = "任务物品条"

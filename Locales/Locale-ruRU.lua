@@ -392,7 +392,7 @@ L["Hide quests that are too difficult for your level. The focused quest is alway
 L["Hide quests that are too easy to give much experience. The focused quest is always shown. Also in the right-click menu of the title and the Quests header."] = "Скрывать задания, слишком лёгкие, чтобы давать много опыта. Отслеживаемое в фокусе задание показывается всегда. Также в меню правого клика по заголовку и по разделу «Задания»."
 L["Open quest log"] = "Открыть журнал заданий"
 L["Show buttons on mouseover"] = "Показывать кнопки при наведении"
-L["Hide the quest markers, find group and voiceover buttons until the mouse is over the tracker, for a cleaner look. The focused quest's marker and quest item buttons stay visible."] = "Скрывать метки заданий и кнопки поиска группы и озвучки, пока курсор не наведён на трекер, для более чистого вида. Метка задания в фокусе и кнопки предметов заданий остаются видимыми."
+L["Hide the quest markers, find group and voiceover buttons until the mouse is over the tracker, for a cleaner look; the quests move into the space they leave. Quest item buttons stay visible."] = "Скрывать метки заданий и кнопки поиска группы и озвучки, пока курсор не наведён на трекер, для более чистого вида; задания занимают освободившееся место. Кнопки предметов заданий остаются видимыми."
 L["Hide quests that are too difficult for your level. Gray quests can be hidden too. Right-click the title or the Quests header to switch the filters and the view."] = "Скрывать задания, слишком сложные для вашего уровня. Серые задания тоже можно скрыть. Щёлкните правой кнопкой по заголовку или разделу «Задания», чтобы переключить фильтры и вид."
 L["Quest item %d"] = "Предмет задания %d"
 L["Quest item bar"] = "Панель предметов заданий"

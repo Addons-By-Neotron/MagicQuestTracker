@@ -799,7 +799,7 @@ local function BuildOptions()
                   buttonsOnHover = {
                      type = "toggle",
                      name = L["Show buttons on mouseover"],
-                     desc = L["Hide the quest markers, find group and voiceover buttons until the mouse is over the tracker, for a cleaner look. The focused quest's marker and quest item buttons stay visible."],
+                     desc = L["Hide the quest markers, find group and voiceover buttons until the mouse is over the tracker, for a cleaner look; the quests move into the space they leave. Quest item buttons stay visible."],
                      order = 4,
                      width = COLUMN_WIDTH,
                   },

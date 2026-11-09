@@ -322,11 +322,18 @@ function mod:CreateTracker()
          FadeToward(bar, hovered and 1 or 0, elapsed, hovered)
       end
       -- Quest buttons (POI, find group, voiceover) with buttonsOnHover.
-      local target = (hovered or not mod.db.profile.buttonsOnHover) and 1 or 0
+      local profile = mod.db.profile
+      local target = (hovered or not profile.buttonsOnHover) and 1 or 0
       local alpha = mod.buttonAlpha
+      -- Reflow: make room as soon as the mouse comes in (the buttons fade
+      -- in), and drop them right away when it leaves (no fade out).
+      mod:SetButtonsCollapsed(target == 0)
       if alpha ~= target then
-         local step = elapsed / (hovered and FADE_IN or FADE_OUT)
-         alpha = alpha < target and math.min(target, alpha + step) or math.max(target, alpha - step)
+         if target == 0 then
+            alpha = 0
+         else
+            alpha = math.min(target, alpha + elapsed / FADE_IN)
+         end
          mod:SetQuestButtonAlpha(alpha)
       end
    end)
@@ -959,13 +966,30 @@ local function QuestButtonAlpha()
    return mod.previewing and 1 or mod.buttonAlpha
 end
 
+-- buttonsOnHover: while the mouse is away and the buttons are faded out,
+-- the layout leaves them out so they don't leave gaps.
+mod.buttonsCollapsed = false
+function mod:ButtonsCollapsed()
+   return self.buttonsCollapsed and not self.previewing
+end
+
+function mod:SetButtonsCollapsed(collapsed)
+   if self.buttonsCollapsed == collapsed then return end
+   self.buttonsCollapsed = collapsed
+   if self.updateTimer then
+      self:CancelTimer(self.updateTimer)
+      self.updateTimer = nil
+   end
+   self:RunUpdate()
+end
+
 function mod:SetQuestButtonAlpha(alpha)
    self.buttonAlpha = alpha
    for i = 1, self.numLinesUsed do
       local line = self.lines[i]
       if line.groupButton then line.groupButton:SetAlpha(alpha) end
       if line.playButton then line.playButton:SetAlpha(alpha) end
-      if line.poiButton and not line.poiButton.keepVisible then line.poiButton:SetAlpha(alpha) end
+      if line.poiButton then line.poiButton:SetAlpha(alpha) end
    end
 end
 
@@ -996,9 +1020,7 @@ local function AttachPOIButton(line, quest)
    button:ClearAllPoints()
    button:SetPoint("TOPRIGHT", line.text, "TOPLEFT", -4, 4)
    button:EnableMouse(not mod.previewing)
-   -- The focused quest's button stays visible with buttonsOnHover.
-   button.keepVisible = quest.isSuperTracked
-   button:SetAlpha(button.keepVisible and 1 or QuestButtonAlpha())
+   button:SetAlpha(QuestButtonAlpha())
    button:Show()
 end
 
@@ -1148,12 +1170,14 @@ function mod:RenderQuest(quest, profile)
    if profile.colorCompleteQuests and quest.isComplete then
       titleColor = colors.completeQuest
    end
+   -- Buttons hidden until mouseover don't take room.
+   local collapsed = self:ButtonsCollapsed()
    local itemSize = (profile.showItemButtons and quest.hasItem) and self.ITEM_BUTTON_SIZE or 0
-   local groupSize = (profile.showFindGroupButton and not self.IS_FOREVER and (self.previewing and quest.previewGroup or not self.previewing and CanFindGroup(quest))) and GROUP_BUTTON_SIZE or 0
-   local voiceUI = profile.showPlayButton and not self.previewing and self:GetQuestVoice()
+   local groupSize = (not collapsed and profile.showFindGroupButton and not self.IS_FOREVER and (self.previewing and quest.previewGroup or not self.previewing and CanFindGroup(quest))) and GROUP_BUTTON_SIZE or 0
+   local voiceUI = not collapsed and profile.showPlayButton and not self.previewing and self:GetQuestVoice()
    local playSize = (voiceUI and HasQuestVoice(voiceUI, quest.questID)) and PLAY_BUTTON_SIZE or 0
    layout.rightInset = itemSize + groupSize + playSize
-   local showPOI = POIButtonsEnabled(profile)
+   local showPOI = POIButtonsEnabled(profile) and not collapsed
    local questIndent = showPOI and POI_QUEST_INDENT or QUEST_INDENT
    local objectiveIndent = showPOI and POI_OBJECTIVE_INDENT or OBJECTIVE_INDENT
 
