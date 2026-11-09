@@ -1671,6 +1671,27 @@ local function ToggleFilter(key)
    mod:RequestUpdate()
 end
 
+-- Submenu of radios for a profile setting (choices: { value, label }).
+-- apply runs after a change (default: update the tracker).
+local function AddChoices(root, label, key, choices, apply)
+   local submenu = root:CreateButton(label)
+   for _, choice in ipairs(choices) do
+      local value = choice[1]
+      submenu:CreateRadio(choice[2],
+         function() return mod.db.profile[key] == value end,
+         function()
+            mod.db.profile[key] = value
+            if apply then apply() else mod:RequestUpdate() end
+         end)
+   end
+end
+
+local function AddHideInCombat(root)
+   AddChoices(root, L["Hide in combat"], "hideInCombat", {
+      { "never", L["Never"] }, { "instances", L["In instances"] }, { "always", L["Always"] },
+   }, function() mod:UpdateCombatVisibility() end)
+end
+
 -- View radios and the quest filters, shared by the title and Quests header menus.
 local function AddQuestFilterItems(root)
    root:CreateTitle(L["Quests shown"])
@@ -1686,11 +1707,19 @@ local function AddQuestFilterItems(root)
    root:CreateCheckbox(L["Hide gray quests"],
       function() return mod.db.profile.hideGrayQuests end,
       function() ToggleFilter("hideGrayQuests") end)
+   root:CreateDivider()
+   AddChoices(root, L["Section on top"], "focusedSection", {
+      { "none", L["None"] }, { "focused", L["Focused"] }, { "tracked", L["Tracked"] },
+   })
+   AddChoices(root, L["Completed section"], "completedSection", {
+      { "none", L["Disabled"] }, { "all", L["All"] }, { "current", L["Current zone"] },
+   })
 end
 
 function mod:ShowTitleMenu(owner)
    MenuUtil.CreateContextMenu(owner, function(_, root)
       AddQuestFilterItems(root)
+      AddHideInCombat(root)
       root:CreateDivider()
       root:CreateButton(L["Open settings"], function() mod:OpenConfig() end)
    end)
@@ -1699,6 +1728,7 @@ end
 local function ShowQuestsHeaderMenu(owner)
    MenuUtil.CreateContextMenu(owner, function(_, root)
       AddQuestFilterItems(root)
+      AddHideInCombat(root)
       root:CreateDivider()
       if ToggleQuestLog then
          root:CreateButton(L["Open quest log"], function() ToggleQuestLog() end)
