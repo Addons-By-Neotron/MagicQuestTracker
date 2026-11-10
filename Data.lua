@@ -597,6 +597,49 @@ end
 
 local function IsTimed(quest) return quest.timerEnd ~= nil end
 
+-- With zone headers always hidden the zones read as one list, so they are
+-- merged into one section and sorted as a whole (current zone first if
+-- set). Sections on top stay apart.
+local function MergeZones(sections, profile)
+   local merged
+   local result = new()
+   for _, section in ipairs(sections) do
+      if section.isSpecial then
+         tinsert(result, section)
+      elseif not merged then
+         merged = section
+         tinsert(result, section)
+      else
+         for _, quest in ipairs(section.quests) do tinsert(merged.quests, quest) end
+         merged.isCurrent = merged.isCurrent or section.isCurrent
+         merged.hasLocalQuests = merged.hasLocalQuests or section.hasLocalQuests
+         merged.zoneRank = math.max(merged.zoneRank, section.zoneRank)
+         merged.minLevel = math.min(merged.minLevel, section.minLevel)
+         if section.distance and (not merged.distance or section.distance < merged.distance) then
+            merged.distance = section.distance
+         end
+         wipe(section.quests)
+         mod.deepDel(section)
+      end
+   end
+   del(sections)
+   if merged then
+      local quests = merged.quests
+      SortQuests(quests, profile)
+      if profile.currentZoneFirst then
+         -- Stable: current zone quests first, each group keeping its order.
+         local here, rest = new(), new()
+         for _, quest in ipairs(quests) do tinsert(quest.inCurrentZone and here or rest, quest) end
+         for i, quest in ipairs(here) do quests[i] = quest end
+         for i, quest in ipairs(rest) do quests[#here + i] = quest end
+         del(here)
+         del(rest)
+      end
+      GroupCompleted(quests, profile.completedSort)
+   end
+   return result
+end
+
 -- Puts the timed section on top of all, and the focused / tracked and the
 -- completed section above or below the zones, as the profile says
 -- (together, the focused one comes first).
@@ -702,6 +745,9 @@ local function ArrangeSections(sections, profile)
    end
    if profile.completedSection == "all" or profile.completedSection == "current" then
       sections = SeparateCompletedQuests(sections, profile, profile.completedSection == "current")
+   end
+   if profile.hideZoneHeaders == true then
+      sections = MergeZones(sections, profile)
    end
    sections = PlaceSpecialSections(sections, profile, timed)
    for _, section in ipairs(sections) do
