@@ -619,6 +619,10 @@ pageBuilders[3] = function(page)
    end
    if not mod.IS_FOREVER then
       page:Option(L["Show tracked achievements"], nil, "showAchievements")
+   else
+      page:Option(L["Show dungeon bosses"],
+         L["In dungeons and raids, list the bosses in a Dungeon section and check them off as they are defeated, like Retail does."],
+         "showDungeonBosses")
    end
    page:Option(L["Show tracked recipes"], nil, "showRecipes")
    page:Option(L["Show completed objectives"],
@@ -991,6 +995,13 @@ local WHATS_NEW = {
          mod:ApplyQuestBar()
       end,
       function() return GetQuestLogSpecialItemInfo ~= nil end },
+   { 5, L["Show dungeon bosses"],
+      L["In dungeons and raids, list the bosses in a Dungeon section and check them off as they are defeated, like Retail does."],
+      function() return mod:GetWizardOption("showDungeonBosses") end,
+      function(value) mod:SetWizardOption("showDungeonBosses", value) end,
+      nil,
+      function() return mod.IS_FOREVER end,
+      image = { "Interface\\AddOns\\MagicQuestTracker\\Textures\\WhatsNewDungeon.png", 373, 146, 512, 256 } },
 }
 
 function mod:MarkWhatsNewSeen()
@@ -1127,6 +1138,21 @@ function mod:ShowWhatsNew(all, showHidden)
       row.desc:SetWidth(width - indent)
       row.desc:SetText(enabled and entry[3] or (entry[3] .. " " .. L["(Needs the Spoken Quests addon, which isn't installed.)"]))
       local height = row.title:GetStringHeight() + row.desc:GetStringHeight() + 14
+      -- Optional screenshot below the text, at half size:
+      -- image = { path, width, height, textureWidth, textureHeight }.
+      local image = entry.image
+      if image then
+         row.image = row.image or row:CreateTexture(nil, "ARTWORK")
+         row.image:SetTexture(image[1])
+         row.image:SetTexCoord(0, image[2] / image[4], 0, image[3] / image[5])
+         row.image:SetSize(image[2] / 2, image[3] / 2)
+         row.image:ClearAllPoints()
+         row.image:SetPoint("TOPLEFT", indent, -(height - 4))
+         row.image:Show()
+         height = height + image[3] / 2 + 4
+      elseif row.image then
+         row.image:Hide()
+      end
       row:SetSize(width, height)
       row:Show()
       if get then

@@ -1142,7 +1142,8 @@ local function AddTimerLine(data, timerEnd, timerTotal, indent)
    tinsert(timerLines, line)
 end
 
--- Objectives ({ text, finished, percent, timerEnd }) of a quest or scenario.
+-- Objectives ({ text, finished, percent, timerEnd, alwaysShow }) of a quest
+-- or scenario. Finished ones show dimmed if enabled, or always with alwaysShow.
 local function RenderObjectives(data, objectives, indent, profile)
    local normal, complete = colors.objective, colors.complete
    for _, objective in ipairs(objectives) do
@@ -1158,7 +1159,7 @@ local function RenderObjectives(data, objectives, indent, profile)
          if objective.timerEnd then
             AddTimerLine(data, objective.timerEnd, objective.timerTotal, indent)
          end
-      elseif hasText and profile.showCompletedObjectives then
+      elseif hasText and (profile.showCompletedObjectives or objective.alwaysShow) then
          AddLine("objective", data, "- " .. objective.text, "objective", indent, spacing.objectiveSpacing, complete)
       end
    end
@@ -1326,7 +1327,7 @@ end
 -- bonus steps.
 function mod:RenderScenario(scenario, profile)
    if not scenario then return end
-   local name = scenario.name
+   local name = scenario.header or scenario.name
    if not name or name == "" then name = L["Scenario"] end
    if not self:RenderSectionHeader("scenario", name, profile) then return end
    local titleColor = colors.quest

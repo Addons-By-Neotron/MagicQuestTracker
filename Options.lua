@@ -566,6 +566,14 @@ local function BuildOptions()
                      width = COLUMN_WIDTH,
                      hidden = function() return not (C_ContentTracking and GetAchievementInfo) end,
                   },
+                  showDungeonBosses = {
+                     type = "toggle",
+                     name = L["Show dungeon bosses"],
+                     desc = L["In dungeons and raids, list the bosses in a Dungeon section and check them off as they are defeated, like Retail does."],
+                     order = 7.5,
+                     width = COLUMN_WIDTH,
+                     hidden = function() return not mod.IS_FOREVER end,
+                  },
                   showWorldQuests = {
                      type = "toggle",
                      name = L["Show world quests"],

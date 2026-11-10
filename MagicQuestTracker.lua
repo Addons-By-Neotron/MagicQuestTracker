@@ -164,6 +164,7 @@ mod.defaults = {
       timerBars = false,             -- time limits as a bar (else a text line)
       showRecipes = true,
       showAchievements = true,
+      showDungeonBosses = false,     -- Forever: dungeon section with a line per boss
       showWorldQuests = true,
       showBonusObjectives = true,
       showItemButtons = true,
@@ -196,6 +197,7 @@ mod.defaults = {
       collapsedSections = {}, -- [quests|worldQuests|bonus|recipes] = true
       minimized = false,
       fullLogWarned = nil,    -- quest ID list the "log almost full" warning was shown for
+      dungeonKills = {},      -- [instanceID] = { name, time, bosses = { [bossName] = true } } (Forever)
    },
 }
 
@@ -301,6 +303,17 @@ function mod:OnEnable()
    end
    if IsEventValid("TRACKED_ACHIEVEMENT_UPDATE") then
       self:RegisterEvent("TRACKED_ACHIEVEMENT_UPDATE")
+   end
+   -- Forever dungeon bosses: kills aren't in the lock info, record them.
+   if IS_FOREVER then
+      self:RegisterEvent("ENCOUNTER_END", function(_, _, encounterName, _, _, success)
+         if success == 1 then mod:RecordBossKill(encounterName) end
+      end)
+      self:RegisterEvent("BOSS_KILL", function(_, _, encounterName)
+         mod:RecordBossKill(encounterName)
+      end)
+      self:RegisterEvent("UPDATE_INSTANCE_INFO", "RequestUpdate")
+      self:RegisterEvent("CHAT_MSG_SYSTEM", function(_, msg) mod:CheckInstanceReset(msg) end)
    end
    self:ApplyProfile()
 end
@@ -489,7 +502,7 @@ function mod:RunUpdate()
    self:UpdateQuestBar()
    local recipes = self.db.profile.showRecipes and self:CollectRecipes() or nil
    local tasks = self:CollectTasks()
-   local scenario = self:CollectScenario()
+   local scenario = self:CollectScenario() or self:CollectDungeon()
    local achievements = self.db.profile.showAchievements and self:CollectAchievements() or nil
    self:AutoFoldZones(sections, tasks)
 
@@ -807,6 +820,8 @@ function mod:ChatCommand(input)
       self:CheckQuestLogFull(true)
    elseif cmd == "bardebug" then
       self:DumpQuestBar()
+   elseif cmd == "dungeondebug" then
+      self:DumpDungeon()
    elseif cmd == "zonedebug" then
       self:DumpZones()
    elseif cmd == "testbar" then

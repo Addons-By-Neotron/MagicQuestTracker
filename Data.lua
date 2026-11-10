@@ -126,6 +126,37 @@ local function GetZoneRank(header, zoneNames)
    return 0
 end
 
+--- /mqt dungeondebug: what the Encounter Journal knows about the current
+--- instance (for a Forever dungeon block like Retail's).
+function mod:DumpDungeon()
+   local print = function(...) self:Print(...) end
+   local name, itype, diff, _, _, _, _, instanceID = GetInstanceInfo()
+   print(format("instance: %s type=%s difficulty=%s id=%s", tostring(name), tostring(itype),
+      tostring(diff), tostring(instanceID)))
+   local EJ = C_EncounterJournal
+   local journalID = EJ and EJ.GetInstanceForGameMap and instanceID and EJ.GetInstanceForGameMap(instanceID)
+   print(format("journal instance=%s scenario=%s", tostring(journalID),
+      tostring(C_Scenario and C_Scenario.IsInScenario and C_Scenario.IsInScenario())))
+   if GetInstanceLockTimeRemaining then
+      local reset, _, numEncounters, completed = GetInstanceLockTimeRemaining()
+      print(format("lock: reset=%s encounters=%s completed=%s", tostring(reset), tostring(numEncounters),
+         tostring(completed)))
+      for i = 1, numEncounters or 0 do
+         print(format("  lock %d: %s killed=%s", i, tostring((GetInstanceLockTimeRemainingEncounter(i))),
+            tostring(select(3, GetInstanceLockTimeRemainingEncounter(i)))))
+      end
+   end
+   if not (journalID and EJ_SelectInstance and EJ_GetEncounterInfoByIndex) then return end
+   EJ_SelectInstance(journalID)
+   for i = 1, 40 do
+      local ename, _, encounterID, _, _, _, dungeonEncounterID = EJ_GetEncounterInfoByIndex(i, journalID)
+      if not ename then break end
+      print(format("  %d %s journal=%s encounter=%s complete=%s", i, ename, tostring(encounterID),
+         tostring(dungeonEncounterID),
+         tostring(EJ.IsEncounterComplete and encounterID and EJ.IsEncounterComplete(encounterID))))
+   end
+end
+
 --- /mqt zonedebug: what the current zone is matched against, and how
 --- each quest log header ranks (for testing).
 function mod:DumpZones()
@@ -957,10 +988,17 @@ function mod:CollectScenario()
    if not self:IsInScenario() or self:IsBlizzardScenario() or not C_ScenarioInfo then
       return nil
    end
-   local name, stage, numStages = C_Scenario.GetInfo()
+   local name, stage, numStages, _, _, _, _, _, _, scenarioType = C_Scenario.GetInfo()
    if not numStages or numStages == 0 then return nil end
    local scenario = new()
    scenario.name, scenario.stage, scenario.numStages = name, stage, numStages
+   -- Section header, as Blizzard's: "Dungeon" for dungeons (the stage line
+   -- shows the name), "Proving Grounds", else the scenario name.
+   if scenarioType and scenarioType == LE_SCENARIO_TYPE_USE_DUNGEON_DISPLAY and TRACKER_HEADER_DUNGEON then
+      scenario.header = TRACKER_HEADER_DUNGEON
+   elseif scenarioType and scenarioType == LE_SCENARIO_TYPE_PROVING_GROUNDS and TRACKER_HEADER_PROVINGGROUNDS then
+      scenario.header = TRACKER_HEADER_PROVINGGROUNDS
+   end
    scenario.criteria = new()
    scenario.bonus = new()
    if stage > numStages then return scenario end  -- completed
@@ -995,6 +1033,93 @@ function mod:CollectScenario()
       end
    end
    return scenario
+end
+
+----------------------------------------------------------------
+-- Dungeon bosses (Forever): Retail shows dungeons as a scenario with a
+-- "Boss defeated" line per boss; Forever has no scenario there. The boss
+-- list comes from the instance lock info, which doesn't flag kills in
+-- normal dungeons, so kills are recorded from ENCOUNTER_END / BOSS_KILL.
+----------------------------------------------------------------
+
+-- Kills are kept per instance ID until the instance is reset ("X has been
+-- reset."). As a fallback for resets that aren't seen (another group
+-- leader's), kills older than this are from an earlier run.
+local DUNGEON_KILLS_EXPIRE = 4 * 60 * 60
+
+local function DungeonKills(self, instanceID, name)
+   local all = self.db.char.dungeonKills
+   local kills = all[instanceID]
+   if not kills or time() - (kills.time or 0) > DUNGEON_KILLS_EXPIRE then
+      kills = { time = time(), bosses = {} }
+      all[instanceID] = kills
+   end
+   kills.name = name
+   return kills
+end
+
+local function InDungeon()
+   if not mod.IS_FOREVER then return end
+   local name, instanceType, _, _, _, _, _, instanceID = GetInstanceInfo()
+   if instanceType == "party" or instanceType == "raid" then return instanceID, name end
+end
+
+function mod:RecordBossKill(boss)
+   local instanceID, name = InDungeon()
+   if not instanceID or not boss then return end
+   local kills = DungeonKills(self, instanceID, name)
+   kills.bosses[boss] = true
+   kills.time = time()
+   self:RequestUpdate()
+end
+
+local resetPattern
+--- Clears the recorded kills of the instance a system message says was reset.
+function mod:CheckInstanceReset(msg)
+   if not msg or not INSTANCE_RESET_SUCCESS then return end
+   if not resetPattern then
+      resetPattern = "^" .. INSTANCE_RESET_SUCCESS:gsub("[%^%$%(%)%.%[%]%*%+%-%?]", "%%%0"):gsub("%%s", "(.+)") .. "$"
+   end
+   local name = msg:match(resetPattern)
+   if not name then return end
+   local all = self.db.char.dungeonKills
+   for instanceID, kills in pairs(all) do
+      if kills.name == name then all[instanceID] = nil end
+   end
+   self:RequestUpdate()
+end
+
+--- Returns a scenario-shaped table (see CollectScenario) with one
+--- "0/1 Boss defeated" objective per boss of the current Forever dungeon,
+--- or nil when not in one or the option is off.
+function mod:CollectDungeon()
+   if not self.db.profile.showDungeonBosses or not GetInstanceLockTimeRemaining then return end
+   local instanceID = InDungeon()
+   if not instanceID then return end
+   local numEncounters = select(3, GetInstanceLockTimeRemaining())
+   if not numEncounters or numEncounters == 0 then return end
+   local name = GetInstanceInfo()
+   local kills = DungeonKills(self, instanceID, name).bosses
+   local dungeon = new()
+   dungeon.name, dungeon.header, dungeon.stageName = name, TRACKER_HEADER_DUNGEON or L["Dungeon"], name
+   dungeon.criteria = new()
+   dungeon.bonus = new()
+   local numKilled = 0
+   for i = 1, numEncounters do
+      local boss, _, isKilled = GetInstanceLockTimeRemainingEncounter(i)
+      if boss then
+         local killed = isKilled or kills[boss] or false
+         if killed then numKilled = numKilled + 1 end
+         local objective = new()
+         objective.text = format("%d/1 %s", killed and 1 or 0, format(L["%s defeated"], boss))
+         objective.finished = killed
+         objective.alwaysShow = true  -- killed bosses stay listed
+         tinsert(dungeon.criteria, objective)
+      end
+   end
+   dungeon.numStages = 1
+   dungeon.stage = (numKilled > 0 and numKilled == #dungeon.criteria) and 2 or 1
+   return dungeon
 end
 
 ----------------------------------------------------------------
