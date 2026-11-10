@@ -260,6 +260,14 @@ local function RefreshQuestTimers()
    end
 end
 
+-- True for quests with a running time limit (the Timed section shows them
+-- whatever the filters). Same sources as BuildQuest's timerEnd.
+local function HasTimeLimit(questID)
+   if questTimerEnds[questID] then return true end
+   local timeTotal, timeElapsed = C_QuestLog.GetTimeAllowed and C_QuestLog.GetTimeAllowed(questID)
+   return timeTotal and timeElapsed and timeElapsed < timeTotal and not C_QuestLog.IsFailed(questID) or false
+end
+
 -- Difficulty (a QuestDifficultyColors key such as "impossible" or "trivial")
 -- as Blizzard's quest log computes it: the server-side
 -- C_PlayerInfo.GetContentDifficultyQuestForPlayer, mapped through
@@ -460,6 +468,7 @@ end
 -- Fold keys of the sections on top, kept apart from zone names.
 mod.FOCUSED_FOLD_KEY = "\001focused"
 mod.COMPLETED_FOLD_KEY = "\001completed"
+mod.TIMED_FOLD_KEY = "\001timed"
 
 -- Moves the quests for which take(quest, section) is true out of their sections, in
 -- the order they are listed. Sections left empty are dropped. Returns the
@@ -586,9 +595,12 @@ local function SeparateCompletedQuests(sections, profile, currentOnly)
    return sections
 end
 
--- Puts the focused / tracked and the completed section above or below the
--- zones, as the profile says (together, the focused one comes first).
-local function PlaceSpecialSections(sections, profile)
+local function IsTimed(quest) return quest.timerEnd ~= nil end
+
+-- Puts the timed section on top of all, and the focused / tracked and the
+-- completed section above or below the zones, as the profile says
+-- (together, the focused one comes first).
+local function PlaceSpecialSections(sections, profile, timed)
    local pinned, completed
    local zones = new()
    for _, section in ipairs(sections) do
@@ -603,6 +615,7 @@ local function PlaceSpecialSections(sections, profile)
    local completedBottom = profile.completedPosition == "bottom"
       or (profile.completedPosition == nil and profile.completedSort == "last")
    local result = new()
+   if timed then tinsert(result, timed) end
    if pinned and profile.focusedPosition ~= "bottom" then tinsert(result, pinned) end
    if completed and not completedBottom then tinsert(result, completed) end
    for _, section in ipairs(zones) do tinsert(result, section) end
@@ -668,6 +681,18 @@ local function ArrangeSections(sections, profile)
       sort(sections, zoneSorter)
    end
 
+   -- Timed quests first, so a timed focused quest goes there too.
+   local timed
+   if profile.timedSection then
+      local quests
+      sections, quests = TakeQuests(sections, IsTimed)
+      if #quests > 0 then
+         sort(quests, function(a, b) return a.timerEnd < b.timerEnd end)  -- least time left first
+         timed = NewSpecialSection(L["Timed"], mod.TIMED_FOLD_KEY, quests)
+      else
+         del(quests)
+      end
+   end
    local pinMode = profile.focusedSection == "focused" or profile.focusedSection == "tracked"
    if pinMode then
       -- Showing only watched quests, Tracked would take every quest out of
@@ -678,7 +703,7 @@ local function ArrangeSections(sections, profile)
    if profile.completedSection == "all" or profile.completedSection == "current" then
       sections = SeparateCompletedQuests(sections, profile, profile.completedSection == "current")
    end
-   sections = PlaceSpecialSections(sections, profile)
+   sections = PlaceSpecialSections(sections, profile, timed)
    for _, section in ipairs(sections) do
       local numComplete = 0
       for _, quest in ipairs(section.quests) do
@@ -729,7 +754,8 @@ function mod:CollectQuests()
                   visible = false
                end
             end
-            if info.questID == focusedID or (allCompleted and C_QuestLog.IsComplete(info.questID)) then
+            if info.questID == focusedID or (allCompleted and C_QuestLog.IsComplete(info.questID))
+               or (profile.timedSection and HasTimeLimit(info.questID)) then
                visible = true
             end
             if visible then

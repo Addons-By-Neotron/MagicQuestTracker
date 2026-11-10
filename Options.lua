@@ -511,6 +511,13 @@ local function BuildOptions()
                      width = DROPDOWN_WIDTH,
                      disabled = function() return mod.db.profile.focusedSection == "none" end,
                   },
+                  timedSection = {
+                     type = "toggle",
+                     name = L["Timed section"],
+                     desc = L["Show quests with a time limit in their own section on top, least time left first. They are shown whatever the filters."],
+                     order = 2.5,
+                     width = "full",
+                  },
                   completedSection = {
                      type = "select",
                      name = L["Completed section"],

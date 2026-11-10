@@ -1477,6 +1477,19 @@ function mod:RenderPass(reserveScrollbar, sections, numQuests, numShown, recipes
 
    self:RenderScenario(scenario, profile)
 
+   -- Timed quests (profile.timedSection): a section of their own above
+   -- Quests; ArrangeSections puts them first.
+   local timed = sections[1] and sections[1].foldKey == mod.TIMED_FOLD_KEY and sections[1] or nil
+   if timed then
+      local header = self:HeaderWithCount(L["Timed"], #timed.quests)
+      if self:RenderSectionHeader("timed", header, profile) then
+         for _, quest in ipairs(timed.quests) do
+            self:RenderQuest(quest, profile)
+         end
+      end
+   end
+   local numZones = #sections - (timed and 1 or 0)
+
    if numQuests > 0 then
       local maxQuests = C_QuestLog.GetMaxNumQuestsCanAccept and C_QuestLog.GetMaxNumQuestsCanAccept() or numQuests
       local questsLabel = TRACKER_HEADER_QUESTS or L["Quests"]
@@ -1505,25 +1518,27 @@ function mod:RenderPass(reserveScrollbar, sections, numQuests, numShown, recipes
          local collapsedZones = self:GetCollapsedMap("collapsedZones")
          local zoneColor, currentZoneColor = colors.zone, colors.currentZone
          local headerMode = self:GetZoneHeaderMode()
-         local hideHeader = headerMode == "always" or (headerMode == "single" and #sections == 1)
+         local hideHeader = headerMode == "always" or (headerMode == "single" and numZones == 1)
          for _, section in ipairs(sections) do
-            local collapsed = not hideHeader and collapsedZones[section.foldKey or section.name]
-            local count = #section.quests
-            if section.foldKey ~= mod.COMPLETED_FOLD_KEY and section.numComplete and section.numComplete > 0 then
-               count = format("%d, %s", count, format(L["%d complete"], section.numComplete))
-            end
-            local text = profile.simpleZoneHeaders and section.name or format("%s (%s)", section.name, count)
-            local color = section.isCurrent and currentZoneColor or zoneColor
-            if not hideHeader then
-               AddLine("zone", section, text, "zone", ZONE_INDENT, spacing.zoneSpacing, color, Brighten(color), "zone",
-                  nil, nil, collapsed and true or false)
-            end
-            if not collapsed then
-               if not hideHeader then
-                  layout.nextSpacing = spacing.zoneHeaderSpacing
+            if section ~= timed then  -- rendered above
+               local collapsed = not hideHeader and collapsedZones[section.foldKey or section.name]
+               local count = #section.quests
+               if section.foldKey ~= mod.COMPLETED_FOLD_KEY and section.numComplete and section.numComplete > 0 then
+                  count = format("%d, %s", count, format(L["%d complete"], section.numComplete))
                end
-               for _, quest in ipairs(section.quests) do
-                  self:RenderQuest(quest, profile)
+               local text = profile.simpleZoneHeaders and section.name or format("%s (%s)", section.name, count)
+               local color = section.isCurrent and currentZoneColor or zoneColor
+               if not hideHeader then
+                  AddLine("zone", section, text, "zone", ZONE_INDENT, spacing.zoneSpacing, color, Brighten(color), "zone",
+                     nil, nil, collapsed and true or false)
+               end
+               if not collapsed then
+                  if not hideHeader then
+                     layout.nextSpacing = spacing.zoneHeaderSpacing
+                  end
+                  for _, quest in ipairs(section.quests) do
+                     self:RenderQuest(quest, profile)
+                  end
                end
             end
          end
@@ -1712,6 +1727,9 @@ local function AddQuestFilterItems(root)
    AddChoices(root, L["Section on top"], "focusedSection", {
       { "none", L["None"] }, { "focused", L["Focused"] }, { "tracked", L["Tracked"] },
    })
+   root:CreateCheckbox(L["Timed section"],
+      function() return mod.db.profile.timedSection end,
+      function() ToggleFilter("timedSection") end)
    AddChoices(root, L["Completed section"], "completedSection", {
       { "none", L["Disabled"] }, { "all", L["All"] }, { "current", L["Current zone"] },
    })

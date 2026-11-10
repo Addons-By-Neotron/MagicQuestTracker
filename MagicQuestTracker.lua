@@ -135,6 +135,7 @@ mod.defaults = {
       completedSort = "normal",      -- completed quests within a section: normal | first | last
       completedSection = "none",     -- completed quests in their own section: none | all | current
       focusedPosition = "top",       -- the focused / tracked section: top | bottom (of the zones)
+      timedSection = false,          -- quests with a time limit in their own section, on top of all
       -- completedPosition: top | bottom; unset follows completedSort ("last" = bottom)
       zoneSort = "distance",         -- level | name | distance
       questSort = "distance",        -- level | name | distance

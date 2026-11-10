@@ -131,6 +131,7 @@ local BLIZZARD_STYLE = {
    showQuestTags = false,
    showLevel = mod.IS_FOREVER or false,
    focusedSection = "none",
+   timedSection = false,
    completedSort = "normal",
    completedSection = "none",
    zoneSort = "distance",
@@ -653,6 +654,10 @@ pageBuilders[4] = function(page)
       { "top", L["Above the zones"] },
       { "bottom", L["Below the zones"] },
    }, 170)
+   page:Gap(6)
+   page:Option(L["Timed section"],
+      L["Show quests with a time limit in their own section on top, least time left first. They are shown whatever the filters."],
+      "timedSection")
 end
 
 pageBuilders[5] = function(page)
@@ -943,7 +948,7 @@ end
 -- is switched on by updating.
 ----------------------------------------------------------------
 
-mod.WHATS_NEW_VERSION = 5
+mod.WHATS_NEW_VERSION = 6
 
 -- { version, title, desc, get, set, enabled, visible } (get and set only for
 -- features with a switch; the switch is grayed out unless enabled() says so,
@@ -1002,6 +1007,10 @@ local WHATS_NEW = {
       nil,
       function() return mod.IS_FOREVER end,
       image = { "Interface\\AddOns\\MagicQuestTracker\\Textures\\WhatsNewDungeon.png", 373, 146, 512, 256 } },
+   { 6, L["Timed section"],
+      L["Show quests with a time limit in their own section on top, least time left first. They are shown whatever the filters."],
+      function() return mod:GetWizardOption("timedSection") end,
+      function(value) mod:SetWizardOption("timedSection", value) end },
 }
 
 function mod:MarkWhatsNewSeen()
