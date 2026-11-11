@@ -942,57 +942,57 @@ end
 -- What's new
 --
 -- Each feature is listed with a checkbox to switch it on right there
--- (where it has one), and the window offers the wizard. WHATS_NEW_VERSION
--- is bumped when features are added; the version last seen is kept for the
--- account. Existing profiles keep how they looked, so nothing listed here
--- is switched on by updating.
+-- (where it has one), and the window offers the wizard. An entry's number
+-- is its position in the list; the highest number seen is kept for the
+-- account (whatsNewSeenID), and entries after it are new. Existing
+-- profiles keep how they looked, so nothing listed here is switched on by
+-- updating.
 ----------------------------------------------------------------
 
-mod.WHATS_NEW_VERSION = 6
-
--- { version, title, desc, get, set, enabled, visible } (get and set only for
--- features with a switch; the switch is grayed out unless enabled() says so,
--- and the entry is skipped where visible() is false)
+-- { title, desc, get, set, enabled, visible, image = ... } (get and set
+-- only for features with a switch; the switch is grayed out unless
+-- enabled() says so, and the entry is skipped where visible() is false).
+-- New entries go at the end; never reorder or remove entries.
 local WHATS_NEW = {
-   { 1, L["Setup wizard"],
+   { L["Setup wizard"],
       L["Pick Blizzard's look or one of the themes, then choose the features. Run it from the button below, the settings, or /mqt wizard."] },
-   { 1, L["Tracked quests only"],
+   { L["Tracked quests only"],
       L["A new view that lists only the quests you track, like the built-in tracker. Middle-click the title to switch between all quests, the current zone and tracked quests."],
       function() return mod:GetWizardOption("view") == "tracked" end,
       function(value) mod:SetWizardOption("view", value and "tracked" or "all") end },
    -- No switch: this is the game's own setting, which is normally already on.
-   { 1, L["Automatically track new quests"],
+   { L["Automatically track new quests"],
       L["The game adds quests to the watch list when you accept them. You can turn that off or on in the General settings."] },
-   { 1, L["Hide zone headers"],
+   { L["Hide zone headers"],
       L["List the quests of all zones together, without zone headers. The settings also let you hide them only while a single zone is shown."],
       function() return mod:GetWizardOption("zoneHeaders") == "always" end,
       function(value) mod:SetWizardOption("zoneHeaders", value and "always" or "never") end },
-   { 1, L["Fold icons"],
+   { L["Fold icons"],
       L["Choose how folded headers look: a triangle, chevron, plus / minus, or Blizzard's button, on the left, right or after the title. See the General settings."] },
-   { 2, L["Spacing settings"],
-      L["Zone spacing, zone header spacing and a new section header spacing now each control one gap: above a zone header, below it, and below a section header. Find them in the Theme settings, Layout tab."] },
-   { 3, L["Timer bars"],
-      L["Timed quests show the time left as a bar that empties as time runs out, red in the last minute. Turn it off for a line of text instead."],
-      function() return mod:GetWizardOption("timerBars") end,
-      function(value) mod:SetWizardOption("timerBars", value) end },
-   { 1, L["Quest voiceover buttons"],
+   { L["Quest voiceover buttons"],
       L["Adds the play button of the Spoken Quests addon to quests that have a voiceover."],
       function() return mod:GetWizardOption("showPlayButton") end,
       function(value) mod:SetWizardOption("showPlayButton", value) end,
       function() return mod:GetQuestVoice() ~= nil end,
       function() return mod.IS_FOREVER end },
+   { L["Spacing settings"],
+      L["Zone spacing, zone header spacing and a new section header spacing now each control one gap: above a zone header, below it, and below a section header. Find them in the Theme settings, Layout tab."] },
+   { L["Timer bars"],
+      L["Timed quests show the time left as a bar that empties as time runs out, red in the last minute. Turn it off for a line of text instead."],
+      function() return mod:GetWizardOption("timerBars") end,
+      function(value) mod:SetWizardOption("timerBars", value) end },
    -- Replaces the version 1 "Simple headers" switch (now a dropdown).
-   { 4, L["Header counts"],
+   { L["Header counts"],
       L["Choose what section headers show: the count and maximum, like Quests (12/25), only the count, like Quests (12), or nothing. Zone header counts can be turned off separately. See the General settings, Quests tab."] },
-   { 5, L["Hide red quests"],
+   { L["Hide red quests"],
       L["Hide quests that are too difficult for your level. Gray quests can be hidden too. Right-click the title or the Quests header to switch the filters and the view."],
       function() return mod:GetWizardOption("hideRedQuests") end,
       function(value) mod:SetWizardOption("hideRedQuests", value) end },
-   { 5, L["Show buttons on mouseover"],
+   { L["Show buttons on mouseover"],
       L["Hide the quest markers, find group and voiceover buttons until the mouse is over the tracker, for a cleaner look; the quests move into the space they leave. Quest item buttons stay visible."],
       function() return mod:GetWizardOption("buttonsOnHover") end,
       function(value) mod:SetWizardOption("buttonsOnHover", value) end },
-   { 5, L["Quest item bar"],
+   { L["Quest item bar"],
       L["A separate bar for quest items, with up to five buttons you can bind keys to. The first holds the focused or nearest quest's item. Move and size it in Edit Mode."],
       function() return mod:GetWizardOption("questBar") end,
       function(value)
@@ -1000,21 +1000,44 @@ local WHATS_NEW = {
          mod:ApplyQuestBar()
       end,
       function() return GetQuestLogSpecialItemInfo ~= nil end },
-   { 5, L["Show dungeon bosses"],
+   { L["Show dungeon bosses"],
       L["In dungeons and raids, list the bosses in a Dungeon section and check them off as they are defeated, like Retail does."],
       function() return mod:GetWizardOption("showDungeonBosses") end,
       function(value) mod:SetWizardOption("showDungeonBosses", value) end,
       nil,
       function() return mod.IS_FOREVER end,
       image = { "Interface\\AddOns\\MagicQuestTracker\\Textures\\WhatsNewDungeon.png", 373, 146, 512, 256 } },
-   { 6, L["Timed section"],
+   { L["Timed section"],
       L["Show quests with a time limit in their own section on top, least time left first. They are shown whatever the filters."],
       function() return mod:GetWizardOption("timedSection") end,
       function(value) mod:SetWizardOption("timedSection", value) end },
 }
 
+local LATEST_ID = #WHATS_NEW
+
+-- Before entry numbers, whatsNewSeen held a version that covered a batch
+-- of entries: the last entry of each version.
+local SEEN_VERSION_IDS = { 6, 7, 8, 9, 13, 14 }
+
+--- The last entry seen, from the old version number if needed.
+function mod:GetWhatsNewSeen()
+   local global = self.db.global
+   if global.whatsNewSeen then
+      local version = global.whatsNewSeen
+      global.whatsNewSeen = nil
+      if version > 0 then
+         global.whatsNewSeenID = math.max(global.whatsNewSeenID or 0,
+            SEEN_VERSION_IDS[math.min(version, #SEEN_VERSION_IDS)])
+      else
+         global.whatsNewSeenID = global.whatsNewSeenID or 0
+      end
+   end
+   return global.whatsNewSeenID or 0
+end
+
 function mod:MarkWhatsNewSeen()
-   self.db.global.whatsNewSeen = self.WHATS_NEW_VERSION
+   self.db.global.whatsNewSeen = nil
+   self.db.global.whatsNewSeenID = LATEST_ID
 end
 
 local ICON_TEXTURE = "Interface\\AddOns\\MagicQuestTracker\\Textures\\Icon.png"
@@ -1070,14 +1093,15 @@ function mod:ShowWelcome()
    frame:Show()
 end
 
---- Lists the features added since the version last seen. all: every entry,
---- or a number to list those added after that version. showHidden also lists
+--- Lists the features added since the last one seen. all: every entry, or
+--- a number to list the entries after that id. showHidden also lists
 --- entries for other game versions (for testing).
 function mod:ShowWhatsNew(all, showHidden)
-   local seen = type(all) == "number" and all or all and 0 or (self.db.global.whatsNewSeen or 0)
+   local seen = type(all) == "number" and all or all and 0 or self:GetWhatsNewSeen()
    local entries = {}
-   for _, entry in ipairs(WHATS_NEW) do
-      if entry[1] > seen and (showHidden or not entry[7] or entry[7]()) then entries[#entries + 1] = entry end
+   for id = seen + 1, #WHATS_NEW do
+      local entry = WHATS_NEW[id]
+      if showHidden or not entry[6] or entry[6]() then entries[#entries + 1] = entry end
    end
    if #entries == 0 then return end
 
@@ -1130,9 +1154,9 @@ function mod:ShowWhatsNew(all, showHidden)
          row.desc:SetTextColor(0.7, 0.7, 0.7)
          frame.entries[i] = row
       end
-      local get, set = entry[4], entry[5]
+      local get, set = entry[3], entry[4]
       row.check:SetShown(get ~= nil)
-      local enabled = not entry[6] or entry[6]()
+      local enabled = not entry[5] or entry[5]()
       row.check:SetEnabled(enabled)
       -- Entries without a switch line up with the others.
       local indent = CHECK_SIZE + 4
@@ -1141,11 +1165,11 @@ function mod:ShowWhatsNew(all, showHidden)
       row.title:ClearAllPoints()
       row.title:SetPoint("TOPLEFT", indent, -4)
       row.title:SetWidth(width - indent)
-      row.title:SetText(entry[2])
+      row.title:SetText(entry[1])
       row.desc:ClearAllPoints()
       row.desc:SetPoint("TOPLEFT", indent, -(row.title:GetStringHeight() + 8))
       row.desc:SetWidth(width - indent)
-      row.desc:SetText(enabled and entry[3] or (entry[3] .. " " .. L["(Needs the Spoken Quests addon, which isn't installed.)"]))
+      row.desc:SetText(enabled and entry[2] or (entry[2] .. " " .. L["(Needs the Spoken Quests addon, which isn't installed.)"]))
       local height = row.title:GetStringHeight() + row.desc:GetStringHeight() + 14
       -- Optional screenshot below the text, at half size:
       -- image = { path, width, height, textureWidth, textureHeight }.
@@ -1189,7 +1213,7 @@ function mod:ShowStartupDialogs()
    if InCombatLockdown() then return end
    if self.freshInstall then
       self:ShowWelcome()
-   elseif not self.db.global.whatsNewDisabled and (self.db.global.whatsNewSeen or 0) < self.WHATS_NEW_VERSION then
+   elseif not self.db.global.whatsNewDisabled and self:GetWhatsNewSeen() < LATEST_ID then
       self:ShowWhatsNew()
    end
 end

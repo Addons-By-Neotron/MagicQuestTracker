@@ -248,7 +248,7 @@ function mod:OnInitialize()
    -- A fresh install gets the welcome prompt; anyone else who hasn't seen the
    -- "what's new" window yet gets that (see Wizard.lua).
    local fresh = self:MigrateDefaults()
-   self.freshInstall = fresh and self.db.global.whatsNewSeen == nil
+   self.freshInstall = fresh and self.db.global.whatsNewSeen == nil and self.db.global.whatsNewSeenID == nil
    self:InitGeometryFlag()
 
    self:SetupOptions()
@@ -811,7 +811,7 @@ function mod:ChatCommand(input)
       self:ShowWhatsNew(true)
    elseif cmd == "newdebug" or cmd:match("^newdebug %d+$") then
       -- Every entry, including those for other game versions, or only the
-      -- ones after the given version (what an update from it shows). For testing.
+      -- ones after the given entry id (what an update from it shows). For testing.
       self:ShowWhatsNew(tonumber(cmd:match("%d+")) or true, true)
    elseif cmd == "welcome" then
       -- The popup new installs get (for testing).
