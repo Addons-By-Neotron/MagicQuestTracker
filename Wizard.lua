@@ -783,40 +783,12 @@ local NUM_PAGES = #pageBuilders
 -- The window
 ----------------------------------------------------------------
 
--- Dialog border with an opaque backing: the dialog background texture alone
--- is see-through enough to make the text hard to read over the game world.
-local function StyleDialog(frame)
-   frame:SetBackdrop({
-      bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
-      edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
-      tile = true, tileSize = 32, edgeSize = 32,
-      insets = { left = 11, right = 12, top = 12, bottom = 11 },
-   })
-   local backing = frame:CreateTexture(nil, "BACKGROUND", nil, -8)
-   backing:SetPoint("TOPLEFT", 11, -11)
-   backing:SetPoint("BOTTOMRIGHT", -11, 11)
-   backing:SetColorTexture(0.04, 0.04, 0.06, 0.96)
-end
-
 local function CreateWizard()
-   local frame = CreateFrame("Frame", "MagicQuestTrackerWizard", UIParent, "BackdropTemplate")
-   frame:SetSize(FRAME_WIDTH, FRAME_HEIGHT)
-   frame:SetPoint("CENTER")
-   frame:SetFrameStrata("DIALOG")
-   frame:SetToplevel(true)
-   frame:EnableMouse(true)
-   frame:SetMovable(true)
-   frame:SetClampedToScreen(true)
-   frame:RegisterForDrag("LeftButton")
-   frame:SetScript("OnDragStart", frame.StartMoving)
-   frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
-   StyleDialog(frame)
-   frame:Hide()
+   -- Opaque: the dialog background alone is see-through enough to make the
+   -- text hard to read over the game world.
+   local frame = mod:CreateDialogWindow("MagicQuestTrackerWizard", FRAME_WIDTH, FRAME_HEIGHT,
+      { title = L["Magic Quest Tracker setup"], opaque = true })
    wizard = frame
-
-   local title = frame:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
-   title:SetPoint("TOP", 0, -18)
-   title:SetText(L["Magic Quest Tracker setup"])
 
    local container = CreateFrame("Frame", nil, frame)
    container:SetPoint("TOPLEFT", 32, -52)
@@ -852,19 +824,13 @@ local function CreateWizard()
    local footer = frame:CreateFontString(nil, "ARTWORK", "GameFontDisable")
    footer:SetPoint("BOTTOM", 0, 24)
 
-   local cancel = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-   cancel:SetSize(90, 24)
+   local cancel = mod:CreateDialogButton(frame, L["Cancel"], 90, function() frame:Hide() end)
    cancel:SetPoint("BOTTOMLEFT", 24, 18)
-   cancel:SetText(L["Cancel"])
-   cancel:SetScript("OnClick", function() frame:Hide() end)
 
-   local next = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-   next:SetSize(90, 24)
+   local next = mod:CreateDialogButton(frame, L["Next"], 90)
    next:SetPoint("BOTTOMRIGHT", -24, 18)
-   local back = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-   back:SetSize(90, 24)
+   local back = mod:CreateDialogButton(frame, L["Back"], 90)
    back:SetPoint("RIGHT", next, "LEFT", -6, 0)
-   back:SetText(L["Back"])
 
    function frame:ShowPage(index)
       self.pageIndex = index
@@ -926,7 +892,6 @@ local function CreateWizard()
       mod:MarkWhatsNewSeen()
       self:ShowPage(1)
    end)
-   tinsert(UISpecialFrames, "MagicQuestTrackerWizard")
    return frame
 end
 
@@ -1055,29 +1020,14 @@ end
 
 local ICON_TEXTURE = "Interface\\AddOns\\MagicQuestTracker\\Textures\\Icon.png"
 
-local function CreateSmallWindow(name, width, height)
-   local frame = CreateFrame("Frame", name, UIParent, "BackdropTemplate")
-   frame:SetSize(width, height)
-   frame:SetPoint("CENTER", 0, 120)
-   frame:SetFrameStrata("DIALOG")
-   frame:SetToplevel(true)
-   frame:EnableMouse(true)
-   frame:SetMovable(true)
-   frame:SetClampedToScreen(true)
-   frame:RegisterForDrag("LeftButton")
-   frame:SetScript("OnDragStart", frame.StartMoving)
-   frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
-   StyleDialog(frame)
-   frame:Hide()
-   return frame
+local function CreateSmallWindow(name, width, height, title)
+   return mod:CreateDialogWindow(name, width, height,
+      { title = title, opaque = true, point = { "CENTER", UIParent, "CENTER", 0, 120 } })
 end
 
 local function AddButton(frame, label, point, x, onClick, width)
-   local button = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-   button:SetSize(width or 130, 24)
+   local button = mod:CreateDialogButton(frame, label, width, onClick)
    button:SetPoint(point, x, 18)
-   button:SetText(label)
-   button:SetScript("OnClick", onClick)
    return button
 end
 
@@ -1123,11 +1073,8 @@ function mod:ShowWhatsNew(all, showHidden)
       frame:Hide()
       for _, child in ipairs(frame.entries or {}) do child:Hide() end
    else
-      frame = CreateSmallWindow("MagicQuestTrackerWhatsNew", 480, 200)
+      frame = CreateSmallWindow("MagicQuestTrackerWhatsNew", 480, 200, L["What's new in Magic Quest Tracker"])
       self.whatsNewFrame = frame
-      local title = frame:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
-      title:SetPoint("TOP", 0, -18)
-      title:SetText(L["What's new in Magic Quest Tracker"])
       AddButton(frame, L["Run setup wizard"], "BOTTOMLEFT", 28, function() mod:ShowWizard() end, 160)
       AddButton(frame, L["Close"], "BOTTOMRIGHT", -28, function() frame:Hide() end, 100)
       AddButton(frame, L["Don't show again"], "BOTTOM", 25, function()
@@ -1135,7 +1082,6 @@ function mod:ShowWhatsNew(all, showHidden)
          frame:Hide()
       end, 140)
       frame:SetScript("OnHide", function() mod:MarkWhatsNewSeen() end)
-      tinsert(UISpecialFrames, "MagicQuestTrackerWhatsNew")
       -- Many releases' worth of features scroll instead of growing the window.
       local scroll = CreateFrame("ScrollFrame", nil, frame, "UIPanelScrollFrameTemplate")
       scroll:SetPoint("TOPLEFT", 28, -52)
