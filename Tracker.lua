@@ -78,16 +78,26 @@ local TIMER_INTERVAL = 1
 local TIMER_WARNING = 60  -- seconds; shown in the failed color from here
 local timerLines = {}
 
-local function FormatTimeLeft(seconds)
-   local clock = SecondsToClock and SecondsToClock(seconds)
+local function FormatClock(seconds)
+   return SecondsToClock and SecondsToClock(seconds)
       or format("%d:%02d", math.floor(seconds / 60), seconds % 60)
-   return format(L["Time left: %s"], clock)
 end
+
+local function FormatTimeLeft(seconds)
+   return format(L["Time left: %s"], FormatClock(seconds))
+end
+
+mod.FormatClock = FormatClock
 
 -- Timer lines are progress bars (the fill is the time left) or text lines,
 -- in the failed color under TIMER_WARNING. Returns false once the timer has
 -- run out.
 local function UpdateTimerLine(line)
+   if line.elapsedFrom then
+      -- Counting up (dungeon run time): elapsedTemplate has a "%s" for it.
+      line.text:SetText(format(line.elapsedTemplate, FormatClock(math.max(0, time() - line.elapsedFrom))))
+      return true
+   end
    local remaining = math.max(0, math.floor(line.timerEnd - GetTime()))
    if not line.isTimerBar then
       line.text:SetText(FormatTimeLeft(remaining))
@@ -114,7 +124,7 @@ function mod:TickTimers(elapsed)
    if self.timerElapsed < TIMER_INTERVAL then return end
    self.timerElapsed = 0
    for _, line in ipairs(timerLines) do
-      if line.timerEnd and not UpdateTimerLine(line) then
+      if (line.timerEnd or line.elapsedFrom) and not UpdateTimerLine(line) then
          -- The quest fails now; let the quest log catch up.
          self:RequestUpdate()
       end
@@ -504,7 +514,34 @@ local function Line_OnEnter(line)
    if line.kind == "quest" and IsInGroup() then
       GameTooltip:SetOwner(line, "ANCHOR_LEFT")
       GameTooltip:SetQuestPartyProgress(line.data.questID)
+   elseif line.kind == "dungeonStats" then
+      mod:ShowRunRatesTooltip(line, line.data)
    end
+end
+
+local function Coins(copper)
+   return GetCoinTextureString and GetCoinTextureString(copper) or GetMoneyString(copper)
+end
+
+--- Dungeon run stats tooltip: XP (kills and quests) and money (coins and
+--- the loot's vendor value) per hour of run time.
+function mod:ShowRunRatesTooltip(owner, dungeon)
+   if not dungeon.runStarted then return end
+   local seconds = (dungeon.runFinished or time()) - dungeon.runStarted
+   GameTooltip:SetOwner(owner, "ANCHOR_LEFT")
+   GameTooltip:AddLine(L["Run rates"])
+   if seconds < 60 then
+      GameTooltip:AddLine(L["Not enough time in the dungeon yet."], 1, 1, 1, true)
+   else
+      local hours = seconds / 3600
+      local xp = math.floor(dungeon.runXP / hours + 0.5)
+      local money = math.floor(dungeon.runMoney / hours + 0.5)
+      GameTooltip:AddDoubleLine(L["XP per hour"], BreakUpLargeNumbers and BreakUpLargeNumbers(xp) or xp, nil, nil, nil, 1, 1, 1)
+      GameTooltip:AddDoubleLine(L["Money per hour"], Coins(money), nil, nil, nil, 1, 1, 1)
+      GameTooltip:AddLine(L["XP from kills and quests, money from coins and the loot's vendor value, over the run time."],
+         0.7, 0.7, 0.7, true)
+   end
+   GameTooltip:Show()
 end
 
 local function Line_OnLeave(line)
@@ -1136,6 +1173,7 @@ local function AddTimerLine(data, timerEnd, timerTotal, indent)
       line = AddLine("objective", data, text, "objective", indent, spacing.objectiveSpacing, colors.objective)
    end
    line.isTimerBar = mod.db.profile.timerBars
+   line.elapsedFrom = nil
    line.timerEnd = timerEnd
    line.timerTotal = timerTotal
    UpdateTimerLine(line)
@@ -1285,6 +1323,8 @@ local function WidgetLayout(container, sortedWidgets)
 end
 
 local function AddWidgetBlock(key, widgetSetID, gap)
+   -- The containers belong to the real tracker; the preview has no widgets.
+   if mod.previewing then return end
    local container = widgetBlocks[key]
    if not container then
       container = CreateFrame("Frame", nil, mod.frame.child, "UIWidgetContainerTemplate")
@@ -1346,6 +1386,23 @@ function mod:RenderScenario(scenario, profile)
       AddWidgetBlock("stage", scenario.widgetSetID, spacing.objectiveSpacing)
    end
    RenderObjectives(scenario, scenario.criteria, OBJECTIVE_INDENT, profile)
+   -- Dungeon run stats (Forever): a block of their own below the bosses.
+   if scenario.stats and #scenario.stats > 0 then
+      for i, stat in ipairs(scenario.stats) do
+         local text = stat.text
+         if stat.elapsedFrom then
+            text = format(text, FormatClock(math.max(0, time() - stat.elapsedFrom)))
+         end
+         -- Hover for the per hour rates (when the run has started).
+         local line = AddLine("dungeonStats", scenario, text, "objective", OBJECTIVE_INDENT,
+            i == 1 and spacing.questSpacing or spacing.objectiveSpacing, colors.objective,
+            scenario.runStarted and Brighten(colors.objective) or nil)
+         line.timerEnd = nil
+         line.elapsedFrom = stat.elapsedFrom
+         line.elapsedTemplate = stat.text
+         if stat.elapsedFrom and not self.previewing then tinsert(timerLines, line) end
+      end
+   end
    AddWidgetBlock("top", SCENARIO_TRACKER_TOP_WIDGET_SET, spacing.objectiveSpacing)
    for _, bonus in ipairs(scenario.bonus) do
       AddLine("scenario", bonus, bonus.name or "", "quest", QUEST_INDENT, spacing.questSpacing, titleColor)

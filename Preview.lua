@@ -22,6 +22,7 @@ along with MagicQuestTracker.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************
 ]]
 local mod = LibStub("AceAddon-3.0"):GetAddon("MagicQuestTracker")
+local L = LibStub("AceLocale-3.0"):GetLocale("MagicQuestTracker")
 
 local CreateFrame = CreateFrame
 
@@ -153,6 +154,41 @@ local function BuildQuest(zone, isCurrent, def)
    return quest
 end
 
+-- Forever's Dungeon section (bosses and run stats), as enabled.
+local function PreviewDungeon(profile)
+   if not mod.IS_FOREVER or not profile.showDungeonBosses then return nil end
+   local criteria = {}
+   for i, boss in ipairs({ "Rhahk'Zor", "Sneed", "Gilnid", "Mr. Smite" }) do
+      local killed = i <= 2
+      criteria[#criteria + 1] = { text = format("%d/1 %s", killed and 1 or 0, format(L["%s defeated"], boss)),
+         finished = killed, alwaysShow = true }
+   end
+   local stats = {}
+   if profile.showDungeonStats then
+      local function Number(n) return BreakUpLargeNumbers and BreakUpLargeNumbers(n) or tostring(n) end
+      local separator = "  \194\183  "
+      local parts = {}
+      if profile.dungeonStatsXP then parts[#parts + 1] = format(L["XP: %s"], Number(4825)) end
+      if profile.dungeonStatsQuestXP then parts[#parts + 1] = format(L["Quest XP: %s"], Number(1350)) end
+      if #parts > 0 then stats[#stats + 1] = { text = table.concat(parts, separator) } end
+      parts = {}
+      if profile.dungeonStatsMoney then
+         local function Coins(c) return GetCoinTextureString and GetCoinTextureString(c) or GetMoneyString(c) end
+         parts[#parts + 1] = format(L["Coins: %s"], Coins(2 * 10000 + 37 * 100 + 15))
+         parts[#parts + 1] = format(L["Items: %s"], Coins(1 * 10000 + 12 * 100 + 40))
+      end
+      if #parts > 0 then stats[#stats + 1] = { text = table.concat(parts, separator) } end
+      parts = {}
+      if profile.dungeonStatsTime then parts[#parts + 1] = format(L["Time: %s"], mod.FormatClock(23 * 60 + 41)) end
+      if profile.dungeonStatsDeaths then parts[#parts + 1] = format(L["Deaths: %d"], 1) end
+      if #parts > 0 then stats[#stats + 1] = { text = table.concat(parts, separator) } end
+   end
+   return {
+      name = "The Deadmines", header = TRACKER_HEADER_DUNGEON or L["Dungeon"], stageName = "The Deadmines",
+      stage = 1, numStages = 1, criteria = criteria, stats = stats, bonus = {},
+   }
+end
+
 --- Returns what mod:Render() takes: sections, numQuests, numShown, recipes,
 --- tasks, scenario, achievements.
 local function BuildPreviewData(profile)
@@ -220,7 +256,7 @@ local function BuildPreviewData(profile)
          { name = "Explore Elwynn Forest", objectives = { Objective("Fargodeep Mine"), Objective("Northshire Abbey", true) } },
       }
    end
-   return sections, numQuests, numShown, recipes, tasks, nil, achievements
+   return sections, numQuests, numShown, recipes, tasks, PreviewDungeon(profile), achievements
 end
 
 --- Draws the preview for the profile in view.profile.

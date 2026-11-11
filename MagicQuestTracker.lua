@@ -166,6 +166,12 @@ mod.defaults = {
       showRecipes = true,
       showAchievements = true,
       showDungeonBosses = false,     -- Forever: dungeon section with a line per boss
+      showDungeonStats = false,      -- Forever: run stats in the dungeon section, each below switchable
+      dungeonStatsXP = true,
+      dungeonStatsQuestXP = true,    -- XP rewards of this dungeon's quests completed in the run
+      dungeonStatsMoney = true,
+      dungeonStatsDeaths = true,
+      dungeonStatsTime = true,
       showWorldQuests = true,
       showBonusObjectives = true,
       showItemButtons = true,
@@ -198,7 +204,7 @@ mod.defaults = {
       collapsedSections = {}, -- [quests|worldQuests|bonus|recipes] = true
       minimized = false,
       fullLogWarned = nil,    -- quest ID list the "log almost full" warning was shown for
-      dungeonKills = {},      -- [instanceID] = { name, time, bosses = { [bossName] = true } } (Forever)
+      dungeonKills = {},      -- [instanceID] = dungeon run: bosses killed and stats (Forever, see Data.lua)
    },
 }
 
@@ -315,6 +321,15 @@ function mod:OnEnable()
       end)
       self:RegisterEvent("UPDATE_INSTANCE_INFO", "RequestUpdate")
       self:RegisterEvent("CHAT_MSG_SYSTEM", function(_, msg) mod:CheckInstanceReset(msg) end)
+      -- Dungeon run stats.
+      self:RegisterEvent("PLAYER_XP_UPDATE", "OnRunXP")
+      self:RegisterEvent("PLAYER_MONEY", "OnRunMoney")
+      self:RegisterEvent("PLAYER_DEAD", "OnRunDeath")
+      self:RegisterEvent("CHAT_MSG_LOOT", function(_, msg) mod:OnRunLoot(msg) end)
+      self:RegisterEvent("QUEST_TURNED_IN", function(_, questID, xp)
+         mod:OnRunQuestTurnedIn(questID, xp)
+         mod:RequestUpdate()
+      end)
    end
    self:ApplyProfile()
 end
@@ -371,6 +386,7 @@ function mod:ApplyProfile()
 end
 
 function mod:PLAYER_ENTERING_WORLD()
+   if IS_FOREVER then self:ResetRunBaselines() end
    self:MatchBlizzardOnFirstLoad()
    if not self.startupDialogShown then
       C_Timer.After(3, function() self:ShowStartupDialogs() end)
@@ -391,6 +407,7 @@ function mod:PLAYER_REGEN_DISABLED()
       self.combatHidden = true
       self.frame:Hide()
    end
+   if IS_FOREVER then self:OnRunCombat() end
 end
 
 ----------------------------------------------------------------

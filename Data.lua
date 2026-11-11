@@ -27,6 +27,12 @@ local mod = LibStub("AceAddon-3.0"):GetAddon("MagicQuestTracker")
 local C_QuestLog = C_QuestLog
 local new, del = mod.new, mod.del
 
+-- Quest log header of every quest seen (CollectQuests), so a quest can be
+-- matched to its dungeon, and whether the quests in the log are complete
+-- (refreshed per collect).
+local questHeaders = {}
+local questComplete = {}
+
 -- WoW Forever (Interface 16xxx) adds quests on top of original Classic.
 -- The highest quest ID in original Classic is 9665 (per ForeverQuestTint's
 -- vanilla quest list); anything above it is new to Forever.
@@ -763,6 +769,7 @@ mod.ArrangeSections = ArrangeSections
 
 function mod:CollectQuests()
    local profile = self.db.profile
+   wipe(questComplete)
    RefreshQuestTimers()
    local zoneNames = GetCurrentZoneNames()
    -- In instances, isOnMap can be true for quests of the surrounding zone.
@@ -784,6 +791,8 @@ function mod:CollectQuests()
          if info.isHeader then
             header = info.title
          elseif ShouldTrackQuest(info) then
+            questHeaders[info.questID] = header
+            questComplete[info.questID] = C_QuestLog.IsComplete(info.questID) or false
             numQuests = numQuests + 1
             local zoneRank = GetZoneRank(header, zoneNames)
             local isCurrentZone = zoneRank > 0
@@ -1114,20 +1123,34 @@ end
 -- normal dungeons, so kills are recorded from ENCOUNTER_END / BOSS_KILL.
 ----------------------------------------------------------------
 
--- Kills are kept per instance ID until the instance is reset ("X has been
+-- Runs are kept per instance ID until the instance is reset ("X has been
 -- reset."). As a fallback for resets that aren't seen (another group
--- leader's), kills older than this are from an earlier run.
-local DUNGEON_KILLS_EXPIRE = 4 * 60 * 60
+-- leader's), a run not seen for this long is from an earlier one.
+local DUNGEON_RUN_EXPIRE = 4 * 60 * 60
 
-local function DungeonKills(self, instanceID, name)
+-- Run record: { name, time (last activity), bosses = { [bossName] = true },
+-- names = { zone names }, tail, started, finished (time()), xp, turnInXP,
+-- quests = { [questID] = xp }, questsBefore = { [questID] = true }, money,
+-- deaths }. Stored in db.char.dungeonKills.
+local function DungeonRun(self, instanceID, name)
    local all = self.db.char.dungeonKills
-   local kills = all[instanceID]
-   if not kills or time() - (kills.time or 0) > DUNGEON_KILLS_EXPIRE then
-      kills = { time = time(), bosses = {} }
-      all[instanceID] = kills
+   local run = all[instanceID]
+   if not run or time() - (run.time or 0) > DUNGEON_RUN_EXPIRE then
+      run = { time = time(), bosses = {}, quests = {}, questsBefore = {} }
+      -- Quests already complete on entering don't count for the run.
+      for questID, complete in pairs(questComplete) do
+         if complete then run.questsBefore[questID] = true end
+      end
+      all[instanceID] = run
    end
-   kills.name = name
-   return kills
+   run.name = name
+   if not run.names then
+      -- What this dungeon's quest log header can be called (see GetZoneRank).
+      run.names = {}
+      for zone in pairs(GetCurrentZoneNames()) do tinsert(run.names, zone) end
+      run.tail = instanceTail
+   end
+   return run
 end
 
 local function InDungeon()
@@ -1136,17 +1159,24 @@ local function InDungeon()
    if instanceType == "party" or instanceType == "raid" then return instanceID, name end
 end
 
-function mod:RecordBossKill(boss)
+-- The run of the dungeon the player is in, or nil.
+local function CurrentRun(self)
    local instanceID, name = InDungeon()
-   if not instanceID or not boss then return end
-   local kills = DungeonKills(self, instanceID, name)
-   kills.bosses[boss] = true
-   kills.time = time()
+   if not instanceID then return end
+   local run = DungeonRun(self, instanceID, name)
+   run.time = time()
+   return run
+end
+
+function mod:RecordBossKill(boss)
+   local run = boss and CurrentRun(self)
+   if not run then return end
+   run.bosses[boss] = true
    self:RequestUpdate()
 end
 
 local resetPattern
---- Clears the recorded kills of the instance a system message says was reset.
+--- Clears the recorded run of the instance a system message says was reset.
 function mod:CheckInstanceReset(msg)
    if not msg or not INSTANCE_RESET_SUCCESS then return end
    if not resetPattern then
@@ -1155,42 +1185,273 @@ function mod:CheckInstanceReset(msg)
    local name = msg:match(resetPattern)
    if not name then return end
    local all = self.db.char.dungeonKills
-   for instanceID, kills in pairs(all) do
-      if kills.name == name then all[instanceID] = nil end
+   for instanceID, run in pairs(all) do
+      if run.name == name then all[instanceID] = nil end
    end
    self:RequestUpdate()
 end
 
---- Returns a scenario-shaped table (see CollectScenario) with one
---- "0/1 Boss defeated" objective per boss of the current Forever dungeon,
---- or nil when not in one or the option is off.
+----------------------------------------------------------------
+-- Dungeon run stats (Forever): XP, quest XP, money, deaths and time of
+-- the current run, like the Dungeon Journal addon's run log (simplified:
+-- XP is the change of UnitXP while inside).
+----------------------------------------------------------------
+
+local lastXP, lastXPMax, lastLevel
+local lastMoney
+
+-- Stats are part of the Dungeon section: off with it.
+local function StatsOn(self)
+   local profile = self.db.profile
+   return mod.IS_FOREVER and profile.showDungeonBosses and profile.showDungeonStats
+end
+
+--- Baselines for the XP and money deltas; call on entering the world.
+function mod:ResetRunBaselines()
+   lastXP, lastXPMax, lastLevel = UnitXP("player"), UnitXPMax("player"), UnitLevel("player")
+   lastMoney = GetMoney()
+end
+
+function mod:OnRunXP()
+   local xp, max, level = UnitXP("player"), UnitXPMax("player"), UnitLevel("player")
+   local delta = 0
+   if lastXP then
+      if level > lastLevel then
+         delta = (lastXPMax - lastXP) + xp  -- one level up
+      elseif level == lastLevel then
+         delta = xp - lastXP
+      end
+   end
+   lastXP, lastXPMax, lastLevel = xp, max, level
+   if delta <= 0 or not StatsOn(self) then return end
+   local run = CurrentRun(self)
+   if not run then return end
+   run.xp = (run.xp or 0) + delta
+   self:RequestUpdate()
+end
+
+function mod:OnRunMoney()
+   local money = GetMoney()
+   local before = lastMoney
+   lastMoney = money
+   -- Gains only: buying or repairing doesn't take it back. Selling at a
+   -- vendor isn't counted, the loot's vendor value already is.
+   if not before or money <= before or not StatsOn(self) then return end
+   if MerchantFrame and MerchantFrame:IsShown() then return end
+   local run = CurrentRun(self)
+   if not run then return end
+   run.money = (run.money or 0) + (money - before)
+   self:RequestUpdate()
+end
+
+-- "You receive loot: [item]x2." (own loot only, not quest rewards).
+local lootPatterns
+local function LootPattern(text)
+   return "^" .. text:gsub("[%^%$%(%)%.%[%]%*%+%-%?]", "%%%0"):gsub("%%s", "(.+)"):gsub("%%d", "(%%d+)") .. "$"
+end
+
+local function AddItemValue(self, run, link, count)
+   local price = select(11, GetItemInfo(link))
+   if price then
+      if price > 0 then
+         run.itemValue = (run.itemValue or 0) + price * count
+         self:RequestUpdate()
+      end
+   elseif Item and Item.CreateFromItemLink then
+      -- Not cached yet: count it once the item data is in.
+      Item:CreateFromItemLink(link):ContinueOnItemLoad(function()
+         local loaded = select(11, GetItemInfo(link))
+         if loaded and loaded > 0 then
+            run.itemValue = (run.itemValue or 0) + loaded * count
+            self:RequestUpdate()
+         end
+      end)
+   end
+end
+
+--- Vendor value of the items looted in the run (added to the money).
+function mod:OnRunLoot(msg)
+   if not msg or not StatsOn(self) or not LOOT_ITEM_SELF then return end
+   if not lootPatterns then
+      lootPatterns = {}
+      if LOOT_ITEM_SELF_MULTIPLE then tinsert(lootPatterns, LootPattern(LOOT_ITEM_SELF_MULTIPLE)) end
+      tinsert(lootPatterns, LootPattern(LOOT_ITEM_SELF))
+   end
+   for _, pattern in ipairs(lootPatterns) do
+      local link, count = msg:match(pattern)
+      if link then
+         local run = CurrentRun(self)
+         if run then AddItemValue(self, run, link, tonumber(count) or 1) end
+         return
+      end
+   end
+end
+
+function mod:OnRunDeath()
+   local run = StatsOn(self) and CurrentRun(self)
+   if not run then return end
+   run.deaths = (run.deaths or 0) + 1
+   self:RequestUpdate()
+end
+
+--- The run's clock starts with the first fight inside.
+function mod:OnRunCombat()
+   local run = StatsOn(self) and CurrentRun(self)
+   if run and not run.started then
+      run.started = time()
+      self:RequestUpdate()
+   end
+end
+
+local function RunMatchesHeader(run, header)
+   if not header then return false end
+   for _, zone in ipairs(run.names or EMPTY) do
+      if zone == header then return true end
+   end
+   local tail = run.tail and LastWord(header)
+   return tail and tail:lower() == run.tail or false
+end
+
+--- Quest turned in inside: its XP is taken out of the kill XP (the UnitXP
+--- change includes it). Dungeon quests count as Quest XP once complete.
+function mod:OnRunQuestTurnedIn(questID, xp)
+   if not StatsOn(self) or not xp or xp <= 0 then return end
+   local run = CurrentRun(self)
+   if run then
+      run.turnInXP = (run.turnInXP or 0) + xp
+   end
+end
+
+-- Quest XP: the reward of this dungeon's quests completed during the run,
+-- counted when complete (kept after turning them in).
+local function UpdateRunQuests(run)
+   run.quests = run.quests or {}
+   run.questsBefore = run.questsBefore or {}
+   local total = 0
+   for questID, complete in pairs(questComplete) do
+      if complete and not run.quests[questID] and not run.questsBefore[questID]
+         and RunMatchesHeader(run, questHeaders[questID]) then
+         run.quests[questID] = GetQuestLogRewardXP and GetQuestLogRewardXP(questID) or 0
+      end
+   end
+   for _, xp in pairs(run.quests) do total = total + xp end
+   return total
+end
+
+local SEPARATOR = "  \194\183  "  -- " · " between stats on a line
+
+local function Number(n)
+   return BreakUpLargeNumbers and BreakUpLargeNumbers(n) or tostring(n)
+end
+
+-- Joins parts into a stats line ({ text, elapsedFrom }); a part with "%s"
+-- is the run time, filled in (and kept ticking) by the tracker.
+local function AddStatLine(dungeon, parts, elapsedFrom)
+   if #parts == 0 then
+      del(parts)
+      return
+   end
+   local line = new()
+   line.text = table.concat(parts, SEPARATOR)
+   line.elapsedFrom = elapsedFrom
+   del(parts)
+   tinsert(dungeon.stats, line)
+end
+
+local function Coins(copper)
+   return GetCoinTextureString and GetCoinTextureString(copper) or GetMoneyString(copper)
+end
+
+-- Lines below the bosses: XP, money (coins and items' vendor value), then
+-- time and deaths.
+local function AddRunStats(self, dungeon, run, profile)
+   dungeon.stats = new()
+   local parts = new()
+   local killXP = math.max(0, (run.xp or 0) - (run.turnInXP or 0))
+   if profile.dungeonStatsXP then
+      tinsert(parts, format(L["XP: %s"], Number(killXP)))
+   end
+   local questXP = UpdateRunQuests(run)
+   -- Totals for the per hour tooltip.
+   dungeon.runXP = killXP + questXP
+   dungeon.runMoney = (run.money or 0) + (run.itemValue or 0)
+   dungeon.runStarted, dungeon.runFinished = run.started, run.finished
+   if profile.dungeonStatsQuestXP and questXP > 0 then
+      tinsert(parts, format(L["Quest XP: %s"], Number(questXP)))
+   end
+   AddStatLine(dungeon, parts)
+
+   parts = new()
+   if profile.dungeonStatsMoney then
+      tinsert(parts, format(L["Coins: %s"], Coins(run.money or 0)))
+      tinsert(parts, format(L["Items: %s"], Coins(run.itemValue or 0)))
+   end
+   AddStatLine(dungeon, parts)
+
+   parts = new()
+   local elapsedFrom
+   if profile.dungeonStatsTime and run.started then
+      if run.finished then
+         tinsert(parts, format(L["Time: %s"], mod.FormatClock(run.finished - run.started)))
+      else
+         -- A format template: the tracker fills in the time and keeps it
+         -- ticking (other parts escaped).
+         tinsert(parts, L["Time: %s"])
+         elapsedFrom = run.started
+      end
+   end
+   if profile.dungeonStatsDeaths then
+      local deaths = format(L["Deaths: %d"], run.deaths or 0)
+      tinsert(parts, elapsedFrom and deaths:gsub("%%", "%%%%") or deaths)
+   end
+   AddStatLine(dungeon, parts, elapsedFrom)
+end
+
+--- Returns a scenario-shaped table (see CollectScenario) for the current
+--- Forever dungeon: one "0/1 Boss defeated" objective per boss and the run
+--- stats, as enabled. Nil when not in one or both are off.
 function mod:CollectDungeon()
-   if not self.db.profile.showDungeonBosses or not GetInstanceLockTimeRemaining then return end
-   local instanceID = InDungeon()
+   local profile = self.db.profile
+   if not profile.showDungeonBosses then return end
+   local showBosses = GetInstanceLockTimeRemaining ~= nil
+   local showStats = StatsOn(self)
+   local instanceID, name = InDungeon()
    if not instanceID then return end
-   local numEncounters = select(3, GetInstanceLockTimeRemaining())
-   if not numEncounters or numEncounters == 0 then return end
-   local name = GetInstanceInfo()
-   local kills = DungeonKills(self, instanceID, name).bosses
+   local run = DungeonRun(self, instanceID, name)
    local dungeon = new()
    dungeon.name, dungeon.header, dungeon.stageName = name, TRACKER_HEADER_DUNGEON or L["Dungeon"], name
    dungeon.criteria = new()
    dungeon.bonus = new()
-   local numKilled = 0
+   dungeon.numStages, dungeon.stage = 1, 1
+   local numEncounters = GetInstanceLockTimeRemaining and select(3, GetInstanceLockTimeRemaining()) or 0
+   local numKilled, numBosses = 0, 0
    for i = 1, numEncounters do
       local boss, _, isKilled = GetInstanceLockTimeRemainingEncounter(i)
       if boss then
-         local killed = isKilled or kills[boss] or false
+         numBosses = numBosses + 1
+         local killed = isKilled or run.bosses[boss] or false
          if killed then numKilled = numKilled + 1 end
-         local objective = new()
-         objective.text = format("%d/1 %s", killed and 1 or 0, format(L["%s defeated"], boss))
-         objective.finished = killed
-         objective.alwaysShow = true  -- killed bosses stay listed
-         tinsert(dungeon.criteria, objective)
+         if showBosses then
+            local objective = new()
+            objective.text = format("%d/1 %s", killed and 1 or 0, format(L["%s defeated"], boss))
+            objective.finished = killed
+            objective.alwaysShow = true  -- killed bosses stay listed
+            tinsert(dungeon.criteria, objective)
+         end
       end
    end
-   dungeon.numStages = 1
-   dungeon.stage = (numKilled > 0 and numKilled == #dungeon.criteria) and 2 or 1
+   local done = numBosses > 0 and numKilled == numBosses
+   if done then
+      dungeon.stage = 2
+      if run.started and not run.finished then run.finished = time() end  -- the clock stops
+   end
+   if showStats then
+      AddRunStats(self, dungeon, run, profile)
+   end
+   if #dungeon.criteria == 0 and not (dungeon.stats and #dungeon.stats > 0) and not done then
+      self.deepDel(dungeon)
+      return
+   end
    return dungeon
 end
 

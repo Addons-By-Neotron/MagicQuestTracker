@@ -624,6 +624,9 @@ pageBuilders[3] = function(page)
       page:Option(L["Show dungeon bosses"],
          L["In dungeons and raids, list the bosses in a Dungeon section and check them off as they are defeated, like Retail does."],
          "showDungeonBosses")
+      page:Option(L["Show run stats"],
+         L["In dungeons and raids, show what the current run has given so far in the Dungeon section: XP, money, deaths and time."],
+         "showDungeonStats")
    end
    page:Option(L["Show tracked recipes"], nil, "showRecipes")
    page:Option(L["Show completed objectives"],
@@ -1011,6 +1014,16 @@ local WHATS_NEW = {
       L["Show quests with a time limit in their own section on top, least time left first. They are shown whatever the filters."],
       function() return mod:GetWizardOption("timedSection") end,
       function(value) mod:SetWizardOption("timedSection", value) end },
+   { L["Dungeon run stats"],
+      L["In dungeons and raids, show what the current run has given so far in the Dungeon section: XP, money, deaths and time. The XP rewards of the dungeon's quests show as soon as they are complete. Each can be switched off in the settings."],
+      function() return mod:GetWizardOption("showDungeonStats") end,
+      function(value)
+         mod:SetWizardOption("showDungeonStats", value)
+         -- The stats are part of the Dungeon section.
+         if value then mod:SetWizardOption("showDungeonBosses", true) end
+      end,
+      nil,
+      function() return mod.IS_FOREVER end },
 }
 
 local LATEST_ID = #WHATS_NEW
