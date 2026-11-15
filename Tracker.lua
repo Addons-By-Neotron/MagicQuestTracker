@@ -1578,6 +1578,9 @@ function mod:RenderPass(reserveScrollbar, sections, numQuests, numShown, recipes
          local hideHeader = headerMode == "always" or (headerMode == "single" and numZones == 1)
          for _, section in ipairs(sections) do
             if section ~= timed then  -- rendered above
+               -- Tracked / Completed keep their header: their quests would
+               -- otherwise read as part of the zone list.
+               local hideHeader = hideHeader and not section.isSpecial
                local collapsed = not hideHeader and collapsedZones[section.foldKey or section.name]
                local count = #section.quests
                if section.foldKey ~= mod.COMPLETED_FOLD_KEY and section.numComplete and section.numComplete > 0 then

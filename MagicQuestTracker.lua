@@ -319,6 +319,15 @@ function mod:OnEnable()
       self:RegisterEvent("BOSS_KILL", function(_, _, encounterName)
          mod:RecordBossKill(encounterName)
       end)
+      if CombatLogGetCurrentEventInfo then
+         self:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED", function()
+            local _, subEvent, _, _, _, _, _, _, destName = CombatLogGetCurrentEventInfo()
+            if subEvent == "UNIT_DIED" then mod:OnRunUnitDied(destName) end
+         end)
+      end
+      -- Wing of Scarlet Monastery / Dire Maul by the door used.
+      self:RegisterEvent("PLAYER_LEAVING_WORLD", "NoteOutside")
+      self:ScheduleRepeatingTimer("NoteOutside", 0.5)
       self:RegisterEvent("UPDATE_INSTANCE_INFO", "RequestUpdate")
       self:RegisterEvent("CHAT_MSG_SYSTEM", function(_, msg) mod:CheckInstanceReset(msg) end)
       -- Dungeon run stats.
@@ -385,8 +394,11 @@ function mod:ApplyProfile()
    self:RequestUpdate()
 end
 
-function mod:PLAYER_ENTERING_WORLD()
-   if IS_FOREVER then self:ResetRunBaselines() end
+function mod:PLAYER_ENTERING_WORLD(_, isInitialLogin, isReloadingUi)
+   if IS_FOREVER then
+      self:ResetRunBaselines()
+      if not (isInitialLogin or isReloadingUi) then self:OnRunEnter() end
+   end
    self:MatchBlizzardOnFirstLoad()
    if not self.startupDialogShown then
       C_Timer.After(3, function() self:ShowStartupDialogs() end)

@@ -152,6 +152,19 @@ function mod:DumpDungeon()
             tostring(select(3, GetInstanceLockTimeRemainingEncounter(i)))))
       end
    end
+   local mapID = C_Map and C_Map.GetBestMapForUnit and C_Map.GetBestMapForUnit("player")
+   local mapInfo = mapID and C_Map.GetMapInfo and C_Map.GetMapInfo(mapID)
+   print(format("rooms: subzone=%s minimap=%s map=%s %s", tostring(GetSubZoneText and GetSubZoneText()),
+      tostring(GetMinimapZoneText and GetMinimapZoneText()), tostring(mapID), tostring(mapInfo and mapInfo.name)))
+   local run = instanceID and self.db.char.dungeonKills[instanceID]
+   if run then
+      local kills = {}
+      for boss in pairs(run.bosses or {}) do tinsert(kills, boss) end
+      print(format("run: wing=%s known=%s entry=%s kills=%s", tostring(run.wing), tostring(run.wingKnown),
+         tostring(run.entry ~= nil), table.concat(kills, ", ")))
+   else
+      print("run: none")
+   end
    if not (journalID and EJ_SelectInstance and EJ_GetEncounterInfoByIndex) then return end
    EJ_SelectInstance(journalID)
    for i = 1, 40 do
@@ -1143,7 +1156,7 @@ local function DungeonRun(self, instanceID, name)
       end
       all[instanceID] = run
    end
-   run.name = name
+   run.name, run.instanceID = name, instanceID
    if not run.names then
       -- What this dungeon's quest log header can be called (see GetZoneRank).
       run.names = {}
@@ -1151,6 +1164,165 @@ local function DungeonRun(self, instanceID, name)
       run.tail = instanceTail
    end
    return run
+end
+
+-- Dungeons whose wings share one instance (and one boss list): each wing
+-- is its own dungeon. Boss and room names are the English ones; on other
+-- clients the bosses don't match and the whole list shows.
+local DUNGEON_WINGS = {
+   [189] = {  -- Scarlet Monastery
+      { title = L["Scarlet Monastery: Graveyard"],
+        bosses = { "Interrogator Vishas", "Azshir the Sleepless", "Fallen Champion", "Ironspine", "Bloodmage Thalnos" },
+        maps = { 302 },
+        rooms = { "Chamber of Atonement", "Forlorn Cloister", "Honor's Tomb" } },
+      { title = L["Scarlet Monastery: Library"],
+        bosses = { "Houndmaster Loksey", "Arcanist Doan" },
+        maps = { 303 },
+        rooms = { "Huntsman's Cloister", "Gallery of Treasures", "Athenaeum" } },
+      { title = L["Scarlet Monastery: Armory"],
+        bosses = { "Herod" },
+        maps = { 304 },
+        rooms = { "Training Grounds", "Footman's Armory", "Crusader's Armory", "Hall of Champions" } },
+      { title = L["Scarlet Monastery: Cathedral"],
+        bosses = { "High Inquisitor Fairbanks", "Scarlet Commander Mograine", "High Inquisitor Whitemane" },
+        -- Not in Forever's lock info: listed before Whitemane, kill seen
+        -- in the combat log (or implied by hers: he dies first).
+        extra = { ["Scarlet Commander Mograine"] = "High Inquisitor Whitemane" },
+        maps = { 305 },
+        rooms = { "Chapel Gardens", "Crusader's Chapel" } },
+   },
+   [429] = {  -- Dire Maul
+      { title = L["Dire Maul: East"],
+        bosses = { "Pusillin", "Zevrim Thornhoof", "Hydrospawn", "Lethtendris", "Alzzin the Wildshaper" } },
+      { title = L["Dire Maul: West"],
+        bosses = { "Tendris Warpwood", "Illyanna Ravenoak", "Tsu'zee", "Magister Kalendris", "Immol'thar",
+                   "Lord Hel'nurath", "Prince Tortheldrin" } },
+      { title = L["Dire Maul: North"],
+        bosses = { "Guard Mol'dar", "Stomper Kreeg", "Guard Fengus", "Guard Slip'kik", "Captain Kromcrush",
+                   "Cho'Rush the Observer", "King Gordok" } },
+   },
+   [329] = {  -- Stratholme
+      { title = L["Stratholme: Living"],
+        bosses = { "Skul", "Hearthsinger Forresten", "The Unforgiven", "Timmy the Cruel", "Malor the Zealous",
+                   "Postmaster Malown", "Cannon Master Willey", "Archivist Galford", "Balnazzar" } },
+      { title = L["Stratholme: Undead"],
+        bosses = { "Stonespine", "Magistrate Barthilas", "Nerub'enkan", "Baroness Anastari", "Maleki the Pallid",
+                   "Ramstein the Gorger", "Baron Rivendare" } },
+   },
+   [229] = {  -- Blackrock Spire
+      { title = L["Lower Blackrock Spire"],
+        bosses = { "Spirestone Butcher", "Spirestone Battle Lord", "Spirestone Lord Magus", "Highlord Omokk",
+                   "Shadow Hunter Vosh'gajin", "War Master Voone", "Mother Smolderweb", "Crystal Fang",
+                   "Urok Doomhowl", "Bannok Grimaxe", "Quartermaster Zigris", "Halycon", "Gizrul the Slavener",
+                   "Ghok Bashguud", "Overlord Wyrmthalak" } },
+      { title = L["Upper Blackrock Spire"],
+        bosses = { "Pyroguard Emberseer", "Solakar Flamewreath", "Jed Runewatcher", "Goraluk Anvilcrack", "Gyth",
+                   "Warchief Rend Blackhand", "The Beast", "Lord Valthalak", "General Drakkisath" } },
+   },
+}
+
+-- Lookups built on first use: wingOfBoss[instanceID][boss] and
+-- wingOfRoom[instanceID][room:lower()] = wing index.
+local wingOfBoss, wingOfRoom, wingOfMap
+local function WingLookups()
+   if wingOfBoss then return end
+   wingOfBoss, wingOfRoom, wingOfMap = {}, {}, {}
+   for instanceID, wings in pairs(DUNGEON_WINGS) do
+      local bosses, rooms, maps = {}, {}, {}
+      for index, wing in ipairs(wings) do
+         for _, boss in ipairs(wing.bosses) do bosses[boss] = index end
+         for _, room in ipairs(wing.rooms or EMPTY) do rooms[room:lower()] = index end
+         for _, mapID in ipairs(wing.maps or EMPTY) do maps[mapID] = index end
+      end
+      wingOfBoss[instanceID], wingOfRoom[instanceID], wingOfMap[instanceID] = bosses, rooms, maps
+   end
+end
+
+-- Bosses missing from the lock info, by name.
+local extraBosses = {}
+for _, wings in pairs(DUNGEON_WINGS) do
+   for _, wing in ipairs(wings) do
+      for boss in pairs(wing.extra or EMPTY) do extraBosses[boss] = true end
+   end
+end
+
+--- Records the death of a boss missing from the lock info (combat log).
+function mod:OnRunUnitDied(destName)
+   if destName and not issecretvalue(destName) and extraBosses[destName] then self:RecordBossKill(destName) end
+end
+
+--- Wing index of a boss in a winged dungeon, or nil.
+local function BossWing(instanceID, boss)
+   if not DUNGEON_WINGS[instanceID] then return end
+   WingLookups()
+   return wingOfBoss[instanceID][boss]
+end
+
+-- The wings' doors outside: inside the game names neither room nor map of a
+-- wing at first, but the portal walked through tells it. Zone map, its
+-- size in yards (w, h) and each portal's spot and wing index (classic
+-- AreaTrigger positions, as ForeverDungeonRoutes has them).
+local WING_PORTALS = {
+   [189] = { map = 1420, w = 4518.7499, h = 3012.4998,  -- Tirisfal Glades
+      { x = 0.848, y = 0.3031, wing = 1 },   -- Graveyard
+      { x = 0.8529, y = 0.3028, wing = 4 },  -- Cathedral
+      { x = 0.857, y = 0.3185, wing = 3 },   -- Armory
+      { x = 0.8538, y = 0.3246, wing = 2 },  -- Library
+   },
+   [429] = { map = 1444, w = 6949.9998, h = 4633.333,  -- Feralas
+      { x = 0.6486, y = 0.2943, wing = 1 },  -- East
+      { x = 0.672, y = 0.3485, wing = 1 },
+      { x = 0.7651, y = 0.3586, wing = 1 },
+      { x = 0.6031, y = 0.3175, wing = 2 },  -- West
+      { x = 0.6032, y = 0.2968, wing = 2 },
+      { x = 0.6292, y = 0.2491, wing = 3 },  -- North
+   },
+}
+local PORTAL_NEAR, PORTAL_FRESH = 15, 120  -- yards, seconds
+local outside  -- { map, x, y, t }: last spot on a zone map with wing portals
+
+--- Notes where the player stands outside (before loading screens and
+--- now and then), for telling the wing by the door used.
+function mod:NoteOutside()
+   if IsInInstance() or not (C_Map and C_Map.GetPlayerMapPosition) then return end
+   for _, portals in pairs(WING_PORTALS) do
+      local pos = C_Map.GetPlayerMapPosition(portals.map, "player")
+      local x, y = pos and pos.x, pos and pos.y
+      if type(x) == "number" and type(y) == "number" and not issecretvalue(x) and not issecretvalue(y)
+         and (x > 0 or y > 0) then
+         outside = { map = portals.map, x = x, y = y, t = time() }
+         return
+      end
+   end
+end
+
+-- Wing index of the portal just walked through, or nil. Used once.
+local function PortalWing(instanceID)
+   local portals = WING_PORTALS[instanceID]
+   local seen = outside
+   outside = nil
+   if not (portals and seen) or seen.map ~= portals.map or time() - seen.t > PORTAL_FRESH then return end
+   local best, bestDist
+   for _, portal in ipairs(portals) do
+      local d = math.sqrt(((seen.x - portal.x) * portals.w) ^ 2 + ((seen.y - portal.y) * portals.h) ^ 2)
+      if not bestDist or d < bestDist then best, bestDist = portal.wing, d end
+   end
+   if bestDist and bestDist <= PORTAL_NEAR then return best end
+end
+
+-- Wing index from the room the player stands in, or nil.
+local function RoomWing(instanceID)
+   if not DUNGEON_WINGS[instanceID] then return end
+   WingLookups()
+   local mapID = C_Map and C_Map.GetBestMapForUnit and C_Map.GetBestMapForUnit("player")
+   if mapID and not issecretvalue(mapID) and wingOfMap[instanceID][mapID] then
+      return wingOfMap[instanceID][mapID]
+   end
+   local rooms = wingOfRoom[instanceID]
+   for _, text in ipairs({ GetSubZoneText and GetSubZoneText(), GetMinimapZoneText and GetMinimapZoneText() }) do
+      local wing = type(text) == "string" and not issecretvalue(text) and rooms[text:lower()]
+      if wing then return wing end
+   end
 end
 
 local function InDungeon()
@@ -1169,16 +1341,20 @@ local function CurrentRun(self)
 end
 
 function mod:RecordBossKill(boss)
-   local run = boss and CurrentRun(self)
+   if not boss or issecretvalue(boss) then return end
+   local run = CurrentRun(self)
    if not run then return end
    run.bosses[boss] = true
+   local wing = BossWing(run.instanceID, boss)
+   if wing then self:SetRunWing(run, wing) end
    self:RequestUpdate()
 end
 
 local resetPattern
 --- Clears the recorded run of the instance a system message says was reset.
 function mod:CheckInstanceReset(msg)
-   if not msg or not INSTANCE_RESET_SUCCESS then return end
+   -- Chat messages can be secret (Forever, in instances).
+   if not msg or issecretvalue(msg) or not INSTANCE_RESET_SUCCESS then return end
    if not resetPattern then
       resetPattern = "^" .. INSTANCE_RESET_SUCCESS:gsub("[%^%$%(%)%.%[%]%*%+%-%?]", "%%%0"):gsub("%%s", "(.+)") .. "$"
    end
@@ -1200,10 +1376,15 @@ end
 local lastXP, lastXPMax, lastLevel
 local lastMoney
 
--- Stats are part of the Dungeon section: off with it.
+-- Stats show as part of the Dungeon section: off with it. They are always
+-- recorded (Forever), so turning them on mid-run shows the whole run.
 local function StatsOn(self)
    local profile = self.db.profile
    return mod.IS_FOREVER and profile.showDungeonBosses and profile.showDungeonStats
+end
+
+local function Tracking()
+   return mod.IS_FOREVER
 end
 
 --- Baselines for the XP and money deltas; call on entering the world.
@@ -1223,7 +1404,7 @@ function mod:OnRunXP()
       end
    end
    lastXP, lastXPMax, lastLevel = xp, max, level
-   if delta <= 0 or not StatsOn(self) then return end
+   if delta <= 0 or not Tracking() then return end
    local run = CurrentRun(self)
    if not run then return end
    run.xp = (run.xp or 0) + delta
@@ -1236,7 +1417,7 @@ function mod:OnRunMoney()
    lastMoney = money
    -- Gains only: buying or repairing doesn't take it back. Selling at a
    -- vendor isn't counted, the loot's vendor value already is.
-   if not before or money <= before or not StatsOn(self) then return end
+   if not before or money <= before or not Tracking() then return end
    if MerchantFrame and MerchantFrame:IsShown() then return end
    local run = CurrentRun(self)
    if not run then return end
@@ -1271,7 +1452,7 @@ end
 
 --- Vendor value of the items looted in the run (added to the money).
 function mod:OnRunLoot(msg)
-   if not msg or not StatsOn(self) or not LOOT_ITEM_SELF then return end
+   if not msg or issecretvalue(msg) or not Tracking() or not LOOT_ITEM_SELF then return end
    if not lootPatterns then
       lootPatterns = {}
       if LOOT_ITEM_SELF_MULTIPLE then tinsert(lootPatterns, LootPattern(LOOT_ITEM_SELF_MULTIPLE)) end
@@ -1288,7 +1469,7 @@ function mod:OnRunLoot(msg)
 end
 
 function mod:OnRunDeath()
-   local run = StatsOn(self) and CurrentRun(self)
+   local run = Tracking() and CurrentRun(self)
    if not run then return end
    run.deaths = (run.deaths or 0) + 1
    self:RequestUpdate()
@@ -1296,11 +1477,58 @@ end
 
 --- The run's clock starts with the first fight inside.
 function mod:OnRunCombat()
-   local run = StatsOn(self) and CurrentRun(self)
-   if run and not run.started then
+   local run = Tracking() and CurrentRun(self)
+   if not run then return end
+   if run.entry and not run.entry.combat then run.entry.combat = time() end
+   if not run.started then
       run.started = time()
       self:RequestUpdate()
    end
+end
+
+-- Winged dungeons: the stats are the current wing's. Walking in starts a
+-- visit of a wing not known yet (shown with all bosses) and notes the
+-- stats so far; once the wing is known (room name or a boss kill) and it
+-- isn't the run's last one, the stats start over from that note.
+local RUN_COUNTERS = { "xp", "turnInXP", "money", "itemValue", "deaths" }
+
+--- Called on walking into an instance (not on /reload).
+local enteredWing  -- { instanceID, wing } from the door, applied on collect
+function mod:OnRunEnter()
+   local instanceID = InDungeon()
+   if not instanceID or not DUNGEON_WINGS[instanceID] then return end
+   local wing = PortalWing(instanceID)
+   enteredWing = wing and { instanceID = instanceID, wing = wing } or nil
+   -- A new run has nothing to note (and is made once the quest log is in).
+   local run = self.db.char.dungeonKills[instanceID]
+   if not run or time() - (run.time or 0) > DUNGEON_RUN_EXPIRE then return end
+   local entry = {}
+   for _, key in ipairs(RUN_COUNTERS) do entry[key] = run[key] or 0 end
+   entry.quests = {}
+   for questID in pairs(run.quests or EMPTY) do entry.quests[questID] = true end
+   run.entry, run.wingKnown = entry, false
+end
+
+function mod:SetRunWing(run, wing)
+   if run.wingKnown and run.wing == wing then return end
+   local entry = run.entry
+   if run.wing and run.wing ~= wing and entry then
+      -- Another wing: its stats are those since walking in.
+      for _, key in ipairs(RUN_COUNTERS) do
+         run[key] = math.max(0, (run[key] or 0) - (entry[key] or 0))
+      end
+      run.quests, run.questsBefore = run.quests or {}, run.questsBefore or {}
+      for questID in pairs(entry.quests) do
+         run.quests[questID] = nil
+         run.questsBefore[questID] = true
+      end
+      run.started, run.finished = entry.combat, nil
+      for key in pairs(entry) do entry[key] = nil end
+      entry.quests = {}
+      for _, key in ipairs(RUN_COUNTERS) do entry[key] = 0 end
+   end
+   run.wing, run.wingKnown = wing, true
+   self:RequestUpdate()
 end
 
 local function RunMatchesHeader(run, header)
@@ -1315,7 +1543,7 @@ end
 --- Quest turned in inside: its XP is taken out of the kill XP (the UnitXP
 --- change includes it). Dungeon quests count as Quest XP once complete.
 function mod:OnRunQuestTurnedIn(questID, xp)
-   if not StatsOn(self) or not xp or xp <= 0 then return end
+   if not Tracking() or not xp or xp <= 0 then return end
    local run = CurrentRun(self)
    if run then
       run.turnInXP = (run.turnInXP or 0) + xp
@@ -1407,44 +1635,95 @@ local function AddRunStats(self, dungeon, run, profile)
    AddStatLine(dungeon, parts, elapsedFrom)
 end
 
+-- Calls fn(boss, killed) for each boss of the lock (of the current wing in
+-- a winged dungeon) and the wing's extra bosses, in order.
+local function ForEachBoss(numEncounters, run, wing, wingInfo, fn)
+   local extra = wingInfo and wingInfo.extra
+   local shown = extra and new()
+   for i = 1, numEncounters do
+      local boss, _, isKilled = GetInstanceLockTimeRemainingEncounter(i)
+      local bossWing = boss and wing and BossWing(run.instanceID, boss)
+      if boss and (not bossWing or bossWing == wing) then
+         local killed = isKilled or run.bosses[boss] or false
+         for name, before in pairs(extra or EMPTY) do
+            if before == boss and not shown[name] then
+               shown[name] = true
+               fn(name, killed or run.bosses[name] or false)
+            end
+         end
+         fn(boss, killed)
+      end
+   end
+   for name in pairs(extra or EMPTY) do
+      if not shown[name] then fn(name, run.bosses[name] or false) end
+   end
+   if shown then del(shown) end
+end
+
 --- Returns a scenario-shaped table (see CollectScenario) for the current
 --- Forever dungeon: one "0/1 Boss defeated" objective per boss and the run
 --- stats, as enabled. Nil when not in one or both are off.
 function mod:CollectDungeon()
    local profile = self.db.profile
-   if not profile.showDungeonBosses then return end
-   local showBosses = GetInstanceLockTimeRemaining ~= nil
-   local showStats = StatsOn(self)
    local instanceID, name = InDungeon()
    if not instanceID then return end
    local run = DungeonRun(self, instanceID, name)
+   local wings = DUNGEON_WINGS[instanceID]
+   if wings then
+      local wing = RoomWing(instanceID)
+      if not wing and enteredWing and enteredWing.instanceID == instanceID then
+         wing = enteredWing.wing
+      end
+      enteredWing = nil
+      if not wing and not run.wingKnown and not run.wing then
+         -- No wing seen in this run yet: the wing of the kills so far, if
+         -- they're all in one.
+         for boss in pairs(run.bosses) do
+            local bossWing = BossWing(instanceID, boss)
+            if bossWing then
+               if wing and wing ~= bossWing then wing = nil break end
+               wing = bossWing
+            end
+         end
+      end
+      if wing then self:SetRunWing(run, wing) end
+   end
+   -- Winged dungeon: only the current wing's bosses (all while not known).
+   local wing = wings and run.wingKnown and run.wing
+   local wingInfo = wing and wings[wing]
+   if wingInfo then name = wingInfo.title end
+   -- Recorded even while not shown: completed quests and the end of the run.
+   UpdateRunQuests(run)
+   local numEncounters = GetInstanceLockTimeRemaining and select(3, GetInstanceLockTimeRemaining()) or 0
+   if run.started and not run.finished and numEncounters > 0 and (wing or not wings) then
+      local allKilled = true
+      ForEachBoss(numEncounters, run, wing, wingInfo, function(_, killed)
+         if not killed then allKilled = false end
+      end)
+      if allKilled then run.finished = time() end  -- the clock stops
+   end
+   if not profile.showDungeonBosses then return end
+   local showBosses = GetInstanceLockTimeRemaining ~= nil
+   local showStats = StatsOn(self)
    local dungeon = new()
    dungeon.name, dungeon.header, dungeon.stageName = name, TRACKER_HEADER_DUNGEON or L["Dungeon"], name
    dungeon.criteria = new()
    dungeon.bonus = new()
    dungeon.numStages, dungeon.stage = 1, 1
-   local numEncounters = GetInstanceLockTimeRemaining and select(3, GetInstanceLockTimeRemaining()) or 0
    local numKilled, numBosses = 0, 0
-   for i = 1, numEncounters do
-      local boss, _, isKilled = GetInstanceLockTimeRemainingEncounter(i)
-      if boss then
-         numBosses = numBosses + 1
-         local killed = isKilled or run.bosses[boss] or false
-         if killed then numKilled = numKilled + 1 end
-         if showBosses then
-            local objective = new()
-            objective.text = format("%d/1 %s", killed and 1 or 0, format(L["%s defeated"], boss))
-            objective.finished = killed
-            objective.alwaysShow = true  -- killed bosses stay listed
-            tinsert(dungeon.criteria, objective)
-         end
+   ForEachBoss(numEncounters, run, wing, wingInfo, function(boss, killed)
+      numBosses = numBosses + 1
+      if killed then numKilled = numKilled + 1 end
+      if showBosses then
+         local objective = new()
+         objective.text = format("%d/1 %s", killed and 1 or 0, format(L["%s defeated"], boss))
+         objective.finished = killed
+         objective.alwaysShow = true  -- killed bosses stay listed
+         tinsert(dungeon.criteria, objective)
       end
-   end
+   end)
    local done = numBosses > 0 and numKilled == numBosses
-   if done then
-      dungeon.stage = 2
-      if run.started and not run.finished then run.finished = time() end  -- the clock stops
-   end
+   if done then dungeon.stage = 2 end
    if showStats then
       AddRunStats(self, dungeon, run, profile)
    end

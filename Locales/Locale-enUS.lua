@@ -451,3 +451,14 @@ L["The quest item bar is turned off; turn it on in the settings or in Edit Mode.
 L["Max distance (%s)"] = true
 L["Only show the items of quests whose objective area is within this distance. The focused quest's item is always shown. 0 shows items at any distance."] = true
 L["Any distance"] = true
+L["Scarlet Monastery: Graveyard"] = true
+L["Scarlet Monastery: Library"] = true
+L["Scarlet Monastery: Armory"] = true
+L["Scarlet Monastery: Cathedral"] = true
+L["Dire Maul: East"] = true
+L["Dire Maul: West"] = true
+L["Dire Maul: North"] = true
+L["Stratholme: Living"] = true
+L["Stratholme: Undead"] = true
+L["Lower Blackrock Spire"] = true
+L["Upper Blackrock Spire"] = true
