@@ -321,12 +321,33 @@ function mod:OnEnable()
       end)
       if CombatLogGetCurrentEventInfo then
          self:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED", function()
-            local _, subEvent, _, _, _, _, _, _, destName = CombatLogGetCurrentEventInfo()
+            local _, subEvent, _, sourceGUID, _, _, _, destGUID, destName = CombatLogGetCurrentEventInfo()
             if subEvent == "UNIT_DIED" then mod:OnRunUnitDied(destName) end
+            if mod:RunCopyUnknown() then
+               mod:NoteRunCopy(sourceGUID)
+               mod:NoteRunCopy(destGUID)
+            end
          end)
       end
       -- Wing of Scarlet Monastery / Dire Maul by the door used.
       self:RegisterEvent("PLAYER_LEAVING_WORLD", "NoteOutside")
+      -- Mobs seen: the run's instance copy.
+      self:RegisterEvent("PLAYER_TARGET_CHANGED", function()
+         if mod:RunCopyUnknown() then mod:NoteRunCopy(UnitGUID("target")) end
+      end)
+      self:RegisterEvent("UPDATE_MOUSEOVER_UNIT", function()
+         if mod:RunCopyUnknown() then mod:NoteRunCopy(UnitGUID("mouseover")) end
+      end)
+      self:RegisterEvent("NAME_PLATE_UNIT_ADDED", function(_, unit)
+         if mod:RunCopyUnknown() then mod:NoteRunCopy(UnitGUID(unit)) end
+      end)
+      -- Kills of bosses missing from the lock info, by name.
+      -- (No hostile death chat in Forever: only kills giving XP are seen.)
+      for _, event in ipairs({ "CHAT_MSG_COMBAT_HOSTILE_DEATH", "CHAT_MSG_COMBAT_XP_GAIN" }) do
+         if not C_EventUtils or not C_EventUtils.IsEventValid or C_EventUtils.IsEventValid(event) then
+            self:RegisterEvent(event, function(_, msg) mod:OnRunDeathMessage(msg) end)
+         end
+      end
       self:ScheduleRepeatingTimer("NoteOutside", 0.5)
       self:RegisterEvent("UPDATE_INSTANCE_INFO", "RequestUpdate")
       self:RegisterEvent("CHAT_MSG_SYSTEM", function(_, msg) mod:CheckInstanceReset(msg) end)
@@ -826,6 +847,9 @@ function mod:PrintHelp()
    self:info(L["/mqt config  - open settings"])
    self:info(L["/mqt wizard  - run the setup wizard"])
    self:info(L["/mqt new     - show what's new"])
+   if IS_FOREVER then
+      self:info(L["/mqt newrun  - start a new dungeon run (stats and kills)"])
+   end
 end
 
 function mod:ChatCommand(input)
@@ -850,6 +874,10 @@ function mod:ChatCommand(input)
       self:CheckQuestLogFull(true)
    elseif cmd == "bardebug" then
       self:DumpQuestBar()
+   elseif cmd == "newrun" then
+      if not (IS_FOREVER and self:NewDungeonRun()) then
+         self:info(L["Not in a dungeon."])
+      end
    elseif cmd == "dungeondebug" then
       self:DumpDungeon()
    elseif cmd == "zonedebug" then

@@ -160,11 +160,13 @@ function mod:DumpDungeon()
    if run then
       local kills = {}
       for boss in pairs(run.bosses or {}) do tinsert(kills, boss) end
-      print(format("run: wing=%s known=%s entry=%s kills=%s", tostring(run.wing), tostring(run.wingKnown),
-         tostring(run.entry ~= nil), table.concat(kills, ", ")))
+      print(format("run: wing=%s known=%s entry=%s copy=%s kills=%s", tostring(run.wing), tostring(run.wingKnown),
+         tostring(run.entry ~= nil), tostring(run.copy), table.concat(kills, ", ")))
    else
       print("run: none")
    end
+   local guid = UnitGUID("target")
+   print(format("target guid=%s", issecretvalue and guid and issecretvalue(guid) and "<secret>" or tostring(guid)))
    if not (journalID and EJ_SelectInstance and EJ_GetEncounterInfoByIndex) then return end
    EJ_SelectInstance(journalID)
    for i = 1, 40 do
@@ -1137,9 +1139,11 @@ end
 ----------------------------------------------------------------
 
 -- Runs are kept per instance ID until the instance is reset ("X has been
--- reset."). As a fallback for resets that aren't seen (another group
--- leader's), a run not seen for this long is from an earlier one.
-local DUNGEON_RUN_EXPIRE = 4 * 60 * 60
+-- reset."). Resets that aren't seen (another group leader's, a new group's
+-- copy) end a run too: a run not seen for this long is from an earlier one;
+-- walking back in after all bosses died starts a new one; and so does a
+-- boss dying again (RecordBossKill). Like the Dungeon Journal addon.
+local DUNGEON_RUN_EXPIRE = 90 * 60
 
 -- Run record: { name, time (last activity), bosses = { [bossName] = true },
 -- names = { zone names }, tail, started, finished (time()), xp, turnInXP,
@@ -1248,7 +1252,9 @@ end
 
 --- Records the death of a boss missing from the lock info (combat log).
 function mod:OnRunUnitDied(destName)
-   if destName and not issecretvalue(destName) and extraBosses[destName] then self:RecordBossKill(destName) end
+   if destName and not issecretvalue(destName) and extraBosses[destName] then
+      self:RecordBossKill(destName)
+   end
 end
 
 --- Wing index of a boss in a winged dungeon, or nil.
@@ -1344,7 +1350,14 @@ function mod:RecordBossKill(boss)
    if not boss or issecretvalue(boss) then return end
    local run = CurrentRun(self)
    if not run then return end
+   run.killedAt = run.killedAt or {}
+   -- Killed before (not this kill's other event): the dungeon was reset, a
+   -- new run since walking in.
+   if run.bosses[boss] and time() - (run.killedAt[boss] or 0) > 60 then
+      self:StartRunOver(run)
+   end
    run.bosses[boss] = true
+   run.killedAt[boss] = time()
    local wing = BossWing(run.instanceID, boss)
    if wing then self:SetRunWing(run, wing) end
    self:RequestUpdate()
@@ -1385,6 +1398,34 @@ end
 
 local function Tracking()
    return mod.IS_FOREVER
+end
+
+-- "X dies." / "X dies, you gain N experience." / "You have slain X!": kills
+-- of the bosses missing from the lock info. (Forever closes the combat log
+-- to addons.)
+local deathPatterns
+function mod:OnRunDeathMessage(msg)
+   if not msg or issecretvalue(msg) or not Tracking() or not IsInInstance() then return end
+   if not deathPatterns then
+      deathPatterns = {}
+      for _, text in ipairs({ UNITDIESOTHER, SELFKILLOTHER, COMBATLOG_XPGAIN_FIRSTPERSON,
+                              COMBATLOG_XPGAIN_EXHAUSTION1, COMBATLOG_XPGAIN_EXHAUSTION2 }) do
+         if type(text) == "string" then
+            -- Only the name is captured: "%s" first, the rest matched loosely.
+            local pattern = "^" .. text:gsub("[%^%$%(%)%.%[%]%*%+%-%?]", "%%%0")
+               :gsub("%%s", "(.+)", 1):gsub("%%s", ".+"):gsub("%%d", "[%%d,%%.]+")
+               :gsub("%%%.1f", "[%%d,%%.]+")
+            tinsert(deathPatterns, pattern)
+         end
+      end
+   end
+   for _, pattern in ipairs(deathPatterns) do
+      local name = msg:match(pattern)
+      if name then
+         self:OnRunUnitDied(name)
+         return
+      end
+   end
 end
 
 --- Baselines for the XP and money deltas; call on entering the world.
@@ -1494,40 +1535,138 @@ local RUN_COUNTERS = { "xp", "turnInXP", "money", "itemValue", "deaths" }
 
 --- Called on walking into an instance (not on /reload).
 local enteredWing  -- { instanceID, wing } from the door, applied on collect
+-- Name of the group's leader (the player when alone), or nil.
+local function GroupLeader()
+   if not IsInGroup() then return UnitName("player") end
+   local prefix, count = "party", GetNumSubgroupMembers()
+   if IsInRaid() then prefix, count = "raid", GetNumGroupMembers() end
+   if UnitIsGroupLeader("player") then return UnitName("player") end
+   for i = 1, count do
+      local unit = prefix .. i
+      if UnitIsGroupLeader(unit) then
+         local name, realm = UnitName(unit)
+         if name and not issecretvalue(name) then
+            return realm and realm ~= "" and not issecretvalue(realm) and (name .. "-" .. realm) or name
+         end
+      end
+   end
+end
+
+-- Instance copy (see NoteRunCopy) not seen yet since walking in.
+local copyUnknown = false
+
 function mod:OnRunEnter()
    local instanceID = InDungeon()
-   if not instanceID or not DUNGEON_WINGS[instanceID] then return end
-   local wing = PortalWing(instanceID)
-   enteredWing = wing and { instanceID = instanceID, wing = wing } or nil
+   copyUnknown = instanceID ~= nil
+   if not instanceID then return end
+   if DUNGEON_WINGS[instanceID] then
+      local wing = PortalWing(instanceID)
+      enteredWing = wing and { instanceID = instanceID, wing = wing } or nil
+   end
    -- A new run has nothing to note (and is made once the quest log is in).
-   local run = self.db.char.dungeonKills[instanceID]
+   local all = self.db.char.dungeonKills
+   local run = all[instanceID]
    if not run or time() - (run.time or 0) > DUNGEON_RUN_EXPIRE then return end
+   if run.finished and not DUNGEON_WINGS[instanceID] then
+      -- Done: back in is the next run. (Winged: per wing, by SetRunWing.)
+      all[instanceID] = nil
+      return
+   end
+   local leader = GroupLeader()
+   if run.leader and leader and run.leader ~= leader then
+      -- Another leader's instance (a new group): the next run.
+      all[instanceID] = nil
+      return
+   end
    local entry = {}
    for _, key in ipairs(RUN_COUNTERS) do entry[key] = run[key] or 0 end
    entry.quests = {}
    for questID in pairs(run.quests or EMPTY) do entry.quests[questID] = true end
-   run.entry, run.wingKnown = entry, false
+   run.entry = entry
+   if DUNGEON_WINGS[instanceID] then run.wingKnown = false end
+end
+
+-- Stats start over from walking in (another wing or instance copy).
+local function StartOver(run)
+   local entry = run.entry
+   if not entry then
+      -- Nothing noted on walking in: all from now.
+      entry = { quests = {} }
+      for _, key in ipairs(RUN_COUNTERS) do entry[key] = run[key] or 0 end
+      for questID in pairs(run.quests or EMPTY) do entry.quests[questID] = true end
+      run.entry = entry
+   end
+   for _, key in ipairs(RUN_COUNTERS) do
+      run[key] = math.max(0, (run[key] or 0) - (entry[key] or 0))
+   end
+   run.quests, run.questsBefore = run.quests or {}, run.questsBefore or {}
+   for questID in pairs(entry.quests) do
+      run.quests[questID] = nil
+      run.questsBefore[questID] = true
+   end
+   run.started, run.finished = entry.combat, nil
+   for key in pairs(entry) do entry[key] = nil end
+   entry.quests = {}
+   for _, key in ipairs(RUN_COUNTERS) do entry[key] = 0 end
+end
+
+--- /mqt newrun, the Dungeon header menu: the current dungeon's run starts
+--- over from now (for a reset or new group not seen). The wing stays.
+function mod:NewDungeonRun()
+   local instanceID = InDungeon()
+   if not instanceID then return false end
+   local all = self.db.char.dungeonKills
+   local run = all[instanceID]
+   if run and run.wingKnown then enteredWing = { instanceID = instanceID, wing = run.wing } end
+   all[instanceID] = nil
+   self:RequestUpdate()
+   return true
+end
+
+--- Whether the player is in a Forever dungeon (with a run to start over).
+function mod:InForeverDungeon()
+   return InDungeon() ~= nil
+end
+
+--- New run from walking in on: no kills, stats since then.
+function mod:StartRunOver(run)
+   StartOver(run)
+   wipe(run.bosses)
+   if run.killedAt then wipe(run.killedAt) end
+   self:RequestUpdate()
 end
 
 function mod:SetRunWing(run, wing)
    if run.wingKnown and run.wing == wing then return end
-   local entry = run.entry
-   if run.wing and run.wing ~= wing and entry then
-      -- Another wing: its stats are those since walking in.
-      for _, key in ipairs(RUN_COUNTERS) do
-         run[key] = math.max(0, (run[key] or 0) - (entry[key] or 0))
-      end
-      run.quests, run.questsBefore = run.quests or {}, run.questsBefore or {}
-      for questID in pairs(entry.quests) do
-         run.quests[questID] = nil
-         run.questsBefore[questID] = true
-      end
-      run.started, run.finished = entry.combat, nil
-      for key in pairs(entry) do entry[key] = nil end
-      entry.quests = {}
-      for _, key in ipairs(RUN_COUNTERS) do entry[key] = 0 end
+   if run.wing and run.wing ~= wing then
+      StartOver(run)
+   elseif run.wing == wing and run.finished then
+      -- Walked back into a finished wing: the next run.
+      self:StartRunOver(run)
    end
    run.wing, run.wingKnown = wing, true
+   self:RequestUpdate()
+end
+
+--- Whether the instance copy is still to be found (watch mob GUIDs).
+function mod:RunCopyUnknown()
+   return copyUnknown
+end
+
+--- Notes the instance copy from a mob's GUID
+--- (Creature-0-server-map-zoneUID-npcID-spawnUID). Another group's copy of
+--- the same dungeon (same instance ID) is a new run: no kills, stats from
+--- walking in.
+function mod:NoteRunCopy(guid)
+   if not copyUnknown or not guid or issecretvalue(guid) then return end
+   local kind, _, server, _, zone = strsplit("-", guid)
+   if kind ~= "Creature" and kind ~= "Vehicle" or not zone then return end
+   local run = CurrentRun(self)
+   if not run then return end
+   copyUnknown = false
+   local copy = server .. ":" .. zone
+   if run.copy and run.copy ~= copy then self:StartRunOver(run) end
+   run.copy = copy
    self:RequestUpdate()
 end
 
@@ -1668,6 +1807,8 @@ function mod:CollectDungeon()
    local instanceID, name = InDungeon()
    if not instanceID then return end
    local run = DungeonRun(self, instanceID, name)
+   -- The leader inside (a leader change in the group keeps the instance).
+   run.leader = GroupLeader() or run.leader
    local wings = DUNGEON_WINGS[instanceID]
    if wings then
       local wing = RoomWing(instanceID)

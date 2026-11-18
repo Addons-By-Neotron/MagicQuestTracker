@@ -1962,6 +1962,13 @@ mod.lineClickHandlers = {
          ShowQuestsHeaderMenu(line)
          return
       end
+      -- Right-click on a Forever dungeon's header: start a new run.
+      if button == "RightButton" and section.key == "scenario" and self:InForeverDungeon() then
+         MenuUtil.CreateContextMenu(line, function(_, root)
+            root:CreateButton(L["Start a new run"], function() mod:NewDungeonRun() end)
+         end)
+         return
+      end
       local collapsed = self.db.char.collapsedSections
       collapsed[section.key] = not collapsed[section.key] or nil
       self:RequestUpdate()

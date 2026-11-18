@@ -462,3 +462,6 @@ L["Stratholme: Living"] = true
 L["Stratholme: Undead"] = true
 L["Lower Blackrock Spire"] = true
 L["Upper Blackrock Spire"] = true
+L["Start a new run"] = true
+L["Not in a dungeon."] = true
+L["/mqt newrun  - start a new dungeon run (stats and kills)"] = true
