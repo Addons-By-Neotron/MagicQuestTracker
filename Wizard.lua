@@ -889,7 +889,6 @@ local function CreateWizard()
       self.nameBox:Hide()
       self.error:SetText("")
       StartWork()
-      mod:MarkWhatsNewSeen()
       self:ShowPage(1)
    end)
    return frame
@@ -989,6 +988,26 @@ local WHATS_NEW = {
       end,
       nil,
       function() return mod.IS_FOREVER end },
+   { L["Quest details window"],
+      L["Clicking a quest opens a window with its objectives, description and rewards, and buttons to show it on the map, focus, track, share or abandon it. This keeps Blizzard's map and quest log working in combat."] },
+   { L["Dungeon wings"],
+      L["Scarlet Monastery, Dire Maul, Stratholme and Blackrock Spire list only the bosses of the wing you entered."],
+      nil, nil,
+      nil,
+      function() return mod.IS_FOREVER end },
+   { L["New dungeon runs"],
+      L["Kills and run stats start over when the dungeon is reset, when you enter with a different group leader, or when you walk into a finished run. Right-click the Dungeon header or type /mqt newrun to start over yourself."],
+      nil, nil,
+      nil,
+      function() return mod.IS_FOREVER end },
+   { L["Dungeon run summary"],
+      L["After you leave a dungeon its section stays for a minute. Click its chat button to post the run's kills and stats to your group, and hover the stats for XP and money per hour. Switch this on to also print the summary to your chat window when leaving."],
+      function() return mod:GetWizardOption("dungeonSummaryOnLeave") end,
+      function(value) mod:SetWizardOption("dungeonSummaryOnLeave", value) end,
+      nil,
+      function() return mod.IS_FOREVER end },
+   { L["Fewer errors in combat"],
+      L["Blizzard blocks some actions in combat once an addon has touched parts of its UI, which caused \"action blocked\" errors and a map that wouldn't open. To avoid that, a few things work a little differently now: clicking a quest opens the details window instead of the map, and its map button only works out of combat (it opens the quest log when Blizzard's tracker has no room for the quest). /mqt config opens the settings in their own window, the right-click menus have their own look, and changing the focused quest in combat takes effect when combat ends."] },
 }
 
 local LATEST_ID = #WHATS_NEW
@@ -1077,15 +1096,34 @@ function mod:ShowWhatsNew(all, showHidden)
       self.whatsNewFrame = frame
       AddButton(frame, L["Run setup wizard"], "BOTTOMLEFT", 28, function() mod:ShowWizard() end, 160)
       AddButton(frame, L["Close"], "BOTTOMRIGHT", -28, function() frame:Hide() end, 100)
-      AddButton(frame, L["Don't show again"], "BOTTOM", 25, function()
-         mod.db.global.whatsNewDisabled = true
-         frame:Hide()
-      end, 140)
+      -- Same checkbox as LibMagicUtil's confirm dialog.
+      local check = CreateFrame("CheckButton", nil, frame, "UICheckButtonTemplate")
+      check:SetSize(24, 24)
+      local label = check.Text or check.text
+      if not label then
+         label = check:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+         label:SetPoint("LEFT", check, "RIGHT", 2, 0)
+      end
+      label:SetFontObject("GameFontHighlightSmall")
+      label:SetText(L["Don't show again"])
+      -- Above the buttons, lined up with the left one.
+      check:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 24, 46)
+      check:SetScript("OnClick", function(self)
+         mod.db.global.whatsNewDisabled = self:GetChecked() and true or nil
+      end)
+      check:SetScript("OnEnter", function(self)
+         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+         GameTooltip:SetText(L["Don't show again"])
+         GameTooltip:AddLine(L["This window won't open by itself after updates. Turn it back on, or open it any time, in the General settings."], 1, 1, 1, true)
+         GameTooltip:Show()
+      end)
+      check:SetScript("OnLeave", GameTooltip_Hide)
+      frame.dontShow = check
       frame:SetScript("OnHide", function() mod:MarkWhatsNewSeen() end)
       -- Many releases' worth of features scroll instead of growing the window.
       local scroll = CreateFrame("ScrollFrame", nil, frame, "UIPanelScrollFrameTemplate")
       scroll:SetPoint("TOPLEFT", 28, -52)
-      scroll:SetPoint("BOTTOMRIGHT", -46, 56)
+      scroll:SetPoint("BOTTOMRIGHT", -46, 80)
       frame.child = CreateFrame("Frame", nil, scroll)
       frame.child:SetSize(1, 1)
       scroll:SetScrollChild(frame.child)
@@ -1156,11 +1194,12 @@ function mod:ShowWhatsNew(all, showHidden)
    for _, refresh in ipairs(refreshers) do refresh() end
    frame.child:SetSize(width, y)
    frame.scroll:SetVerticalScroll(0)
-   -- Up to 3/4 of the screen; the scroll bar only when the list doesn't fit.
-   local height = math.min(y + 112, math.floor(UIParent:GetHeight() * 0.75))
+   -- Up to 60% of the screen; the scroll bar only when the list doesn't fit.
+   local height = math.min(y + 136, math.floor(UIParent:GetHeight() * 0.6))
    frame:SetHeight(height)
    local scrollBar = frame.scroll.ScrollBar or _G[(frame.scroll:GetName() or "") .. "ScrollBar"]
-   if scrollBar then scrollBar:SetShown(y > height - 108) end
+   if scrollBar then scrollBar:SetShown(y > height - 132) end
+   frame.dontShow:SetChecked(self.db.global.whatsNewDisabled and true or false)
    frame:Show()
 end
 

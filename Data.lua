@@ -1206,10 +1206,10 @@ local DUNGEON_WINGS = {
                    "Cho'Rush the Observer", "King Gordok" } },
    },
    [329] = {  -- Stratholme
-      { title = L["Stratholme: Living"],
+      { title = L["Stratholme: Main Gate"],
         bosses = { "Skul", "Hearthsinger Forresten", "The Unforgiven", "Timmy the Cruel", "Malor the Zealous",
                    "Postmaster Malown", "Cannon Master Willey", "Archivist Galford", "Balnazzar" } },
-      { title = L["Stratholme: Undead"],
+      { title = L["Stratholme: Service Entrance"],
         bosses = { "Stonespine", "Magistrate Barthilas", "Nerub'enkan", "Baroness Anastari", "Maleki the Pallid",
                    "Ramstein the Gorger", "Baron Rivendare" } },
    },

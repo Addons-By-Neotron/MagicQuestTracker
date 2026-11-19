@@ -1011,11 +1011,22 @@ local function BuildOptions()
                   showWhatsNew = {
                      type = "toggle",
                      name = L["Show what's new after updates"],
-                     desc = L["Show the list of new features when an update adds some. Turned off by the window's Don't show again button."],
+                     desc = L["Show the list of new features when an update adds some. Turned off by the window's Don't show again checkbox."],
                      order = 4,
                      width = COLUMN_WIDTH,
                      get = function() return not mod.db.global.whatsNewDisabled end,
                      set = function(_, val) mod.db.global.whatsNewDisabled = not val or nil end,
+                  },
+                  openWhatsNew = {
+                     type = "execute",
+                     name = L["Show what's new"],
+                     desc = L["Open the list of all features added in updates."],
+                     order = 4.5,
+                     -- The settings window would cover it.
+                     func = function()
+                        mod:CloseConfig()
+                        mod:ShowWhatsNew(true)
+                     end,
                   },
                   cmdHeader = { type = "header", name = L["Commands"], order = 90 },
                   cmdDesc = {
@@ -1024,7 +1035,7 @@ local function BuildOptions()
                         .. L["/mqt config  - open settings"] .. "\n"
                         .. L["/mqt wizard  - run the setup wizard"] .. "\n"
                         .. L["/mqt new     - show what's new"],
-                     order = 5,
+                     order = 91,
                      fontSize = "medium",
                   },
                },

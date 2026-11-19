@@ -203,7 +203,7 @@ local function UpdateMapButton(inCombat)
    if autoComplete then
       button:SetText(COMPLETE_QUEST or L["Complete quest"])
    elseif viaLog then
-      button:SetText(L["Open Quest Log"])
+      button:SetText(L["Open quest log"])
    else
       button:SetText(OBJECTIVES_SHOW_QUEST_MAP or L["Show on map"])
    end
