@@ -581,6 +581,14 @@ local function BuildOptions()
                      width = COLUMN_WIDTH,
                      hidden = function() return not mod.IS_FOREVER end,
                   },
+                  dungeonSummaryOnLeave = {
+                     type = "toggle",
+                     name = L["Print run summary on leaving"],
+                     desc = L["Print the dungeon run's kills and stats to the chat frame when leaving the dungeon. Right-click the Dungeon header to print it any time."],
+                     order = 7.7,
+                     width = COLUMN_WIDTH,
+                     hidden = function() return not mod.IS_FOREVER end,
+                  },
                   dungeonStats = {
                      type = "group",
                      name = L["Dungeon run stats"],

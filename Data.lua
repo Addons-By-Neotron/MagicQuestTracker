@@ -1731,7 +1731,7 @@ end
 
 -- Lines below the bosses: XP, money (coins and items' vendor value), then
 -- time and deaths.
-local function AddRunStats(self, dungeon, run, profile)
+local function AddRunStats(self, dungeon, run, profile, stoppedAt)
    dungeon.stats = new()
    local parts = new()
    local killXP = math.max(0, (run.xp or 0) - (run.turnInXP or 0))
@@ -1740,9 +1740,9 @@ local function AddRunStats(self, dungeon, run, profile)
    end
    local questXP = UpdateRunQuests(run)
    -- Totals for the per hour tooltip.
-   dungeon.runXP = killXP + questXP
-   dungeon.runMoney = (run.money or 0) + (run.itemValue or 0)
-   dungeon.runStarted, dungeon.runFinished = run.started, run.finished
+   dungeon.runKillXP, dungeon.runQuestXP = killXP, questXP
+   dungeon.runCoins, dungeon.runItems = run.money or 0, run.itemValue or 0
+   dungeon.runStarted, dungeon.runFinished = run.started, run.finished or stoppedAt
    if profile.dungeonStatsQuestXP and questXP > 0 then
       tinsert(parts, format(L["Quest XP: %s"], Number(questXP)))
    end
@@ -1758,8 +1758,9 @@ local function AddRunStats(self, dungeon, run, profile)
    parts = new()
    local elapsedFrom
    if profile.dungeonStatsTime and run.started then
-      if run.finished then
-         tinsert(parts, format(L["Time: %s"], mod.FormatClock(run.finished - run.started)))
+      local ended = run.finished or stoppedAt
+      if ended then
+         tinsert(parts, format(L["Time: %s"], mod.FormatClock(math.max(0, ended - run.started))))
       else
          -- A format template: the tracker fills in the time and keeps it
          -- ticking (other parts escaped).
@@ -1776,11 +1777,11 @@ end
 
 -- Calls fn(boss, killed) for each boss of the lock (of the current wing in
 -- a winged dungeon) and the wing's extra bosses, in order.
-local function ForEachBoss(numEncounters, run, wing, wingInfo, fn)
+local function ForEachBoss(encounters, run, wing, wingInfo, fn)
    local extra = wingInfo and wingInfo.extra
    local shown = extra and new()
-   for i = 1, numEncounters do
-      local boss, _, isKilled = GetInstanceLockTimeRemainingEncounter(i)
+   for _, encounter in ipairs(encounters) do
+      local boss, isKilled = encounter[1], encounter[2]
       local bossWing = boss and wing and BossWing(run.instanceID, boss)
       if boss and (not bossWing or bossWing == wing) then
          local killed = isKilled or run.bosses[boss] or false
@@ -1799,18 +1800,148 @@ local function ForEachBoss(numEncounters, run, wing, wingInfo, fn)
    if shown then del(shown) end
 end
 
+-- The dungeon last seen inside: { instanceID, name, encounters = { { boss,
+-- killed }, ... }, left = time() }. Shown for a while after leaving, with
+-- its run summary printed.
+local LINGER_TIME = 60
+local lastDungeon
+
+-- The lock's bosses now, kept for after leaving.
+local function SaveEncounters(instanceID, name)
+   local encounters
+   if lastDungeon and lastDungeon.instanceID == instanceID then
+      encounters = lastDungeon.encounters
+      wipe(encounters)
+   else
+      encounters = {}
+   end
+   local numEncounters = GetInstanceLockTimeRemaining and select(3, GetInstanceLockTimeRemaining()) or 0
+   for i = 1, numEncounters do
+      local boss, _, isKilled = GetInstanceLockTimeRemainingEncounter(i)
+      if boss then tinsert(encounters, { boss, isKilled or false }) end
+   end
+   lastDungeon = { instanceID = instanceID, name = name, encounters = encounters }
+   return encounters
+end
+
+--- time() the dungeon last seen was left, while it's still shown; nil once
+--- closed or after LINGER_TIME. The first call after leaving prints the
+--- run summary (when enabled).
+function mod:LingeringDungeon()
+   if not lastDungeon or lastDungeon.closed then return end
+   if not lastDungeon.left then
+      lastDungeon.left = time()
+      self:ScheduleTimer("RequestUpdate", LINGER_TIME + 1)
+      if self.db.profile.dungeonSummaryOnLeave then self:PrintRunSummary() end
+   end
+   if time() - lastDungeon.left > LINGER_TIME then
+      lastDungeon.closed = true
+      return
+   end
+   return lastDungeon.left
+end
+
+--- Hides the dungeon kept shown after leaving.
+function mod:CloseLingeringDungeon()
+   if lastDungeon then lastDungeon.closed = true end
+   self:RequestUpdate()
+end
+
+--- Whether a run summary can be printed: inside or just left.
+function mod:CanPrintRunSummary()
+   return lastDungeon ~= nil and self.db.char.dungeonKills[lastDungeon.instanceID] ~= nil
+end
+
+-- Money as plain text ("1g 20s 5c") for chat messages (no textures).
+local function PlainCoins(copper)
+   local gold, silver = math.floor(copper / 10000), math.floor(copper / 100) % 100
+   local text = format(L["%dc"], copper % 100)
+   if silver > 0 or gold > 0 then text = format(L["%ds"], silver) .. " " .. text end
+   if gold > 0 then text = format(L["%dg"], gold) .. " " .. text end
+   return text
+end
+
+-- Lines of the run summary of the dungeon inside (or last left), nil
+-- without one. plain: money as text, for chat messages.
+local function RunSummaryLines(self, plain)
+   local info = lastDungeon
+   local run = info and self.db.char.dungeonKills[info.instanceID]
+   if not run then return end
+   local money = plain and PlainCoins or Coins
+   local wings = DUNGEON_WINGS[info.instanceID]
+   local wing = wings and run.wingKnown and run.wing
+   local wingInfo = wing and wings[wing]
+   local name = wingInfo and wingInfo.title or info.name
+   local numKilled, numBosses = 0, 0
+   ForEachBoss(info.encounters, run, wing, wingInfo, function(_, killed)
+      numBosses = numBosses + 1
+      if killed then numKilled = numKilled + 1 end
+   end)
+   local killXP = math.max(0, (run.xp or 0) - (run.turnInXP or 0))
+   local questXP = UpdateRunQuests(run)
+   local coins, items = run.money or 0, run.itemValue or 0
+   local ended = run.finished or info.left or time()
+   local seconds = run.started and math.max(0, ended - run.started) or 0
+   local lines = {}
+   tinsert(lines, format(L["Run summary: %s (%d/%d bosses)"], name, numKilled, numBosses))
+   tinsert(lines, format(L["XP: %s"], Number(killXP)) .. SEPARATOR .. format(L["Quest XP: %s"], Number(questXP)))
+   tinsert(lines, format(L["Coins: %s"], money(coins)) .. SEPARATOR .. format(L["Items: %s"], money(items)))
+   local line = format(L["Deaths: %d"], run.deaths or 0)
+   if run.started then line = format(L["Time: %s"], mod.FormatClock(seconds)) .. SEPARATOR .. line end
+   tinsert(lines, line)
+   if seconds >= 60 then
+      local hours = seconds / 3600
+      tinsert(lines, format(L["%s XP per hour"], Number(math.floor((killXP + questXP) / hours + 0.5)))
+         .. SEPARATOR .. format(L["%s per hour"], money(math.floor((coins + items) / hours + 0.5))))
+   end
+   return lines
+end
+
+--- Prints the run summary to the chat frame.
+function mod:PrintRunSummary()
+   local lines = RunSummaryLines(self)
+   if not lines then
+      self:Print(L["Not in a dungeon."])
+      return
+   end
+   self:Print(lines[1])
+   for i = 2, #lines do print("  " .. lines[i]) end
+end
+
+--- Posts the run summary to the group's chat (instance, raid or party).
+function mod:PostRunSummary()
+   local lines = RunSummaryLines(self, true)
+   local channel = IsInGroup(LE_PARTY_CATEGORY_INSTANCE) and "INSTANCE_CHAT"
+      or IsInRaid() and "RAID" or IsInGroup() and "PARTY"
+   if not lines or not channel then
+      self:PrintRunSummary()
+      return
+   end
+   for _, line in ipairs(lines) do
+      SendChatMessage(line, channel)
+   end
+end
+
 --- Returns a scenario-shaped table (see CollectScenario) for the current
 --- Forever dungeon: one "0/1 Boss defeated" objective per boss and the run
 --- stats, as enabled. Nil when not in one or both are off.
 function mod:CollectDungeon()
    local profile = self.db.profile
    local instanceID, name = InDungeon()
-   if not instanceID then return end
-   local run = DungeonRun(self, instanceID, name)
-   -- The leader inside (a leader change in the group keeps the instance).
-   run.leader = GroupLeader() or run.leader
+   local left  -- time() the dungeon shown was left, nil inside
+   if not instanceID then
+      left = self:LingeringDungeon()
+      if not left then return end
+      instanceID, name = lastDungeon.instanceID, lastDungeon.name
+   end
+   local run = left and self.db.char.dungeonKills[instanceID] or DungeonRun(self, instanceID, name)
+   if not run then return end
    local wings = DUNGEON_WINGS[instanceID]
-   if wings then
+   if not left then
+      -- The leader inside (a leader change in the group keeps the instance).
+      run.leader = GroupLeader() or run.leader
+   end
+   if wings and not left then
       local wing = RoomWing(instanceID)
       if not wing and enteredWing and enteredWing.instanceID == instanceID then
          wing = enteredWing.wing
@@ -1835,10 +1966,15 @@ function mod:CollectDungeon()
    if wingInfo then name = wingInfo.title end
    -- Recorded even while not shown: completed quests and the end of the run.
    UpdateRunQuests(run)
-   local numEncounters = GetInstanceLockTimeRemaining and select(3, GetInstanceLockTimeRemaining()) or 0
-   if run.started and not run.finished and numEncounters > 0 and (wing or not wings) then
+   local encounters
+   if left then
+      encounters = lastDungeon.encounters
+   else
+      encounters = SaveEncounters(instanceID, name)
+   end
+   if not left and run.started and not run.finished and #encounters > 0 and (wing or not wings) then
       local allKilled = true
-      ForEachBoss(numEncounters, run, wing, wingInfo, function(_, killed)
+      ForEachBoss(encounters, run, wing, wingInfo, function(_, killed)
          if not killed then allKilled = false end
       end)
       if allKilled then run.finished = time() end  -- the clock stops
@@ -1852,7 +1988,7 @@ function mod:CollectDungeon()
    dungeon.bonus = new()
    dungeon.numStages, dungeon.stage = 1, 1
    local numKilled, numBosses = 0, 0
-   ForEachBoss(numEncounters, run, wing, wingInfo, function(boss, killed)
+   ForEachBoss(encounters, run, wing, wingInfo, function(boss, killed)
       numBosses = numBosses + 1
       if killed then numKilled = numKilled + 1 end
       if showBosses then
@@ -1866,8 +2002,10 @@ function mod:CollectDungeon()
    local done = numBosses > 0 and numKilled == numBosses
    if done then dungeon.stage = 2 end
    if showStats then
-      AddRunStats(self, dungeon, run, profile)
+      AddRunStats(self, dungeon, run, profile, left)
    end
+   dungeon.closable = left and true or nil
+   dungeon.canPostSummary = run.started and true or nil
    if #dungeon.criteria == 0 and not (dungeon.stats and #dungeon.stats > 0) and not done then
       self.deepDel(dungeon)
       return

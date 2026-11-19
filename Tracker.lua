@@ -540,10 +540,23 @@ function mod:ShowRunRatesTooltip(owner, dungeon)
       GameTooltip:AddLine(L["Not enough time in the dungeon yet."], 1, 1, 1, true)
    else
       local hours = seconds / 3600
-      local xp = math.floor(dungeon.runXP / hours + 0.5)
-      local money = math.floor(dungeon.runMoney / hours + 0.5)
-      GameTooltip:AddDoubleLine(L["XP per hour"], BreakUpLargeNumbers and BreakUpLargeNumbers(xp) or xp, nil, nil, nil, 1, 1, 1)
-      GameTooltip:AddDoubleLine(L["Money per hour"], Coins(money), nil, nil, nil, 1, 1, 1)
+      local function Rate(n) return math.floor(n / hours + 0.5) end
+      local function Number(n) return BreakUpLargeNumbers and BreakUpLargeNumbers(n) or tostring(n) end
+      local function Line(label, value, sub)
+         if sub then
+            GameTooltip:AddDoubleLine("   " .. label, value, 0.8, 0.8, 0.8, 0.8, 0.8, 0.8)
+         else
+            GameTooltip:AddDoubleLine(label, value, nil, nil, nil, 1, 1, 1)
+         end
+      end
+      local killXP, questXP = dungeon.runKillXP or 0, dungeon.runQuestXP or 0
+      local coins, items = dungeon.runCoins or 0, dungeon.runItems or 0
+      Line(L["XP per hour"], Number(Rate(killXP + questXP)))
+      Line(L["Kills"], Number(Rate(killXP)), true)
+      Line(L["Quests"], Number(Rate(questXP)), true)
+      Line(L["Money per hour"], Coins(Rate(coins + items)))
+      Line(L["Coins"], Coins(Rate(coins)), true)
+      Line(L["Items"], Coins(Rate(items)), true)
       GameTooltip:AddLine(L["XP from kills and quests, money from coins and the loot's vendor value, over the run time."],
          0.7, 0.7, 0.7, true)
    end
@@ -704,6 +717,8 @@ local function AddLine(kind, data, text, role, indent, spacing, color, highlight
    if line.poiButton then line.poiButton:Hide() end
    if line.groupButton then line.groupButton:Hide() end
    if line.playButton then line.playButton:Hide() end
+   if line.closeButton then line.closeButton:Hide() end
+   if line.summaryButton then line.summaryButton:Hide() end
    if line.previewItem then line.previewItem:Hide() end
    if line.bar then line.bar:Hide() end
    if arrowTarget then
@@ -1595,7 +1610,44 @@ function mod:RenderScenario(scenario, profile)
          or format(L["Stage %d/%d"], scenario.stage, scenario.numStages)
    end
    if title and title ~= "" then
-      AddLine("scenario", scenario, title, "quest", QUEST_INDENT, spacing.questSpacing, titleColor)
+      local line = AddLine("scenario", scenario, title, "quest", QUEST_INDENT, spacing.questSpacing, titleColor)
+      local right = layout.rightInset or 0
+      -- A Forever dungeon just left: shown for a while, or until closed.
+      if scenario.closable and not self.previewing then
+         local button = line.closeButton
+         if not button then
+            button = CreateFrame("Button", nil, line, "UIPanelCloseButtonNoScripts")
+            button:SetSize(20, 20)
+            button:SetScript("OnClick", function() mod:CloseLingeringDungeon() end)
+            line.closeButton = button
+         end
+         button:ClearAllPoints()
+         button:SetPoint("TOPRIGHT", line, "TOPRIGHT", -right, 3)
+         button:Show()
+         right = right + 20
+      end
+      -- Forever dungeon run: post its summary to the group (or print it).
+      if scenario.canPostSummary and not self.previewing then
+         local button = line.summaryButton
+         if not button then
+            button = CreateFrame("Button", nil, line)
+            button:SetSize(16, 16)
+            button:SetNormalTexture("Interface\\ChatFrame\\UI-ChatIcon-Chat-Up")
+            button:SetPushedTexture("Interface\\ChatFrame\\UI-ChatIcon-Chat-Down")
+            button:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight", "ADD")
+            button:SetScript("OnClick", function() mod:PostRunSummary() end)
+            button:SetScript("OnEnter", function(b)
+               GameTooltip:SetOwner(b, "ANCHOR_LEFT")
+               GameTooltip:SetText(IsInGroup() and L["Post run summary to group"] or L["Print run summary"])
+               GameTooltip:Show()
+            end)
+            button:SetScript("OnLeave", GameTooltip_Hide)
+            line.summaryButton = button
+         end
+         button:ClearAllPoints()
+         button:SetPoint("TOPRIGHT", line, "TOPRIGHT", -right - 2, 1)
+         button:Show()
+      end
    end
    if scenario.widgetSetID then
       AddWidgetBlock("stage", scenario.widgetSetID, spacing.objectiveSpacing)
@@ -2194,10 +2246,18 @@ mod.lineClickHandlers = {
          ShowQuestsHeaderMenu(line)
          return
       end
-      -- Right-click on a Forever dungeon's header: start a new run.
-      if button == "RightButton" and section.key == "scenario" and self:InForeverDungeon() then
+      -- Right-click on a Forever dungeon's header (inside or just left):
+      -- the run summary, start a new run.
+      if button == "RightButton" and section.key == "scenario" and mod.IS_FOREVER and self:CanPrintRunSummary() then
+         local inside = self:InForeverDungeon()
          mod:ShowContextMenu(line, function(_, root)
-            root:CreateButton(L["Start a new run"], function() mod:NewDungeonRun() end)
+            root:CreateButton(L["Print run summary"], function() mod:PrintRunSummary() end)
+            if IsInGroup() then
+               root:CreateButton(L["Post run summary to group"], function() mod:PostRunSummary() end)
+            end
+            if inside then
+               root:CreateButton(L["Start a new run"], function() mod:NewDungeonRun() end)
+            end
          end)
          return
       end

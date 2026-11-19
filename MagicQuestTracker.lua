@@ -165,6 +165,7 @@ mod.defaults = {
       showRecipes = true,
       showAchievements = true,
       showDungeonBosses = false,     -- Forever: dungeon section with a line per boss
+      dungeonSummaryOnLeave = false, -- Forever: run summary to chat on leaving a dungeon
       showDungeonStats = false,      -- Forever: run stats in the dungeon section, each below switchable
       dungeonStatsXP = true,
       dungeonStatsQuestXP = true,    -- XP rewards of this dungeon's quests completed in the run
