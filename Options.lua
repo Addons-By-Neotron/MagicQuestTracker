@@ -410,6 +410,14 @@ local function BuildOptions()
                      order = 3.2,
                      width = COLUMN_WIDTH,
                   },
+                  kerzoQuestLog = {
+                     type = "toggle",
+                     name = L["Open quests in Kerzo Classic Quest Log"],
+                     desc = L["Left-clicking a quest opens it in Kerzo Classic Quest Log instead of the quest details window. The right-click menu still opens the details window."],
+                     order = 3.3,
+                     width = COLUMN_WIDTH,
+                     hidden = function() return not mod:HasKerzoQuestLog() end,
+                  },
                   zoneSort = {
                      type = "select",
                      name = L["Zone sort order"],

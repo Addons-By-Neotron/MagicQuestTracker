@@ -916,9 +916,10 @@ end
 -- updating.
 ----------------------------------------------------------------
 
--- { title, desc, get, set, enabled, visible, image = ... } (get and set
--- only for features with a switch; the switch is grayed out unless
--- enabled() says so, and the entry is skipped where visible() is false).
+-- { title, desc, get, set, enabled, visible, image = ..., needs = ... }
+-- (get and set only for features with a switch; the switch is grayed out
+-- unless enabled() says so, with the needs note added to the text, and the
+-- entry is skipped where visible() is false).
 -- New entries go at the end; never reorder or remove entries.
 local WHATS_NEW = {
    { L["Setup wizard"],
@@ -941,7 +942,8 @@ local WHATS_NEW = {
       function() return mod:GetWizardOption("showPlayButton") end,
       function(value) mod:SetWizardOption("showPlayButton", value) end,
       function() return mod:GetQuestVoice() ~= nil end,
-      function() return mod.IS_FOREVER end },
+      function() return mod.IS_FOREVER end,
+      needs = L["(Needs the Spoken Quests addon, which isn't installed.)"] },
    { L["Spacing settings"],
       L["Zone spacing, zone header spacing and a new section header spacing now each control one gap: above a zone header, below it, and below a section header. Find them in the Theme settings, Layout tab."] },
    { L["Timer bars"],
@@ -1008,6 +1010,12 @@ local WHATS_NEW = {
       function() return mod.IS_FOREVER end },
    { L["Fewer errors in combat"],
       L["Blizzard blocks some actions in combat once an addon has touched parts of its UI, which caused \"action blocked\" errors and a map that wouldn't open. To avoid that, a few things work a little differently now: clicking a quest opens the details window instead of the map, and its map button only works out of combat (it opens the quest log when Blizzard's tracker has no room for the quest). /mqt config opens the settings in their own window, the right-click menus have their own look, and changing the focused quest in combat takes effect when combat ends."] },
+   { L["Open quests in Kerzo Classic Quest Log"],
+      L["With the Kerzo Classic Quest Log addon installed, left-clicking a quest opens it there instead of the quest details window. The right-click menu still opens the details window."],
+      function() return mod:GetWizardOption("kerzoQuestLog") end,
+      function(value) mod:SetWizardOption("kerzoQuestLog", value) end,
+      function() return mod:HasKerzoQuestLog() end,
+      needs = L["(Needs the Kerzo Classic Quest Log addon, which isn't installed.)"] },
 }
 
 local LATEST_ID = #WHATS_NEW
@@ -1166,7 +1174,7 @@ function mod:ShowWhatsNew(all, showHidden)
       row.desc:ClearAllPoints()
       row.desc:SetPoint("TOPLEFT", indent, -(row.title:GetStringHeight() + 8))
       row.desc:SetWidth(width - indent)
-      row.desc:SetText(enabled and entry[2] or (entry[2] .. " " .. L["(Needs the Spoken Quests addon, which isn't installed.)"]))
+      row.desc:SetText((not enabled and entry.needs) and (entry[2] .. " " .. entry.needs) or entry[2])
       local height = row.title:GetStringHeight() + row.desc:GetStringHeight() + 14
       -- Optional screenshot below the text, at half size:
       -- image = { path, width, height, textureWidth, textureHeight }.

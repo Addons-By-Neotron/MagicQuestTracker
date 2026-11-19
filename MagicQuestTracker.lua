@@ -178,6 +178,7 @@ mod.defaults = {
       showPOIButtons = true,
       showFindGroupButton = true,
       showPlayButton = false, -- Spoken Quests voiceover play button (Forever)
+      kerzoQuestLog = true,   -- left-click opens quests in Kerzo Classic Quest Log, when loaded
       buttonsOnHover = false, -- POI, find group and play buttons only while the mouse is over the tracker      questBar = false,       -- separate quest item bar (QuestBar.lua)
       questBarButtons = 5,
       questBarSpacing = 4,

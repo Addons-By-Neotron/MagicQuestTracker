@@ -438,6 +438,33 @@ local function CreateWindow()
    window.mapHelp = help
 end
 
+--- Kerzo Classic Quest Log (third-party quest log window) and its public API.
+function mod:HasKerzoQuestLog()
+   local api = KerzosQuestLogAPI
+   return api and type(api.OpenQuest) == "function"
+end
+
+--- Opens the quest in Kerzo Classic Quest Log. Returns true if it did.
+--- Its API's OpenQuest selects the quest but neither shows the details panel
+--- nor refreshes, so with the window already open nothing changes. Its own
+--- "open quest details" hook does both, a frame later: the quest text
+--- follows the selection a frame late.
+function mod:OpenInKerzoQuestLog(id)
+   if not self:HasKerzoQuestLog() then return false end
+   local ok, opened = pcall(KerzosQuestLogAPI.OpenQuest, KerzosQuestLogAPI, id)
+   if not (ok and opened) then return false end
+   local kql = KerzosQuestLog
+   if kql then
+      if kql.Raise then kql:Raise() end
+      if kql.ActivarPanel then pcall(kql.ActivarPanel, kql, "VisorDetalle") end
+      if kql.Refrescar then
+         pcall(kql.Refrescar, kql)
+         C_Timer.After(0, function() pcall(kql.Refrescar, kql) end)
+      end
+   end
+   return true
+end
+
 --- Shows the details window for a quest in the log (toggles it off when
 --- that quest is already showing).
 function mod:ShowQuestDetails(id)

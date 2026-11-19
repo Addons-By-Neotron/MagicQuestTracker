@@ -409,6 +409,7 @@ L["Show a play button on quests that have a voiceover, to hear the quest text re
 L["Quest voiceover buttons"] = true
 L["Adds the play button of the Spoken Quests addon to quests that have a voiceover."] = true
 L["(Needs the Spoken Quests addon, which isn't installed.)"] = true
+L["(Needs the Kerzo Classic Quest Log addon, which isn't installed.)"] = true
 L["Close"] = true
 L["/mqt wizard  - run the setup wizard"] = true
 L["/mqt new     - show what's new"] = true
@@ -437,6 +438,9 @@ L["The look and behavior of the built-in objective tracker: tracked quests only,
 L["The preview shows the theme as you select it. Custom themes you made are listed too."] = true
 L["Hide red quests"] = true
 L["Hide gray quests"] = true
+L["Open quests in Kerzo Classic Quest Log"] = true
+L["Left-clicking a quest opens it in Kerzo Classic Quest Log instead of the quest details window. The right-click menu still opens the details window."] = true
+L["With the Kerzo Classic Quest Log addon installed, left-clicking a quest opens it there instead of the quest details window. The right-click menu still opens the details window."] = true
 L["Hide quests that are too difficult for your level. The focused quest is always shown. Also in the right-click menu of the title and the Quests header."] = true
 L["Hide quests that are too easy to give much experience. The focused quest is always shown. Also in the right-click menu of the title and the Quests header."] = true
 L["Open quest log"] = true

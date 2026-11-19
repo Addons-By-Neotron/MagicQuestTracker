@@ -2285,7 +2285,10 @@ mod.lineClickHandlers = {
          -- button clicks Blizzard's own tracker block securely: the map or
          -- quest panel opened from addon code (even out of combat) stays
          -- tainted, and the map is then blocked in combat until a reload.
-         self:ShowQuestDetails(questID)
+         -- Kerzo Classic Quest Log is a plain addon frame, so opening it is fine.
+         if not (self.db.profile.kerzoQuestLog and self:OpenInKerzoQuestLog(questID)) then
+            self:ShowQuestDetails(questID)
+         end
       end
    end,
 
