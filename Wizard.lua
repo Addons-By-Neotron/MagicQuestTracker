@@ -1016,6 +1016,9 @@ local WHATS_NEW = {
       function(value) mod:SetWizardOption("kerzoQuestLog", value) end,
       function() return mod:HasKerzoQuestLog() end,
       needs = L["(Needs the Kerzo Classic Quest Log addon, which isn't installed.)"] },
+   -- No switch here: turning it on goes through the warning in the settings.
+   { L["Left-click opens the map"],
+      L["If you would rather have left-click open Blizzard's map like before, turn it on in the Quests settings. It breaks parts of the map in combat until you reload, so you have to confirm it first."] },
 }
 
 local LATEST_ID = #WHATS_NEW

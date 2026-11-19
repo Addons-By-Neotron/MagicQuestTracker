@@ -179,6 +179,7 @@ mod.defaults = {
       showFindGroupButton = true,
       showPlayButton = false, -- Spoken Quests voiceover play button (Forever)
       kerzoQuestLog = true,   -- left-click opens quests in Kerzo Classic Quest Log, when loaded
+      mapQuestClicks = false, -- left-click opens Blizzard's map from addon code (taints it; confirmed in a dialog)
       buttonsOnHover = false, -- POI, find group and play buttons only while the mouse is over the tracker      questBar = false,       -- separate quest item bar (QuestBar.lua)
       questBarButtons = 5,
       questBarSpacing = 4,

@@ -2002,6 +2002,27 @@ end
 mod.AbandonQuest = AbandonQuest
 mod.ShareQuest = ShareQuest
 
+-- Opening the map from addon code taints it: Blizzard's map code is then
+-- blocked in combat until a reload. Only with mapQuestClicks, which the
+-- player turns on through a warning.
+local function OpenQuestOnMap(questID)
+   if QuestMapFrame_OpenToQuestDetails then
+      QuestMapFrame_OpenToQuestDetails(questID)
+   elseif ToggleQuestLog then
+      ToggleQuestLog()
+   end
+end
+
+local function OpenTaskOnMap(questID)
+   local mapID = C_TaskQuest and C_TaskQuest.GetQuestZoneID(questID)
+   if mapID and OpenQuestLog then
+      OpenQuestLog(mapID)
+      if EventRegistry then
+         EventRegistry:TriggerEvent("MapCanvas.PingQuestID", questID)
+      end
+   end
+end
+
 -- Menus can stay open across updates, which recycle the quest tables, so
 -- menu actions work on a copy of the fields they need.
 local function SnapshotQuest(quest)
@@ -2286,7 +2307,16 @@ mod.lineClickHandlers = {
          -- quest panel opened from addon code (even out of combat) stays
          -- tainted, and the map is then blocked in combat until a reload.
          -- Kerzo Classic Quest Log is a plain addon frame, so opening it is fine.
-         if not (self.db.profile.kerzoQuestLog and self:OpenInKerzoQuestLog(questID)) then
+         if self:UseKerzoQuestLog() and self:OpenInKerzoQuestLog(questID) then
+            return
+         elseif self.db.profile.mapQuestClicks and not InCombatLockdown() then
+            -- The player chose this knowing it taints the map.
+            if quest.isTask then
+               OpenTaskOnMap(questID)
+            else
+               OpenQuestOnMap(questID)
+            end
+         else
             self:ShowQuestDetails(questID)
          end
       end

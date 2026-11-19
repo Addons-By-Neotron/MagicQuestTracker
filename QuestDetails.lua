@@ -444,6 +444,11 @@ function mod:HasKerzoQuestLog()
    return api and type(api.OpenQuest) == "function"
 end
 
+--- True when left-clicks go to Kerzo Classic Quest Log.
+function mod:UseKerzoQuestLog()
+   return self.db.profile.kerzoQuestLog and self:HasKerzoQuestLog() and true or false
+end
+
 --- Opens the quest in Kerzo Classic Quest Log. Returns true if it did.
 --- Its API's OpenQuest selects the quest but neither shows the details panel
 --- nor refreshes, so with the window already open nothing changes. Its own

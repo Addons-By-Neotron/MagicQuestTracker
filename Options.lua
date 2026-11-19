@@ -418,6 +418,31 @@ local function BuildOptions()
                      width = COLUMN_WIDTH,
                      hidden = function() return not mod:HasKerzoQuestLog() end,
                   },
+                  mapQuestClicks = {
+                     type = "toggle",
+                     name = L["Left-click opens the map"],
+                     desc = L["Left-clicking a quest opens it on Blizzard's map instead of the quest details window, like the built-in tracker. Opening the map from an addon breaks parts of it in combat until you reload. In combat a click still opens the details window."],
+                     order = 3.4,
+                     width = COLUMN_WIDTH,
+                     disabled = function() return mod:UseKerzoQuestLog() end,
+                     set = function(_, val)
+                        if not val then
+                           mod.db.profile.mapQuestClicks = false
+                           return
+                        end
+                        mod:ShowConfirmDialog({
+                           text = L["Opening the map from an addon taints Blizzard's map. Until you reload, the map and the quest log can stop working in combat and show \"action blocked\" errors, which other addons or Blizzard may get the blame for. Only turn this on if you would rather have the map than avoid those errors."],
+                           checkboxText = L["I understand this will break things in combat"],
+                           requireCheckbox = true,
+                           acceptText = L["Turn on"],
+                           onAccept = function(checked)
+                              if not checked then return end
+                              mod.db.profile.mapQuestClicks = true
+                              mod:NotifyOptionsChanged()
+                           end,
+                        })
+                     end,
+                  },
                   zoneSort = {
                      type = "select",
                      name = L["Zone sort order"],
