@@ -61,6 +61,16 @@ end
 -- Content pools
 ----------------------------------------------------------------
 
+--- A note for a reward XP the game has reduced (6+ levels below you), or
+--- nil. How much varies (Forever's dungeon quests keep more), so no figure.
+local function ReducedXPNote()
+   local level = C_QuestLog.GetQuestDifficultyLevel and C_QuestLog.GetQuestDifficultyLevel(questID)
+   if not level or level <= 0 then return end
+   local below = UnitLevel("player") - level
+   if below < 6 then return end
+   return format(L["Reduced XP: the quest is %d levels below you."], below)
+end
+
 local function AddText(text, x, y, font, r, g, b)
    usedTexts = usedTexts + 1
    local fs = texts[usedTexts]
@@ -286,6 +296,8 @@ function Refresh(inCombat)
       y = y + AddSection(QUEST_REWARDS or L["Rewards"], y)
       if r.xp > 0 then
          y = y + AddText(format(BONUS_OBJECTIVE_EXPERIENCE_FORMAT or "%d XP", r.xp), 0, y) + 4
+         local note = ReducedXPNote()
+         if note then y = y + AddText(note, 0, y, GameFontNormalSmall, 0.8, 0.8, 0.8) + 4 end
       end
       if r.money > 0 then
          y = y + AddText(GetMoneyString(r.money), 0, y) + 4

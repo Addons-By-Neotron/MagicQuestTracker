@@ -499,3 +499,4 @@ L["Complete quest"] = true
 L["Only works for tracked quests, out of combat. It goes through Blizzard's own quest tracker, since opening the map from an addon causes errors in combat later."] = true
 L["Blizzard's tracker has no room for this quest (too many tracked quests), so this opens the quest log instead."] = true
 L["This quest isn't tracked, so this opens the quest log instead."] = true
+L["Reduced XP: the quest is %d levels below you."] = true
