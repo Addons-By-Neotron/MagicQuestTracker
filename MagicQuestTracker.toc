@@ -8,7 +8,7 @@
 ## X-Category: Quests
 ## X-eMail: neotron@gmail.com
 ## X-Date: @project-date-integer@
-## OptionalDeps: Ace3, LibSharedMedia-3.0, AceGUI-3.0-SharedMediaWidgets, LibMagicUtil-1.0, LibLogger, LibEditMode
+## OptionalDeps: Ace3, LibSharedMedia-3.0, AceGUI-3.0-SharedMediaWidgets, LibMagicUtil-1.0, LibDropdown-1.0, LibLogger, LibEditMode
 ## SavedVariables: MagicQuestTrackerDB
 ## X-Curse-Project-ID: 1736971
 ## X-Wago-ID: nGv9VjKx
@@ -22,7 +22,10 @@ Direction.lua
 Waypoint.lua
 Data.lua
 Themes.lua
+Menu.lua
 Tracker.lua
+ClickOverlay.lua
+QuestDetails.lua
 EditMode.lua
 QuestBar.lua
 Options.lua

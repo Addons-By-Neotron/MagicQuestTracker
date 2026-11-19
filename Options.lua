@@ -765,13 +765,6 @@ local function BuildOptions()
                      disabled = function() return not mod.db.profile.blizzardFocus end,
                      width = COLUMN_WIDTH,
                   },
-                  mapClicks = {
-                     type = "toggle",
-                     name = L["Left-click opens map"],
-                     desc = L["Left-clicking a quest opens it on the map. Opening the map from an addon can cause harmless errors about blocked actions when the map is next opened in combat; turn this off to avoid them. The right-click menu can still show quests on the map."],
-                     order = 5,
-                     width = COLUMN_WIDTH,
-                  },
                   showDistance = {
                      type = "toggle",
                      name = L["Show distance"],
@@ -1289,52 +1282,15 @@ end
 -- New theme name popup (copy of the selected theme)
 ----------------------------------------------------------------
 
-local NEW_THEME_POPUP = "MAGICQUESTTRACKER_NEW_THEME"
-
-local function PopupEditBox(dialog)
-   return dialog.GetEditBox and dialog:GetEditBox() or dialog.editBox
-end
-
-local function PopupButton1(dialog)
-   return dialog.GetButton1 and dialog:GetButton1() or dialog.button1
-end
-
-StaticPopupDialogs[NEW_THEME_POPUP] = {
-   text = L["Name for the copy of %s:"],
-   button1 = ACCEPT,
-   button2 = CANCEL,
-   hasEditBox = 1,
-   OnShow = function(dialog, data)
-      local editBox = PopupEditBox(dialog)
-      editBox:SetText(mod:GetFreeThemeName(format(L["%s (copy)"], data.sourceName)))
-      editBox:HighlightText()
-      editBox:SetFocus()
-   end,
-   OnAccept = function(dialog)
-      mod:CreateTheme(PopupEditBox(dialog):GetText())
-   end,
-   EditBoxOnTextChanged = function(editBox)
-      PopupButton1(editBox:GetParent()):SetEnabled(not mod:ValidateThemeName(editBox:GetText()))
-   end,
-   EditBoxOnEnterPressed = function(editBox)
-      local dialog = editBox:GetParent()
-      if PopupButton1(dialog):IsEnabled() then
-         mod:CreateTheme(editBox:GetText())
-         dialog:Hide()
-      end
-   end,
-   EditBoxOnEscapePressed = function(editBox)
-      editBox:GetParent():Hide()
-   end,
-   hideOnEscape = 1,
-   timeout = 0,
-   whileDead = 1,
-}
-
 --- Asks for a name and creates an editable copy of the selected theme.
 function mod:ShowNewThemePopup()
    local sourceName = self:GetThemeList()[self:GetThemeSettings() and self.db.profile.theme or "blizzard"]
-   StaticPopup_Show(NEW_THEME_POPUP, sourceName, nil, { sourceName = sourceName })
+   self:ShowInputDialog({
+      text = format(L["Name for the copy of %s:"], sourceName),
+      default = self:GetFreeThemeName(format(L["%s (copy)"], sourceName)),
+      validate = function(text) return self:ValidateThemeName(text) end,
+      onAccept = function(text) self:CreateTheme(text) end,
+   })
 end
 
 ----------------------------------------------------------------
@@ -1431,16 +1387,59 @@ function mod:OptReg(optname, tbl, dispname)
    end
 end
 
+-- The same pages in one tree, for our own settings window.
+local DIALOG_APP = APP_NAME .. " Dialog"
+
+local function DialogPage(group, name, order)
+   local page = {}
+   for k, v in pairs(group) do page[k] = v end
+   page.name = name
+   page.order = order
+   return page
+end
+
 function mod:SetupOptions()
    BuildOptions()
    self.optionsMain = self:OptReg(APP_NAME, options.general)
    self:OptReg(": Layout", options.layout, L["Layout"])
    self:OptReg(": Theme", options.theme, L["Theme"])
    self.optionsEnd = self:OptReg(": Profiles", options.profiles, L["Profiles"])
+   AceConfig:RegisterOptionsTable(DIALOG_APP, {
+      type = "group",
+      name = APP_NAME,
+      childGroups = "tree",
+      args = {
+         general = DialogPage(options.general, GENERAL or L["General"], 1),
+         layout = DialogPage(options.layout, L["Layout"], 2),
+         theme = DialogPage(options.theme, L["Theme"], 3),
+         profiles = DialogPage(options.profiles, L["Profiles"], 4),
+      },
+   })
+   AceConfigDialog:SetDefaultSize(DIALOG_APP, 860, 640)
+end
+
+--- Opens the settings in AceConfigDialog's own window. Blizzard's Settings
+--- panel opened from addon code (Settings.OpenToCategory) runs Blizzard's UI
+--- panel manager tainted, and the map, shown through the same manager, is
+--- then blocked in combat. The settings still appear in Blizzard's AddOns
+--- list; opened from there it's the player's own click.
+function mod:OpenConfig()
+   AceConfigDialog:Open(DIALOG_APP)
+end
+
+function mod:CloseConfig()
+   AceConfigDialog:Close(DIALOG_APP)
+   -- Opened from Blizzard's AddOns list instead.
+   if SettingsPanel and SettingsPanel:IsShown() then
+      HideUIPanel(SettingsPanel)
+   elseif InterfaceOptionsFrame and InterfaceOptionsFrame:IsShown() then
+      InterfaceOptionsFrame:Hide()
+   end
 end
 
 function mod:NotifyOptionsChanged()
    AceConfigRegistry:NotifyChange(APP_NAME)
    AceConfigRegistry:NotifyChange(APP_NAME .. ": Layout")
    AceConfigRegistry:NotifyChange(APP_NAME .. ": Theme")
+   AceConfigRegistry:NotifyChange(DIALOG_APP)
 end

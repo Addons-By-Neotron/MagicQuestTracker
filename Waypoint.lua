@@ -128,11 +128,24 @@ function mod:SetSuperTrackedQuest(questID)
       return
    end
    if InCombatLockdown() then
+      -- Shown as focused on the tracker right away; Blizzard's focus (map,
+      -- arrow) follows when combat ends.
+      if self.pendingSuperTrack == nil then
+         self:info(L["Quest focus will change when combat ends."])
+      end
       self.pendingSuperTrack = questID
+      self:RequestUpdate()
       return
    end
    self.pendingSuperTrack = nil
    C_SuperTrack.SetSuperTrackedQuestID(questID)
+end
+
+--- The focused quest as shown on the tracker: a change waiting for combat
+--- to end counts as done. 0 or nil when none.
+function mod:GetFocusedQuestID()
+   if self.pendingSuperTrack ~= nil then return self.pendingSuperTrack end
+   return C_SuperTrack and C_SuperTrack.GetSuperTrackedQuestID and C_SuperTrack.GetSuperTrackedQuestID()
 end
 
 function mod:ApplyPendingSuperTrack()

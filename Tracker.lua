@@ -236,6 +236,7 @@ local function OnScrollWheel(scroll, delta)
    scroll:SetVerticalScroll(value)
    mod:UpdateScrollBar()
    mod:RequestItemButtonLayout()
+   mod:RequestClickOverlayRefresh()
 end
 
 function mod:CreateTracker()
@@ -244,6 +245,8 @@ function mod:CreateTracker()
 
    local frame = CreateFrame("Frame", "MagicQuestTrackerFrame", UIParent)
    frame:SetFrameStrata("LOW")
+   -- The secure click overlay sits outside the frame: it goes when the tracker does.
+   frame:HookScript("OnHide", function() mod:HideClickOverlay() end)
    frame:SetClampedToScreen(true)
    frame:SetMovable(true)
    frame:SetDontSavePosition(true)
@@ -517,6 +520,9 @@ local function Line_OnEnter(line)
    elseif line.kind == "dungeonStats" then
       mod:ShowRunRatesTooltip(line, line.data)
    end
+   if line.kind == "quest" or line.kind == "recipe" then
+      mod:ShowClickOverlay(line)
+   end
 end
 
 local function Coins(copper)
@@ -549,6 +555,7 @@ local function Line_OnLeave(line)
       line.text:SetTextColor(unpack(line.color))
    end
    GameTooltip:Hide()
+   mod:OnClickOverlayLineLeave(line)
 end
 
 local function Line_OnClick(line, button)
@@ -557,6 +564,11 @@ local function Line_OnClick(line, button)
       handler(mod, line, line.data, button)
    end
 end
+
+-- For the secure click overlay (ClickOverlay.lua), which stands in for the line.
+mod.LineOnEnter = Line_OnEnter
+mod.LineOnLeave = Line_OnLeave
+mod.LineOnClick = Line_OnClick
 
 local function AcquireLine()
    mod.numLinesUsed = mod.numLinesUsed + 1
@@ -972,28 +984,109 @@ local function SetPOIWaypoint(quest)
    end
 end
 
--- Blizzard's click handler super tracks right away; in combat, defer the
--- focus change instead (see mod:SetSuperTrackedQuest).
-local function POIButton_OnClick(button, mouseButton)
-   local quest = button:GetParent().data
-   local leftClick = mouseButton == "LeftButton" and not IsShiftKeyDown()
-   -- Shift-click (chat link / untrack) goes to Blizzard as usual.
-   if leftClick and InCombatLockdown() then
-      local questID = button:GetQuestID()
-      if questID then
-         local focusing = not button:IsSelected()
-         mod:SetSuperTrackedQuest(focusing and questID or 0)
-         -- Unfocusing leaves the TomTom waypoint alone.
-         if focusing then
-            SetPOIWaypoint(quest)
-         end
+----------------------------------------------------------------
+-- Watch list edits
+--
+-- Adding or removing a watch fires QUEST_WATCH_LIST_CHANGED right away, so
+-- Blizzard's tracker, quest log and map handlers run under our taint. Edits
+-- wait until it's safe: out of combat, no boss encounter, and the world map
+-- closed (its quest pin rebuild would run tainted). The latest edit per
+-- quest is applied then.
+----------------------------------------------------------------
+
+local pendingWatches = {}
+local watchWaitFrame
+
+local function EncounterInProgress()
+   if C_InstanceEncounter and C_InstanceEncounter.IsEncounterInProgress then
+      return C_InstanceEncounter.IsEncounterInProgress()
+   end
+   return IsEncounterInProgress and IsEncounterInProgress() or false
+end
+
+local function CanEditWatches()
+   return not InCombatLockdown() and not EncounterInProgress()
+      and not (WorldMapFrame and WorldMapFrame:IsShown())
+end
+
+local function ApplyQuestWatch(questID, watch, isWorldQuest)
+   if isWorldQuest then
+      if watch then
+         C_QuestLog.AddWorldQuestWatch(questID)
+      else
+         C_QuestLog.RemoveWorldQuestWatch(questID)
       end
+   elseif watch then
+      C_QuestLog.AddQuestWatch(questID)
+   elseif not QuestUtil.CanRemoveQuestWatch or QuestUtil.CanRemoveQuestWatch() then
+      C_QuestLog.RemoveQuestWatch(questID)
+   end
+end
+
+local function FlushQuestWatches()
+   if not next(pendingWatches) or not CanEditWatches() then return end
+   watchWaitFrame:UnregisterAllEvents()
+   for questID, edit in pairs(pendingWatches) do
+      ApplyQuestWatch(questID, edit.watch, edit.isWorldQuest)
+   end
+   wipe(pendingWatches)
+end
+
+-- The map hiding: edit a frame later, outside the map's own hide. A script
+-- hook rather than EventRegistry's WorldMapOnHide, whose shared callback
+-- table addon code shouldn't write to.
+local mapHooked = false
+local function OnWorldMapHide()
+   if next(pendingWatches) then C_Timer.After(0, FlushQuestWatches) end
+end
+
+--- Watches (watch = true) or unwatches a quest, now or once it's safe.
+function mod:SetQuestWatch(questID, watch, isWorldQuest)
+   if not next(pendingWatches) and CanEditWatches() then
+      ApplyQuestWatch(questID, watch, isWorldQuest)
       return
    end
-   POIButtonMixin.OnClick(button, mouseButton)
-   if leftClick and quest and C_SuperTrack.GetSuperTrackedQuestID() == quest.questID then
-      SetPOIWaypoint(quest)
+   pendingWatches[questID] = { watch = watch, isWorldQuest = isWorldQuest }
+   if not watchWaitFrame then
+      watchWaitFrame = CreateFrame("Frame")
+      watchWaitFrame:SetScript("OnEvent", FlushQuestWatches)
    end
+   watchWaitFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
+   watchWaitFrame:RegisterEvent("ENCOUNTER_END")
+   if not mapHooked and WorldMapFrame then
+      mapHooked = true
+      WorldMapFrame:HookScript("OnHide", OnWorldMapHide)
+   end
+   FlushQuestWatches()
+end
+
+-- Focuses the quest (or stops focusing it), like Blizzard's POI button click.
+-- Watch list edits are skipped in combat; the focus change itself is deferred
+-- there by mod:SetSuperTrackedQuest.
+local function POIButton_OnClick(button, mouseButton)
+   if mouseButton ~= "LeftButton" then return end
+   local questID = button.questID
+   if not questID then return end
+   if button.selected then
+      PlaySound(SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_OFF)
+      mod:SetSuperTrackedQuest(0)
+      return
+   end
+   PlaySound(SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON)
+   if ChatFrameUtil and ChatFrameUtil.TryInsertQuestLinkForQuestID
+      and ChatFrameUtil.TryInsertQuestLinkForQuestID(questID) then
+      return
+   end
+   if QuestUtils_IsQuestWatched(questID) then
+      if IsShiftKeyDown() then
+         mod:SetQuestWatch(questID, false)
+         return
+      end
+   else
+      mod:SetQuestWatch(questID, true)
+   end
+   mod:SetSuperTrackedQuest(questID)
+   SetPOIWaypoint(button:GetParent().data)
 end
 
 -- Alpha of the quest buttons on the tracker (faded by buttonsOnHover). Quest
@@ -1030,30 +1123,152 @@ function mod:SetQuestButtonAlpha(alpha)
    end
 end
 
--- Quest POI button (same as Blizzard's tracker): shows in progress / complete,
--- highlighted when focused; clicking it focuses (super tracks) the quest.
+-- Quest POI button, drawn like Blizzard's POIButtonTemplate but as a plain
+-- button. The template's OnShow / OnHide register and unregister
+-- "Supertracking.OnChanged" in EventRegistry; running those from addon code
+-- taints that shared callback table, and with it every map data provider
+-- dispatched from it (blocked map pin calls in combat). The focused state
+-- comes from the tracker's own update on SUPER_TRACKING_CHANGED.
+
+-- Atlas prefix of the button frame per quest classification (default: UI-QuestPoi).
+local POI_FRAME_PREFIX = {}
+-- Turn-in icon per quest classification (default: UI-QuestIcon-TurnIn-Normal).
+local POI_TURNIN_ICON = {}
+do
+   local qc = Enum and Enum.QuestClassification
+   if qc then
+      POI_FRAME_PREFIX[qc.Legendary] = "UI-QuestPoiLegendary"
+      POI_FRAME_PREFIX[qc.Campaign] = "UI-QuestPoiCampaign"
+      POI_FRAME_PREFIX[qc.Calling] = "UI-QuestPoiCampaign"
+      POI_FRAME_PREFIX[qc.Recurring] = "UI-QuestPoiRecurring"
+      POI_FRAME_PREFIX[qc.Important] = "UI-QuestPoiImportant"
+      POI_FRAME_PREFIX[qc.Meta] = "UI-QuestPoiWrapper"
+      POI_TURNIN_ICON[qc.Legendary] = "UI-QuestPoiLegendary-QuestBangTurnIn"
+      POI_TURNIN_ICON[qc.Campaign] = "UI-QuestPoiCampaign-QuestBangTurnIn"
+      POI_TURNIN_ICON[qc.Calling] = "UI-DailyQuestPoiCampaign-QuestBangTurnIn"
+      POI_TURNIN_ICON[qc.Recurring] = "UI-QuestPoiRecurring-QuestBangTurnIn"
+      POI_TURNIN_ICON[qc.Important] = "UI-QuestPoiImportant-QuestBangTurnIn"
+      POI_TURNIN_ICON[qc.Meta] = "UI-QuestPoiWrapper-QuestBangTurnIn"
+   end
+end
+
+local function GetQuestClassification(questID)
+   if C_QuestInfoSystem and C_QuestInfoSystem.GetQuestClassification then
+      return C_QuestInfoSystem.GetQuestClassification(questID)
+   end
+end
+
+-- Sets an atlas at its own size; false when the atlas doesn't exist.
+local function SetPOIAtlas(texture, atlas, width, height)
+   if not (atlas and C_Texture.GetAtlasInfo(atlas)) then
+      texture:Hide()
+      return false
+   end
+   texture:SetAtlas(atlas, not width)
+   if width then texture:SetSize(width, height) end
+   texture:Show()
+   return true
+end
+
+-- Applies the button's look: frame (normal / pushed), highlight, glow and icon.
+local function UpdatePOILook(button)
+   local look = button.look
+   SetPOIAtlas(button.normal, button.pushed and look.pushed or look.normal)
+   SetPOIAtlas(button.highlight, look.highlight)
+   button.highlight:SetShown(button:IsMouseOver())
+   if not SetPOIAtlas(button.glow, look.glow) or not button.selected then
+      button.glow:Hide()
+   end
+   SetPOIAtlas(button.icon, look.icon, look.iconWidth, look.iconHeight)
+   local offset = button.pushed and 1 or 0
+   button.icon:SetPoint("CENTER", offset, -offset)
+end
+
+local function POIButton_OnMouseDown(button)
+   button.pushed = true
+   UpdatePOILook(button)
+end
+
+local function POIButton_OnMouseUp(button)
+   button.pushed = nil
+   UpdatePOILook(button)
+end
+
+local function POIButton_OnEnter(button)
+   if button.highlight:GetAtlas() then button.highlight:Show() end
+end
+
+local function POIButton_OnLeave(button)
+   button.highlight:Hide()
+end
+
+-- Works out the atlases for a quest, as POIButtonMixin:UpdateButtonStyle does.
+local function SetPOILook(look, quest, selected)
+   local questID = quest.questID
+   local classification = GetQuestClassification(questID)
+   local suffix = selected and "-SuperTracked" or ""
+   local prefix = POI_FRAME_PREFIX[classification] or "UI-QuestPoi"
+   look.normal = prefix .. "-QuestNumber" .. suffix
+   look.pushed = prefix .. "-QuestNumber-Pressed" .. suffix
+   look.glow = prefix .. "-OuterGlow"
+   look.highlight = prefix .. "-InnerGlow"
+   look.iconWidth, look.iconHeight = nil, nil
+   if quest.isWorldQuest then
+      local info = C_QuestLog.GetQuestTagInfo(questID)
+      look.icon = nil
+      if info and QuestUtil and QuestUtil.GetWorldQuestAtlasInfo then
+         look.icon, look.iconWidth, look.iconHeight = QuestUtil.GetWorldQuestAtlasInfo(questID, info, false)
+      end
+   elseif quest.isTask then
+      local tracked = selected and "-supertracked" or ""
+      look.normal = "worldquest-questmarker-epic" .. tracked
+      look.pushed = "worldquest-questmarker-epic-down" .. tracked
+      look.glow = "UI-QuestPoi-OuterGlow"
+      look.highlight = "UI-QuestPoi-InnerGlow"
+      look.icon = "Bonus-Objective-Star"
+   elseif quest.isComplete then
+      look.icon = POI_TURNIN_ICON[classification] or "UI-QuestIcon-TurnIn-Normal"
+   else
+      look.icon = selected and "Quest-In-Progress-Icon-Brown" or "Quest-In-Progress-Icon-yellow"
+   end
+end
+
+local function CreatePOIButton(line)
+   local button = CreateFrame("Button", nil, line)
+   button:SetSize(20, 20)
+   button:RegisterForClicks("LeftButtonUp")
+   button.glow = button:CreateTexture(nil, "BACKGROUND")
+   button.glow:SetPoint("CENTER")
+   button.glow:SetBlendMode("ADD")
+   button.normal = button:CreateTexture(nil, "ARTWORK")
+   button.normal:SetPoint("CENTER")
+   button.icon = button:CreateTexture(nil, "ARTWORK", nil, 1)
+   button.icon:SetPoint("CENTER")
+   button.highlight = button:CreateTexture(nil, "OVERLAY")
+   button.highlight:SetPoint("CENTER")
+   button.highlight:SetBlendMode("ADD")
+   button.look = {}
+   button:SetScript("OnClick", POIButton_OnClick)
+   button:SetScript("OnMouseDown", POIButton_OnMouseDown)
+   button:SetScript("OnMouseUp", POIButton_OnMouseUp)
+   button:SetScript("OnEnter", POIButton_OnEnter)
+   button:SetScript("OnLeave", POIButton_OnLeave)
+   return button
+end
+
+-- Shows in progress / complete, highlighted when focused; clicking it
+-- focuses (super tracks) the quest.
 local function AttachPOIButton(line, quest)
    local button = line.poiButton
    if not button then
-      button = CreateFrame("Button", nil, line, "POIButtonTemplate")
-      button:SetScript("OnClick", POIButton_OnClick)
+      button = CreatePOIButton(line)
       line.poiButton = button
    end
-   button:SetQuestID(quest.questID)
-   local style
-   if quest.isWorldQuest then
-      style = POIButtonUtil.Style.WorldQuest
-   elseif quest.isTask then
-      style = POIButtonUtil.Style.BonusObjective
-   elseif quest.isComplete then
-      style = POIButtonUtil.Style.QuestComplete
-   else
-      style = POIButtonUtil.Style.QuestInProgress
-   end
-   button:SetStyle(style)
-   button:SetSelected(quest.isSuperTracked)
-   button:SetPingWorldMap(quest.isWorldQuest or false)
-   button:UpdateButtonStyle()
+   button.questID = quest.questID
+   button.selected = quest.isSuperTracked or false
+   button.pushed = nil
+   SetPOILook(button.look, quest, button.selected)
+   UpdatePOILook(button)
    button:ClearAllPoints()
    button:SetPoint("TOPRIGHT", line.text, "TOPLEFT", -4, 4)
    button:EnableMouse(not mod.previewing)
@@ -1640,6 +1855,7 @@ function mod:RenderPass(reserveScrollbar, sections, numQuests, numShown, recipes
    end
    self:UpdateScrollBar()
    self:RequestItemButtonLayout()
+   self:RequestClickOverlayRefresh()
    if profile.showDirection and not preview then
       self:UpdateArrows()
    end
@@ -1676,37 +1892,63 @@ local function InsertChatLink(link)
    return false
 end
 
-local function OpenQuestOnMap(questID)
-   if QuestMapFrame_OpenToQuestDetails then
-      QuestMapFrame_OpenToQuestDetails(questID)
-   elseif ToggleQuestLog then
-      ToggleQuestLog()
-   end
-end
-
 local function ToggleQuestWatch(questID, isWorldQuest)
+   local watched
    if isWorldQuest then
-      if QuestUtils_IsQuestWatched(questID) then
-         C_QuestLog.RemoveWorldQuestWatch(questID)
-      else
-         C_QuestLog.AddWorldQuestWatch(questID)
-      end
-   elseif C_QuestLog.GetQuestWatchType(questID) ~= nil then
-      C_QuestLog.RemoveQuestWatch(questID)
+      watched = QuestUtils_IsQuestWatched(questID)
    else
-      C_QuestLog.AddQuestWatch(questID)
+      watched = C_QuestLog.GetQuestWatchType(questID) ~= nil
    end
+   mod:SetQuestWatch(questID, not watched, isWorldQuest)
+end
+mod.ToggleQuestWatch = ToggleQuestWatch
+
+-- Abandoning asks with our own dialog: Blizzard's (QuestMapQuestOptions_AbandonQuest)
+-- uses StaticPopup_Show, which run from addon code taints the shared popups.
+local function AbandonQuest(questID)
+   if C_QuestLog.CanAbandonQuest and not C_QuestLog.CanAbandonQuest(questID) then return end
+   local oldSelected = C_QuestLog.GetSelectedQuest()
+   C_QuestLog.SetSelectedQuest(questID)
+   C_QuestLog.SetAbandonQuest()
+   local title = C_QuestLog.GetTitleForQuestID(questID) or ""
+   local names = {}
+   for _, itemID in ipairs(C_QuestLog.GetAbandonQuestItems and C_QuestLog.GetAbandonQuestItems() or {}) do
+      local name = C_Item and C_Item.GetItemNameByID and C_Item.GetItemNameByID(itemID)
+      if name then tinsert(names, name) end
+   end
+   C_QuestLog.SetSelectedQuest(oldSelected or 0)
+   local text
+   if #names > 0 and ABANDON_QUEST_CONFIRM_WITH_ITEMS then
+      text = ABANDON_QUEST_CONFIRM_WITH_ITEMS:format(title, table.concat(names, ", "))
+   else
+      text = (ABANDON_QUEST_CONFIRM or L["Abandon \"%s\"?"]):format(title)
+   end
+   mod:ShowConfirmDialog({
+      text = text,
+      acceptText = YES,
+      cancelText = NO,
+      onAccept = function()
+         -- Selection may have changed while the dialog was open.
+         local selected = C_QuestLog.GetSelectedQuest()
+         C_QuestLog.SetSelectedQuest(questID)
+         C_QuestLog.SetAbandonQuest()
+         C_QuestLog.AbandonQuest()
+         C_QuestLog.SetSelectedQuest(selected or 0)
+         PlaySound(SOUNDKIT.IG_QUEST_LOG_ABANDON_QUEST)
+      end,
+   })
 end
 
-local function OpenTaskOnMap(questID)
-   local mapID = C_TaskQuest.GetQuestZoneID(questID)
-   if mapID and OpenQuestLog then
-      OpenQuestLog(mapID)
-      if EventRegistry then
-         EventRegistry:TriggerEvent("MapCanvas.PingQuestID", questID)
-      end
-   end
+-- Pushing a quest from addon code is refused in combat.
+local function ShareQuest(questID)
+   if InCombatLockdown() then return end
+   local logIndex = C_QuestLog.GetLogIndexForQuestID(questID)
+   if logIndex then QuestLogPushQuest(logIndex) end
 end
+
+-- For the quest details window (QuestDetails.lua).
+mod.AbandonQuest = AbandonQuest
+mod.ShareQuest = ShareQuest
 
 -- Menus can stay open across updates, which recycle the quest tables, so
 -- menu actions work on a copy of the fields they need.
@@ -1725,7 +1967,7 @@ end
 -- "Focus quest" / "Stop focusing quest", unless Blizzard quest focus is off.
 local function AddFocusButton(root, questID)
    if not mod.db.profile.blizzardFocus then return end
-   if C_SuperTrack.GetSuperTrackedQuestID() ~= questID then
+   if mod:GetFocusedQuestID() ~= questID then
       root:CreateButton(SUPER_TRACK_QUEST or L["Focus quest"], function()
          mod:SetSuperTrackedQuest(questID)
       end)
@@ -1796,7 +2038,7 @@ local function AddQuestFilterItems(root)
 end
 
 function mod:ShowTitleMenu(owner)
-   MenuUtil.CreateContextMenu(owner, function(_, root)
+   mod:ShowContextMenu(owner, function(_, root)
       AddQuestFilterItems(root)
       AddHideInCombat(root)
       root:CreateDivider()
@@ -1805,20 +2047,17 @@ function mod:ShowTitleMenu(owner)
 end
 
 local function ShowQuestsHeaderMenu(owner)
-   MenuUtil.CreateContextMenu(owner, function(_, root)
+   mod:ShowContextMenu(owner, function(_, root)
       AddQuestFilterItems(root)
       AddHideInCombat(root)
       root:CreateDivider()
-      if ToggleQuestLog then
-         root:CreateButton(L["Open quest log"], function() ToggleQuestLog() end)
-      end
       root:CreateButton(L["Open settings"], function() mod:OpenConfig() end)
    end)
 end
 
 local function ShowTaskMenu(owner, quest)
    local questID = quest.questID
-   MenuUtil.CreateContextMenu(owner, function(_, root)
+   mod:ShowContextMenu(owner, function(_, root)
       root:CreateTitle(quest.title)
       if mod:HasTomTom() then
          root:CreateButton(L["Set TomTom waypoint"], function()
@@ -1826,9 +2065,6 @@ local function ShowTaskMenu(owner, quest)
          end)
       end
       AddFocusButton(root, questID)
-      root:CreateButton(OBJECTIVES_SHOW_QUEST_MAP or L["Show on map"], function()
-         OpenTaskOnMap(questID)
-      end)
       if quest.isWorldQuest then
          local watched = QuestUtils_IsQuestWatched(questID)
          root:CreateButton(watched and (OBJECTIVES_STOP_TRACKING or L["Stop tracking"]) or (TRACK_QUEST or L["Track quest"]), function()
@@ -1844,7 +2080,7 @@ local function ShowQuestMenu(owner, quest)
       return ShowTaskMenu(owner, quest)
    end
    local questID = quest.questID
-   MenuUtil.CreateContextMenu(owner, function(_, root)
+   mod:ShowContextMenu(owner, function(_, root)
       root:CreateTitle(C_QuestLog.GetTitleForQuestID(questID) or "")
 
       if mod:HasTomTom() then
@@ -1855,14 +2091,9 @@ local function ShowQuestMenu(owner, quest)
 
       AddFocusButton(root, questID)
 
-      if QuestUtil and QuestUtil.OpenQuestDetails then
-         root:CreateButton(OBJECTIVES_VIEW_IN_QUESTLOG or L["Open quest details"], function()
-            QuestUtil.OpenQuestDetails(questID)
-         end)
-      end
-
-      root:CreateButton(OBJECTIVES_SHOW_QUEST_MAP or L["Show on map"], function()
-         OpenQuestOnMap(questID)
+      -- Our own window: Blizzard's (QuestUtil.OpenQuestDetails) opens the map from addon code.
+      root:CreateButton(OBJECTIVES_VIEW_IN_QUESTLOG or L["Open quest details"], function()
+         mod:ShowQuestDetails(questID)
       end)
 
       local watched = C_QuestLog.GetQuestWatchType(questID) ~= nil
@@ -1871,14 +2102,15 @@ local function ShowQuestMenu(owner, quest)
       end)
 
       if C_QuestLog.IsPushableQuest(questID) and IsInGroup() then
-         root:CreateButton(SHARE_QUEST or L["Share quest"], function()
-            QuestUtil.ShareQuest(questID)
+         local share = root:CreateButton(SHARE_QUEST or L["Share quest"], function()
+            ShareQuest(questID)
          end)
+         share:SetEnabled(not InCombatLockdown())
       end
 
-      if QuestMapQuestOptions_AbandonQuest then
+      if not C_QuestLog.CanAbandonQuest or C_QuestLog.CanAbandonQuest(questID) then
          root:CreateButton(ABANDON_QUEST_ABBREV or L["Abandon quest"], function()
-            QuestMapQuestOptions_AbandonQuest(questID)
+            AbandonQuest(questID)
          end)
       end
    end)
@@ -1899,7 +2131,7 @@ end
 local function ShowRecipeMenu(owner, recipe)
    -- Copy the fields: the recipe table is recycled on the next update.
    local recipeID, isRecraft, name = recipe.recipeID, recipe.isRecraft, recipe.name
-   MenuUtil.CreateContextMenu(owner, function(_, root)
+   mod:ShowContextMenu(owner, function(_, root)
       root:CreateTitle(name)
       if not isRecraft then
          root:CreateButton(PROFESSIONS_TRACKING_VIEW_RECIPE or L["View recipe"], function()
@@ -1937,7 +2169,7 @@ end
 local function ShowAchievementMenu(owner, achievement)
    -- Copy the fields: the achievement table is recycled on the next update.
    local achievementID, name = achievement.achievementID, achievement.name
-   MenuUtil.CreateContextMenu(owner, function(_, root)
+   mod:ShowContextMenu(owner, function(_, root)
       root:CreateTitle(name)
       root:CreateButton(OBJECTIVES_VIEW_ACHIEVEMENT or L["View achievement"], function()
          ShowAchievementFrameForAchievement(achievementID)
@@ -1964,7 +2196,7 @@ mod.lineClickHandlers = {
       end
       -- Right-click on a Forever dungeon's header: start a new run.
       if button == "RightButton" and section.key == "scenario" and self:InForeverDungeon() then
-         MenuUtil.CreateContextMenu(line, function(_, root)
+         mod:ShowContextMenu(line, function(_, root)
             root:CreateButton(L["Start a new run"], function() mod:NewDungeonRun() end)
          end)
          return
@@ -1988,16 +2220,12 @@ mod.lineClickHandlers = {
          end
       elseif IsControlKeyDown() then
          self:SetQuestWaypoint(quest)
-      elseif quest.isAutoComplete and quest.isComplete and ShowQuestComplete then
-         ShowQuestComplete(questID)
-      elseif self.db.profile.mapClicks then
-         -- Opening the map from addon code taints it, and Blizzard's map
-         -- code is then blocked when the map is next opened in combat.
-         if quest.isTask then
-            OpenTaskOnMap(questID)
-         else
-            OpenQuestOnMap(questID)
-         end
+      else
+         -- Always our details window. Its "Show on map" / "Complete quest"
+         -- button clicks Blizzard's own tracker block securely: the map or
+         -- quest panel opened from addon code (even out of combat) stays
+         -- tainted, and the map is then blocked in combat until a reload.
+         self:ShowQuestDetails(questID)
       end
    end,
 

@@ -347,7 +347,7 @@ local function BuildQuest(info)
    quest.isComplete = C_QuestLog.IsComplete(questID)
    quest.isFailed = C_QuestLog.IsFailed(questID)
    quest.isWatched = C_QuestLog.GetQuestWatchType(questID) ~= nil
-   quest.isSuperTracked = C_SuperTrack and C_SuperTrack.GetSuperTrackedQuestID() == questID
+   quest.isSuperTracked = mod:GetFocusedQuestID() == questID
    quest.distance = GetQuestDistance(questID)
    quest.isForeverQuest = IS_FOREVER and questID > MAX_VANILLA_QUEST_ID
    quest.objectives = BuildObjectives(questID)
@@ -795,7 +795,7 @@ function mod:CollectQuests()
    local numQuests, numShown = 0, 0
    -- With a section on top, the focused quest is always shown (in it).
    local pinMode = profile.focusedSection == "focused" or profile.focusedSection == "tracked"
-   local focusedID = pinMode and C_SuperTrack and C_SuperTrack.GetSuperTrackedQuestID() or nil
+   local focusedID = pinMode and self:GetFocusedQuestID() or nil
    -- The "All" completed section lists every completed quest, whatever the filters.
    local allCompleted = profile.completedSection == "all"
    local filterDifficulty = profile.hideRedQuests or profile.hideGrayQuests

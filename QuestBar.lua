@@ -277,7 +277,7 @@ local function CollectItems()
    local count = 0
    -- Only items of quests nearby (see IsNear), plus the focused quest's.
    local maxDistance = mod.db.profile.questBarMaxDistance or 0
-   local focused = C_SuperTrack and C_SuperTrack.GetSuperTrackedQuestID and C_SuperTrack.GetSuperTrackedQuestID()
+   local focused = mod:GetFocusedQuestID()
    local useOnMap = not IsInInstance()
    for i = 1, C_QuestLog.GetNumQuestLogEntries() do
       local info = C_QuestLog.GetInfo(i)
@@ -342,7 +342,7 @@ end
 -- The entry for slot 1: the focused quest, else the nearest (keeping the
 -- current one unless another is clearly nearer).
 local function PickSpecial(count)
-   local focused = C_SuperTrack and C_SuperTrack.GetSuperTrackedQuestID and C_SuperTrack.GetSuperTrackedQuestID()
+   local focused = mod:GetFocusedQuestID()
    local nearest, current
    for i = 1, count do
       local entry = entries[i]
@@ -467,7 +467,7 @@ function mod:DumpQuestBar()
          tostring(GetLayoutName()), pos.point, pos.x, pos.y, pos.scale, holder:GetWidth(), holder:GetHeight(),
          NumButtons(), tostring(self.questBarTimer ~= nil)))
    end
-   local focused = C_SuperTrack and C_SuperTrack.GetSuperTrackedQuestID and C_SuperTrack.GetSuperTrackedQuestID()
+   local focused = mod:GetFocusedQuestID()
    print(format("maxDistance=%s focused=%s instance=%s", tostring(profile.questBarMaxDistance), tostring(focused),
       tostring(IsInInstance())))
    local found = 0

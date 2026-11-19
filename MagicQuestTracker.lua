@@ -147,7 +147,6 @@ mod.defaults = {
       waypointMode = "both",         -- ctrl-click: tomtom | blizzard | both
       poiTomTom = true,              -- clicking a quest's POI button also sets the TomTom waypoint
       blizzardFocus = true,          -- focus (super track) quests; off avoids taint errors
-      mapClicks = true,              -- left-click opens the quest on the map (taints the map)
       showLevel = IS_FOREVER,        -- like the built-in tracker: Forever shows levels, retail does not
       showQuestTags = false,
       markForeverQuests = false,
@@ -436,6 +435,8 @@ function mod:PLAYER_REGEN_DISABLED()
    if self.itemLayoutPending then
       self:LayoutItemButtons()
    end
+   -- The click overlay can't follow the lines in combat: lines take clicks themselves.
+   self:HideClickOverlay(true)
    if self:ShouldHideInCombat() and self.frame then
       self.combatHidden = true
       self.frame:Hide()
@@ -826,20 +827,6 @@ end
 ----------------------------------------------------------------
 -- Slash command
 ----------------------------------------------------------------
-
-function mod:CloseConfig()
-   if SettingsPanel and SettingsPanel:IsShown() then
-      HideUIPanel(SettingsPanel)
-   end
-   if InterfaceOptionsFrame and InterfaceOptionsFrame:IsShown() then
-      InterfaceOptionsFrame:Hide()
-   end
-end
-
-function mod:OpenConfig()
-   self:InterfaceOptionsFrame_OpenToCategory(self.optionsEnd)
-   self:InterfaceOptionsFrame_OpenToCategory(self.optionsMain)
-end
 
 function mod:PrintHelp()
    self:info(L["Available commands:"])
