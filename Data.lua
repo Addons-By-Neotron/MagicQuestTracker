@@ -1494,6 +1494,8 @@ local function LootPattern(text)
    return "^" .. text:gsub("[%^%$%(%)%.%[%]%*%+%-%?]", "%%%0"):gsub("%%s", "(.+)"):gsub("%%d", "(%%d+)") .. "$"
 end
 
+local GetItemInfo = (C_Item and C_Item.GetItemInfo) or _G.GetItemInfo
+
 local function AddItemValue(self, run, link, count)
    local price = select(11, GetItemInfo(link))
    if price then
