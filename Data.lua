@@ -160,8 +160,8 @@ function mod:DumpDungeon()
    if run then
       local kills = {}
       for boss in pairs(run.bosses or {}) do tinsert(kills, boss) end
-      print(format("run: wing=%s known=%s entry=%s copy=%s kills=%s", tostring(run.wing), tostring(run.wingKnown),
-         tostring(run.entry ~= nil), tostring(run.copy), table.concat(kills, ", ")))
+      print(format("run: wing=%s known=%s all=%s entry=%s copy=%s kills=%s", tostring(run.wing), tostring(run.wingKnown),
+         tostring(run.crossedWings and table.concat(GetKeysArray and GetKeysArray(run.crossedWings) or {}, "+")), tostring(run.entry ~= nil), tostring(run.copy), table.concat(kills, ", ")))
    else
       print("run: none")
    end
@@ -1225,6 +1225,28 @@ local DUNGEON_WINGS = {
    },
 }
 
+-- Wings a group can do in one run (walking through inside, or out one door
+-- and in another): crossing over makes it one run of the wings visited.
+local CROSSABLE_WINGS = {
+   [429] = true,  -- Dire Maul
+   [329] = true,  -- Stratholme
+}
+
+--- The wing whose bosses are shown: its index, a set of indexes for a run
+--- that crossed over, or nil for all of them (not winged, not known yet).
+local function ShownWing(run, wings)
+   if not wings then return nil end
+   if run.crossedWings then return run.crossedWings end
+   return run.wingKnown and run.wing or nil
+end
+
+--- Whether a boss of bossWing is shown for ShownWing's wing.
+local function WingShown(wing, bossWing)
+   if not bossWing or not wing then return true end
+   if type(wing) == "table" then return wing[bossWing] or false end
+   return bossWing == wing
+end
+
 -- Lookups built on first use: wingOfBoss[instanceID][boss] and
 -- wingOfRoom[instanceID][room:lower()] = wing index.
 local wingOfBoss, wingOfRoom, wingOfMap
@@ -1567,8 +1589,9 @@ function mod:OnRunEnter()
    local all = self.db.char.dungeonKills
    local run = all[instanceID]
    if not run or time() - (run.time or 0) > DUNGEON_RUN_EXPIRE then return end
-   if run.finished and not DUNGEON_WINGS[instanceID] then
-      -- Done: back in is the next run. (Winged: per wing, by SetRunWing.)
+   if run.finished and (not DUNGEON_WINGS[instanceID] or run.crossedWings) then
+      -- Done: back in is the next run. (Winged: per wing, by SetRunWing;
+      -- a run of all wings is done as a whole.)
       all[instanceID] = nil
       return
    end
@@ -1631,14 +1654,34 @@ end
 --- New run from walking in on: no kills, stats since then.
 function mod:StartRunOver(run)
    StartOver(run)
+   run.crossedWings = nil
    wipe(run.bosses)
    if run.killedAt then wipe(run.killedAt) end
    self:RequestUpdate()
 end
 
 function mod:SetRunWing(run, wing)
+   local crossed = run.crossedWings
+   if crossed then
+      -- Already crossed over: another wing joins the run.
+      if not crossed[wing] then
+         crossed[wing] = true
+         run.finished = nil
+      end
+      run.wing, run.wingKnown = wing, true
+      self:RequestUpdate()
+      return
+   end
    if run.wingKnown and run.wing == wing then return end
    if run.wing and run.wing ~= wing then
+      if CROSSABLE_WINGS[run.instanceID] and run.started then
+         -- Crossed over into another wing mid-run: one run of the wings
+         -- visited, their bosses shown.
+         run.crossedWings = { [run.wing] = true, [wing] = true }
+         run.wing, run.wingKnown, run.finished = wing, true, nil
+         self:RequestUpdate()
+         return
+      end
       StartOver(run)
    elseif run.wing == wing and run.finished then
       -- Walked back into a finished wing: the next run.
@@ -1783,7 +1826,7 @@ local function ForEachBoss(encounters, run, wing, wingInfo, fn)
    for _, encounter in ipairs(encounters) do
       local boss, isKilled = encounter[1], encounter[2]
       local bossWing = boss and wing and BossWing(run.instanceID, boss)
-      if boss and (not bossWing or bossWing == wing) then
+      if boss and WingShown(wing, bossWing) then
          local killed = isKilled or run.bosses[boss] or false
          for name, before in pairs(extra or EMPTY) do
             if before == boss and not shown[name] then
@@ -1869,7 +1912,7 @@ local function RunSummaryLines(self, plain)
    if not run then return end
    local money = plain and PlainCoins or Coins
    local wings = DUNGEON_WINGS[info.instanceID]
-   local wing = wings and run.wingKnown and run.wing
+   local wing = ShownWing(run, wings)
    local wingInfo = wing and wings[wing]
    local name = wingInfo and wingInfo.title or info.name
    local numKilled, numBosses = 0, 0
@@ -1949,19 +1992,25 @@ function mod:CollectDungeon()
       enteredWing = nil
       if not wing and not run.wingKnown and not run.wing then
          -- No wing seen in this run yet: the wing of the kills so far, if
-         -- they're all in one.
+         -- they're all in one; kills in more than one crossed over.
+         local killWings, count = {}, 0
          for boss in pairs(run.bosses) do
             local bossWing = BossWing(instanceID, boss)
-            if bossWing then
-               if wing and wing ~= bossWing then wing = nil break end
+            if bossWing and not killWings[bossWing] then
+               killWings[bossWing] = true
+               count = count + 1
                wing = bossWing
             end
+         end
+         if count > 1 then
+            wing = nil
+            if CROSSABLE_WINGS[instanceID] then run.crossedWings = killWings end
          end
       end
       if wing then self:SetRunWing(run, wing) end
    end
    -- Winged dungeon: only the current wing's bosses (all while not known).
-   local wing = wings and run.wingKnown and run.wing
+   local wing = ShownWing(run, wings)
    local wingInfo = wing and wings[wing]
    if wingInfo then name = wingInfo.title end
    -- Recorded even while not shown: completed quests and the end of the run.
