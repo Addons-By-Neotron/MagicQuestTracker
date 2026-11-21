@@ -334,21 +334,96 @@ local function NormalizeText(text)
    return (text:gsub("%s+", " "):gsub("^ ", ""):gsub(" $", ""):lower())
 end
 
+-- Phrases (normalized) to look for in quest texts for the quest items in
+-- the bags, other than ones that start a quest: the whole name, and every
+-- run of two or more of its words, as the text may leave words out
+-- ("Miniature Platinum Discs" are "the platinum discs"). Collected once per
+-- update (reset by CollectQuests).
+local bagQuestItems
+local bagQuestItemIDs = {}  -- [itemID] = true, filled with bagQuestItems
+local NUM_BAGS = NUM_TOTAL_EQUIPPED_BAG_SLOTS or NUM_BAG_SLOTS or 4
+local QUEST_ITEM_CLASS = Enum.ItemClass and Enum.ItemClass.Questitem or 12
+
+local function GetBagQuestItems()
+   if bagQuestItems then return bagQuestItems end
+   bagQuestItems = {}
+   wipe(bagQuestItemIDs)
+   if not (C_Container and C_Container.GetContainerNumSlots) then return bagQuestItems end
+   for bag = 0, NUM_BAGS do
+      for slot = 1, C_Container.GetContainerNumSlots(bag) or 0 do
+         local itemID = C_Container.GetContainerItemID(bag, slot)
+         if itemID then
+            local questInfo = C_Container.GetContainerItemQuestInfo and C_Container.GetContainerItemQuestInfo(bag, slot)
+            local classID = select(6, C_Item.GetItemInfoInstant(itemID))
+            local isQuestItem = classID == QUEST_ITEM_CLASS or (questInfo and questInfo.isQuestItem)
+            -- Items that start a quest aren't carried for one.
+            if isQuestItem and not (questInfo and questInfo.questID) then
+               bagQuestItemIDs[itemID] = true
+               local name = C_Item.GetItemNameByID(itemID)
+               if name and name ~= "" then
+                  name = NormalizeText(name)
+                  bagQuestItems[name] = true
+                  local words = {}
+                  for word in name:gmatch("%S+") do words[#words + 1] = word end
+                  for first = 1, #words - 1 do
+                     for last = first + 1, #words do
+                        bagQuestItems[table.concat(words, " ", first, last)] = true
+                     end
+                  end
+               end
+            end
+         end
+      end
+   end
+   return bagQuestItems
+end
+
+-- QuestieDB (the database addon Questie uses, with a public API): the item
+-- a quest gives you when you accept it. nil when QuestieDB isn't loaded,
+-- is an incompatible version, or doesn't know the quest.
+local QUESTIEDB_CONTRACT = 4
+local questieDBUsable  -- nil until checked
+local function QuestieSourceItem(questID)
+   local lib = LibQuestieDB
+   if not lib then return nil end
+   if questieDBUsable == nil then
+      local ok, compatible = pcall(lib.RequireContract, QUESTIEDB_CONTRACT)
+      questieDBUsable = ok and compatible and lib.Quest ~= nil and type(lib.Quest.sourceItemId) == "function"
+   end
+   if not questieDBUsable then return nil end
+   local ok, itemID = pcall(lib.Quest.sourceItemId, questID)
+   return ok and type(itemID) == "number" and itemID or nil
+end
+
 -- A complete quest that was complete from the moment it was accepted: just
 -- go and talk to someone (breadcrumbs, deliveries). Either it has no
 -- objectives, or only "log" ones that repeat the quest's summary ("Take
--- the letter to ..."), which the game marks done on accepting.
+-- the letter to ..."), which the game marks done on accepting. Quests that
+-- have you carry an item (named in their text) count as completed
+-- instead: the item takes a bag slot until they are turned in. The item is
+-- known exactly from QuestieDB when installed, else (and for quests it
+-- doesn't cover) guessed from item names in the quest's text.
 local function IsTravelQuest(questID, logIndex)
    local list = C_QuestLog.GetQuestObjectives(questID)
-   if not list or #list == 0 then return true end
-   local summary
-   for _, obj in ipairs(list) do
-      if obj.type ~= "log" or not obj.text or obj.text == "" then return false end
-      if summary == nil then
-         summary = logIndex and GetQuestLogQuestText and select(2, GetQuestLogQuestText(logIndex)) or false
-         summary = summary and summary ~= "" and NormalizeText(summary) or false
+   local description, summary
+   if logIndex and GetQuestLogQuestText then
+      description, summary = GetQuestLogQuestText(logIndex)
+   end
+   description = description and description ~= "" and NormalizeText(description) or ""
+   summary = summary and summary ~= "" and NormalizeText(summary) or false
+   if list then
+      for _, obj in ipairs(list) do
+         if obj.type ~= "log" or not obj.text or obj.text == "" then return false end
+         if not summary or NormalizeText(obj.text) ~= summary then return false end
       end
-      if not summary or NormalizeText(obj.text) ~= summary then return false end
+   end
+   local items = GetBagQuestItems()
+   local sourceItem = QuestieSourceItem(questID)
+   if sourceItem and bagQuestItemIDs[sourceItem] then return false end
+   for name in pairs(items) do
+      if description:find(name, 1, true) or (summary and summary:find(name, 1, true)) then
+         return false
+      end
    end
    return true
 end
@@ -374,7 +449,7 @@ local function BuildQuest(info)
    quest.distance = GetQuestDistance(questID)
    quest.isForeverQuest = IS_FOREVER and questID > MAX_VANILLA_QUEST_ID
    quest.objectives = BuildObjectives(questID)
-   quest.isTravel = quest.isComplete and IsTravelQuest(questID, logIndex) or nil
+   quest.isTravel = quest.isComplete and mod.db.profile.travelSection and IsTravelQuest(questID, logIndex) or nil
    -- Time limit (escort and other timed quests): absolute GetTime() it runs out.
    local timeTotal, timeElapsed = C_QuestLog.GetTimeAllowed and C_QuestLog.GetTimeAllowed(questID)
    if timeTotal and timeElapsed and timeElapsed < timeTotal and not quest.isFailed then
@@ -526,6 +601,11 @@ local function TakeQuests(sections, take)
       local hasLocal = false
       for _, quest in ipairs(section.quests) do
          if take(quest, section) then
+            if not section.isSpecial then
+               -- For grouping by zone again (separate sections).
+               quest.zoneRank = section.zoneRank
+               quest.zoneIsCurrent = section.isCurrent
+            end
             tinsert(taken, quest)
          else
             tinsert(quests, quest)
@@ -731,6 +811,9 @@ local function PlaceSpecialSections(sections, profile, timed)
    local completedBottom = profile.completedPosition == "bottom"
       or (profile.completedPosition == nil and profile.completedSort == "last")
    local travelBottom = profile.travelPosition ~= "top"
+   -- For separate sections: below Quests instead of above.
+   if completed then completed.placeBottom = completedBottom end
+   if travel then travel.placeBottom = travelBottom end
    local result = new()
    if timed then tinsert(result, timed) end
    if pinned and profile.focusedPosition ~= "bottom" then tinsert(result, pinned) end
@@ -743,6 +826,92 @@ local function PlaceSpecialSections(sections, profile, timed)
    del(sections)
    del(zones)
    return result
+end
+
+-- Sorts zone sections by the zone sort order (current zone first if set).
+-- ranks: the distance sort's memory of the previous order. Returns the
+-- sorted list (may be a new table).
+local function SortZones(sections, profile, ranks)
+   local zoneSorter = zoneSorters[profile.zoneSort] or zoneSorters.level
+   if profile.zoneSort == "distance" then
+      if profile.currentZoneFirst then
+         -- Current zone (and its sub-areas) first, then the rest by distance.
+         local current, others = new(), new()
+         for _, section in ipairs(sections) do
+            tinsert(section.zoneRank > 0 and current or others, section)
+         end
+         sort(current, CurrentZoneFirstByLevel)
+         SortByDistance(others, ZoneKey, ranks, zoneSorters.level)
+         for _, section in ipairs(others) do
+            tinsert(current, section)
+         end
+         del(others)
+         del(sections)
+         sections = current
+      else
+         SortByDistance(sections, ZoneKey, ranks, zoneSorters.level)
+      end
+   elseif profile.currentZoneFirst then
+      activeZoneSorter = zoneSorter
+      sort(sections, CurrentZoneFirst)
+   else
+      sort(sections, zoneSorter)
+   end
+   return sections
+end
+
+-- Distance sort memory of the zones inside the separate sections, per section.
+local subZoneRanks = {}
+
+-- Separate sections (profile.separateSections): Completed and Travel are
+-- shown next to Quests instead of inside it, with their quests grouped by
+-- zone again. Moves section.quests into section.zones (sub-sections, like
+-- zone sections); with zone headers always hidden, one unnamed group in the
+-- section's own order.
+local function SplitIntoZones(section, profile)
+   local quests = section.quests
+   section.quests = nil
+   section.numQuests = #quests
+   section.isTopLevel = true
+   local zones = new()
+   if profile.hideZoneHeaders == true then
+      local zone = new()
+      zone.quests = quests
+      zone.zoneRank = 0
+      tinsert(zones, zone)
+      section.zones = zones
+      return
+   end
+   local byName = new()
+   for _, quest in ipairs(quests) do
+      local name = quest.zoneName or L["Miscellaneous"]
+      local zone = byName[name]
+      if not zone then
+         zone = new()
+         zone.name = name
+         zone.foldKey = section.foldKey .. "\001" .. name
+         zone.isCurrent = quest.zoneIsCurrent or false
+         zone.zoneRank = quest.zoneRank or 0
+         zone.minLevel = math.huge
+         zone.quests = new()
+         byName[name] = zone
+         tinsert(zones, zone)
+      end
+      tinsert(zone.quests, quest)
+      if quest.inCurrentZone then zone.hasLocalQuests = true end
+      if quest.level < zone.minLevel then zone.minLevel = quest.level end
+      if quest.distance and (not zone.distance or quest.distance < zone.distance) then
+         zone.distance = quest.distance
+      end
+   end
+   del(byName)
+   del(quests)
+   local ranks = subZoneRanks[section.foldKey]
+   if not ranks then
+      ranks = {}
+      subZoneRanks[section.foldKey] = ranks
+   end
+   section.zones = SortZones(zones, profile, ranks)
 end
 
 -- Sorts the zones and their quests, pins the focused / tracked quests and
@@ -774,31 +943,7 @@ local function ArrangeSections(sections, profile)
       end
    end
 
-   local zoneSorter = zoneSorters[profile.zoneSort] or zoneSorters.level
-   if profile.zoneSort == "distance" then
-      if profile.currentZoneFirst then
-         -- Current zone (and its sub-areas) first, then the rest by distance.
-         local current, others = new(), new()
-         for _, section in ipairs(sections) do
-            tinsert(section.zoneRank > 0 and current or others, section)
-         end
-         sort(current, CurrentZoneFirstByLevel)
-         SortByDistance(others, ZoneKey, zoneRanks, zoneSorters.level)
-         for _, section in ipairs(others) do
-            tinsert(current, section)
-         end
-         del(others)
-         del(sections)
-         sections = current
-      else
-         SortByDistance(sections, ZoneKey, zoneRanks, zoneSorters.level)
-      end
-   elseif profile.currentZoneFirst then
-      activeZoneSorter = zoneSorter
-      sort(sections, CurrentZoneFirst)
-   else
-      sort(sections, zoneSorter)
-   end
+   sections = SortZones(sections, profile, zoneRanks)
 
    -- Timed quests first, so a timed focused quest goes there too.
    local timed
@@ -836,6 +981,9 @@ local function ArrangeSections(sections, profile)
          if quest.isComplete then numComplete = numComplete + 1 end
       end
       section.numComplete = numComplete
+      if profile.separateSections and (section.foldKey == mod.COMPLETED_FOLD_KEY or section.foldKey == mod.TRAVEL_FOLD_KEY) then
+         SplitIntoZones(section, profile)
+      end
    end
    return sections
 end
@@ -843,6 +991,7 @@ mod.ArrangeSections = ArrangeSections
 
 function mod:CollectQuests()
    local profile = self.db.profile
+   bagQuestItems = nil  -- bags may have changed
    wipe(questComplete)
    RefreshQuestTimers()
    local zoneNames = GetCurrentZoneNames()

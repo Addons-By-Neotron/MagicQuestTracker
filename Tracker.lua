@@ -132,6 +132,8 @@ function mod:TickTimers(elapsed)
 end
 
 -- Line data for section headers (constant per section key).
+local RenderZones, RenderSeparateSections  -- defined with the rendering below
+
 local SECTION_DATA = setmetatable({}, { __index = function(t, key)
    local data = { key = key }
    t[key] = data
@@ -1526,6 +1528,62 @@ function mod:HeaderWithCount(name, count)
    return format("%s (%d)", name, count)
 end
 
+-- Zone sections (or, in a separate section, its zones) with their zone
+-- headers: plain text under the section bar. numZones: how many are listed,
+-- for hiding a single zone's header. Timed and separate sections are
+-- rendered on their own.
+function RenderZones(self, sections, profile, numZones)
+   local collapsedZones = self:GetCollapsedMap("collapsedZones")
+   local zoneColor, currentZoneColor = colors.zone, colors.currentZone
+   local headerMode = self:GetZoneHeaderMode()
+   local hideHeaders = headerMode == "always" or (headerMode == "single" and numZones == 1)
+   for _, section in ipairs(sections) do
+      if section.foldKey ~= mod.TIMED_FOLD_KEY and not section.isTopLevel then
+         -- Tracked / Completed keep their header: their quests would
+         -- otherwise read as part of the zone list. An unnamed group (a
+         -- separate section with zone headers off) has none.
+         local hideHeader = not section.name or (hideHeaders and not section.isSpecial)
+         local collapsed = not hideHeader and collapsedZones[section.foldKey or section.name]
+         local count = #section.quests
+         if section.foldKey ~= mod.COMPLETED_FOLD_KEY and section.foldKey ~= mod.TRAVEL_FOLD_KEY
+            and section.numComplete and section.numComplete > 0 then
+            count = format("%d, %s", count, format(L["%d complete"], section.numComplete))
+         end
+         if not hideHeader then
+            local text = profile.simpleZoneHeaders and section.name or format("%s (%s)", section.name, count)
+            local color = section.isCurrent and currentZoneColor or zoneColor
+            AddLine("zone", section, text, "zone", ZONE_INDENT, spacing.zoneSpacing, color, Brighten(color), "zone",
+               nil, nil, collapsed and true or false)
+         end
+         if not collapsed then
+            if not hideHeader then
+               layout.nextSpacing = spacing.zoneHeaderSpacing
+            end
+            for _, quest in ipairs(section.quests) do
+               self:RenderQuest(quest, profile)
+            end
+         end
+      end
+   end
+end
+
+-- Completed and Travel as sections of their own (profile.separateSections),
+-- above or below Quests as their position settings say.
+local SEPARATE_SECTION_KEYS = {
+   [mod.COMPLETED_FOLD_KEY] = "completed",
+   [mod.TRAVEL_FOLD_KEY] = "travel",
+}
+function RenderSeparateSections(self, sections, profile, bottom)
+   for _, section in ipairs(sections) do
+      if section.isTopLevel and (section.placeBottom or false) == bottom then
+         local key = SEPARATE_SECTION_KEYS[section.foldKey]
+         if self:RenderSectionHeader(key, self:HeaderWithCount(section.name, section.numQuests), profile) then
+            RenderZones(self, section.zones, profile, #section.zones)
+         end
+      end
+   end
+end
+
 function mod:RenderSectionHeader(key, text, profile)
    local collapsed = self:GetCollapsedMap("collapsedSections")[key]
    AddLine("section", SECTION_DATA[key], text, "module", 0, spacing.sectionSpacing, colors.section, Brighten(colors.section),
@@ -1812,7 +1870,18 @@ function mod:RenderPass(reserveScrollbar, sections, numQuests, numShown, recipes
          end
       end
    end
-   local numZones = #sections - (timed and 1 or 0)
+   local numZones = 0
+   for _, section in ipairs(sections) do
+      if section.isTopLevel then
+         -- Counted in their own header, not Quests'.
+         numShown = numShown - section.numQuests
+      elseif section == timed then
+         numShown = numShown - #section.quests
+      else
+         numZones = numZones + 1
+      end
+   end
+   RenderSeparateSections(self, sections, profile, false)
 
    if numQuests > 0 then
       local maxQuests = C_QuestLog.GetMaxNumQuestsCanAccept and C_QuestLog.GetMaxNumQuestsCanAccept() or numQuests
@@ -1838,40 +1907,10 @@ function mod:RenderPass(reserveScrollbar, sections, numQuests, numShown, recipes
          header = format("%s (%d/%d)", questsLabel, numQuests, maxQuests)
       end
       if self:RenderSectionHeader("quests", header, profile) then
-         -- Zone headers: plain text under the section bar.
-         local collapsedZones = self:GetCollapsedMap("collapsedZones")
-         local zoneColor, currentZoneColor = colors.zone, colors.currentZone
-         local headerMode = self:GetZoneHeaderMode()
-         local hideHeader = headerMode == "always" or (headerMode == "single" and numZones == 1)
-         for _, section in ipairs(sections) do
-            if section ~= timed then  -- rendered above
-               -- Tracked / Completed keep their header: their quests would
-               -- otherwise read as part of the zone list.
-               local hideHeader = hideHeader and not section.isSpecial
-               local collapsed = not hideHeader and collapsedZones[section.foldKey or section.name]
-               local count = #section.quests
-               if section.foldKey ~= mod.COMPLETED_FOLD_KEY and section.foldKey ~= mod.TRAVEL_FOLD_KEY
-                  and section.numComplete and section.numComplete > 0 then
-                  count = format("%d, %s", count, format(L["%d complete"], section.numComplete))
-               end
-               local text = profile.simpleZoneHeaders and section.name or format("%s (%s)", section.name, count)
-               local color = section.isCurrent and currentZoneColor or zoneColor
-               if not hideHeader then
-                  AddLine("zone", section, text, "zone", ZONE_INDENT, spacing.zoneSpacing, color, Brighten(color), "zone",
-                     nil, nil, collapsed and true or false)
-               end
-               if not collapsed then
-                  if not hideHeader then
-                     layout.nextSpacing = spacing.zoneHeaderSpacing
-                  end
-                  for _, quest in ipairs(section.quests) do
-                     self:RenderQuest(quest, profile)
-                  end
-               end
-            end
-         end
+         RenderZones(self, sections, profile, numZones)
       end
    end
+   RenderSeparateSections(self, sections, profile, true)
 
    if tasks then
       self:RenderTaskSection("worldQuests", TRACKER_HEADER_WORLD_QUESTS or L["World Quests"], tasks.worldQuests, profile)
@@ -2112,6 +2151,9 @@ local function AddQuestFilterItems(root)
    root:CreateCheckbox(L["Travel section"],
       function() return mod.db.profile.travelSection end,
       function() ToggleFilter("travelSection") end)
+   root:CreateCheckbox(L["Completed and Travel as own sections"],
+      function() return mod.db.profile.separateSections end,
+      function() ToggleFilter("separateSections") end)
 end
 
 function mod:ShowTitleMenu(owner)

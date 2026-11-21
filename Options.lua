@@ -608,6 +608,17 @@ local function BuildOptions()
                      width = DROPDOWN_WIDTH,
                      disabled = function() return not mod.db.profile.travelSection end,
                   },
+                  separateSections = {
+                     type = "toggle",
+                     name = L["Completed and Travel as own sections"],
+                     desc = L["Show the Completed and Travel sections next to Quests instead of inside it, with their quests grouped by zone again. Their position settings put them above or below Quests."],
+                     order = 5.3,
+                     width = "full",
+                     disabled = function()
+                        local profile = mod.db.profile
+                        return profile.completedSection == "none" and not profile.travelSection
+                     end,
+                  },
                   showRecipes = {
                      type = "toggle",
                      name = L["Show tracked recipes"],

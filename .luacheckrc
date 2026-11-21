@@ -36,7 +36,7 @@ read_globals = {
      "GetInstanceLockTimeRemaining", "GetInstanceLockTimeRemainingEncounter", "GetItemInfo",
      "GetMinimapZoneText", "GetMoney", "GetNumGroupMembers", "GetNumSubgroupMembers", "GetQuestUiMapID",
      "GetSubZoneText", "GetTime", "HideUIPanel", "HOUSING_CORNERSTONE_NEIGHBORHOOD", "INSTANCE_RESET_SUCCESS",
-     "InterfaceOptionsFrame", "IsInRaid", "KerzosQuestLog", "KerzosQuestLogAPI", "KeybindFrames_InQuickKeybindMode",
+     "InterfaceOptionsFrame", "IsInRaid", "C_Container", "LibQuestieDB", "NUM_BAG_SLOTS", "NUM_TOTAL_EQUIPPED_BAG_SLOTS", "KerzosQuestLog", "KerzosQuestLogAPI", "KeybindFrames_InQuickKeybindMode",
      "LE_SCENARIO_TYPE_USE_DUNGEON_DISPLAY", "LOOT_ITEM_SELF", "LOOT_ITEM_SELF_MULTIPLE", "MerchantFrame",
      "MinimalSliderWithSteppersMixin", "QuestDifficultyColors", "QuestTimerFrame",
      "QuickKeybindButtonTemplateMixin", "QuickKeybindFrame", "QuickKeybindTooltip", "RegisterStateDriver",

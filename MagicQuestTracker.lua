@@ -138,6 +138,7 @@ mod.defaults = {
       timedSection = false,          -- quests with a time limit in their own section, on top of all
       travelSection = false,         -- quests complete on accepting (no objectives) in their own section
       travelPosition = "bottom",     -- top | bottom
+      separateSections = false,      -- Completed and Travel next to Quests, with zone headers inside
       -- completedPosition: top | bottom; unset follows completedSort ("last" = bottom)
       zoneSort = "distance",         -- level | name | distance
       questSort = "distance",        -- level | name | distance

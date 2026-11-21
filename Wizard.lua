@@ -1027,6 +1027,10 @@ local WHATS_NEW = {
       L["Show quests that were complete as soon as you accepted them, with nothing to do but talk to someone, in their own section. They are kept apart from the quests you completed yourself."],
       function() return mod:GetWizardOption("travelSection") end,
       function(value) mod:SetWizardOption("travelSection", value) end },
+   { L["Completed and Travel as own sections"],
+      L["Show the Completed and Travel sections next to Quests instead of inside it, with their quests grouped by zone again. Their position settings put them above or below Quests."],
+      function() return mod:GetWizardOption("separateSections") end,
+      function(value) mod:SetWizardOption("separateSections", value) end },
 }
 
 local LATEST_ID = #WHATS_NEW
