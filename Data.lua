@@ -486,17 +486,26 @@ local function HasObjectiveInZone(questID, currentZones)
 end
 
 -- QuestieDB once more: a usable item for quests the game gives no quest
--- item button, e.g. a jar to fill from a mob. Candidates are the item the
--- quest gives on accepting, the items of "use item" objectives, and
--- items in the bags that come out of the item the quest gives (a chest of
--- jars; not always quest items). The first one in the bags that has a use effect or opens is it,
+-- item button, e.g. a jar to fill from a mob. Candidates are the items the
+-- quest needs (a flare gun that summons the one to turn it in to), the
+-- item it gives on accepting, the items of "use item" objectives, and
+-- items in the bags that come out of the item it gives (a chest of jars;
+-- not always quest items). Once complete, only the items it needs count. The first one in the bags that has a use effect or opens is it,
 -- so the chest comes before what's in it.
-local questItemCandidates = {}  -- [questID] = { source = itemID?, itemID, ... } or false
+local questItemCandidates = {}  -- [questID] = { source = itemID?, numRequired = n, itemID, ... } or false
 local itemContainers = {}       -- [itemID] = { [containerItemID] = true } or false
 
 local function LookupItemCandidates(lib, questID)
    local list = {}
-   local ok, sourceItem = pcall(lib.Quest.sourceItemId, questID)
+   local ok, required = pcall(lib.Quest.requiredSourceItems, questID)
+   if ok and type(required) == "table" then
+      for _, itemID in ipairs(required) do
+         if type(itemID) == "number" then list[#list + 1] = itemID end
+      end
+   end
+   list.numRequired = #list
+   local sourceItem
+   ok, sourceItem = pcall(lib.Quest.sourceItemId, questID)
    if ok and type(sourceItem) == "number" then
       list.source = sourceItem
       list[#list + 1] = sourceItem
@@ -530,7 +539,7 @@ local function IsUsableInBags(itemID)
    return bagUsableIDs[itemID] or false
 end
 
-local function QuestieUsableItem(questID)
+local function QuestieUsableItem(questID, isComplete)
    local lib = QuestieDB()
    if not lib then return nil end
    local list = questItemCandidates[questID]
@@ -540,10 +549,11 @@ local function QuestieUsableItem(questID)
    end
    if not list then return nil end
    GetBagQuestItems()
-   for _, itemID in ipairs(list) do
+   for i, itemID in ipairs(list) do
+      if isComplete and i > list.numRequired then return nil end
       if IsUsableInBags(itemID) then return itemID end
    end
-   if list.source then
+   if list.source and not isComplete then
       local found
       for itemID in pairs(bagUsableIDs) do
          -- Lowest ID when there are several, so the button doesn't flip.
@@ -561,13 +571,12 @@ function mod.GetQuestItem(questID, logIndex, isComplete)
    if logIndex and GetQuestLogSpecialItemInfo then
       local link, texture, charges, showItemWhenComplete = GetQuestLogSpecialItemInfo(logIndex)
       local itemID = link and tonumber(link:match("item:(%d+)"))
-      if itemID then
-         if isComplete and not showItemWhenComplete then return nil end
+      -- Done with once complete; QuestieDB may know of one still needed.
+      if itemID and (not isComplete or showItemWhenComplete) then
          return itemID, texture, charges, false
       end
    end
-   if isComplete then return nil end
-   local itemID = QuestieUsableItem(questID)
+   local itemID = QuestieUsableItem(questID, isComplete)
    if itemID then
       return itemID, C_Item.GetItemIconByID(itemID), C_Item.GetItemCount(itemID), true
    end
