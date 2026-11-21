@@ -133,6 +133,8 @@ local BLIZZARD_STYLE = {
    focusedSection = "none",
    timedSection = false,
    travelSection = false,
+   travelPosition = "bottom",
+   separateSections = false,
    completedSort = "normal",
    completedSection = "none",
    zoneSort = "distance",
@@ -659,12 +661,19 @@ pageBuilders[4] = function(page)
       { "bottom", L["Below the zones"] },
    }, 170)
    page:Gap(6)
-   page:Option(L["Timed section"],
-      L["Show quests with a time limit in their own section on top, least time left first. They are shown whatever the filters."],
-      "timedSection")
    page:Option(L["Travel section"],
       L["Show quests that were complete as soon as you accepted them, with nothing to do but talk to someone, in their own section. They are kept apart from the quests you completed yourself."],
       "travelSection")
+   page:Choice(L["Position"], "travelPosition", {
+      { "top", L["Above the zones"] },
+      { "bottom", L["Below the zones"] },
+   }, 170)
+   page:Option(L["Completed and Travel as own sections"],
+      L["Show the Completed and Travel sections next to Quests instead of inside it, with their quests grouped by zone again. Their position settings put them above or below Quests."],
+      "separateSections")
+   page:Option(L["Timed section"],
+      L["Show quests with a time limit in their own section on top, least time left first. They are shown whatever the filters."],
+      "timedSection")
 end
 
 pageBuilders[5] = function(page)

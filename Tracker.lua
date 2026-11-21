@@ -2142,12 +2142,12 @@ local function AddQuestFilterItems(root)
    AddChoices(root, L["Section on top"], "focusedSection", {
       { "none", L["None"] }, { "focused", L["Focused"] }, { "tracked", L["Tracked"] },
    })
-   root:CreateCheckbox(L["Timed section"],
-      function() return mod.db.profile.timedSection end,
-      function() ToggleFilter("timedSection") end)
    AddChoices(root, L["Completed section"], "completedSection", {
       { "none", L["Disabled"] }, { "all", L["All"] }, { "current", L["Current zone"] },
    })
+   root:CreateCheckbox(L["Timed section"],
+      function() return mod.db.profile.timedSection end,
+      function() ToggleFilter("timedSection") end)
    root:CreateCheckbox(L["Travel section"],
       function() return mod.db.profile.travelSection end,
       function() ToggleFilter("travelSection") end)
