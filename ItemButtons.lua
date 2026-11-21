@@ -54,10 +54,18 @@ local function GetLogIndex(button)
    return button.questID and C_QuestLog.GetLogIndexForQuestID(button.questID)
 end
 
+-- Items the quest log doesn't know as the quest's item (found in the bags
+-- from QuestieDB) use the plain item APIs.
 local function UpdateCooldown(button)
-   local logIndex = GetLogIndex(button)
-   if not logIndex then return end
-   local start, duration, enable = GetQuestLogSpecialItemCooldown(logIndex)
+   local start, duration, enable
+   if button.fromBags then
+      if not (button.itemID and C_Container and C_Container.GetItemCooldown) then return end
+      start, duration, enable = C_Container.GetItemCooldown(button.itemID)
+   else
+      local logIndex = GetLogIndex(button)
+      if not logIndex then return end
+      start, duration, enable = GetQuestLogSpecialItemCooldown(logIndex)
+   end
    if start then
       CooldownFrame_Set(button.Cooldown, start, duration, enable)
       if duration > 0 and enable == 0 then
@@ -73,8 +81,17 @@ local function Button_OnUpdate(button, elapsed)
    if button.rangeTimer > 0 then return end
    button.rangeTimer = RANGE_INTERVAL
 
-   local logIndex = GetLogIndex(button)
-   local inRange = logIndex and IsQuestLogSpecialItemInRange(logIndex)
+   local inRange
+   if button.fromBags then
+      -- Restricted in combat for hostile targets; no indicator then.
+      if button.itemID and not InCombatLockdown() and UnitExists("target") then
+         local ok, result = pcall(C_Item.IsItemInRange, button.itemID, "target")
+         if ok and result ~= nil then inRange = result and 1 or 0 end
+      end
+   else
+      local logIndex = GetLogIndex(button)
+      inRange = logIndex and IsQuestLogSpecialItemInRange(logIndex)
+   end
    if button.hasBinding then
       -- Bound key text (quest bar): red when out of range.
       if inRange == 0 then
@@ -94,6 +111,14 @@ local function Button_OnUpdate(button, elapsed)
 end
 
 local function Button_OnEnter(button)
+   if button.fromBags then
+      if button.itemID then
+         GameTooltip:SetOwner(button, "ANCHOR_LEFT")
+         GameTooltip:SetItemByID(button.itemID)
+         GameTooltip:Show()
+      end
+      return
+   end
    local logIndex = GetLogIndex(button)
    if logIndex then
       GameTooltip:SetOwner(button, "ANCHOR_LEFT")
@@ -154,6 +179,8 @@ local function SetupButton(button, quest)
       button:SetAttribute("item1", item)
    end
    button.questID = quest.questID
+   button.itemID = quest.itemID
+   button.fromBags = quest.itemFromBags or nil
    button.icon:SetTexture(quest.itemTexture)
    if quest.itemCharges and quest.itemCharges > 1 then
       button.Count:SetText(quest.itemCharges)

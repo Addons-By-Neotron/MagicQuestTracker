@@ -1040,6 +1040,11 @@ local WHATS_NEW = {
       L["Show the Completed and Travel sections next to Quests instead of inside it, with their quests grouped by zone again. Their position settings put them above or below Quests."],
       function() return mod:GetWizardOption("separateSections") end,
       function(value) mod:SetWizardOption("separateSections", value) end },
+   { L["Better with QuestieDB"],
+      L["With the QuestieDB addon installed, quests count as being in your zone when their objectives are there, even when they are filed under another zone. Quests the game gives no item button get one when you carry the item they use, like a chest the quest gave you or the jars inside it. This works on the quest item bar too."],
+      nil, nil,
+      function() return mod.HasQuestieDB() end,
+      needs = L["(Needs the QuestieDB addon, which isn't installed.)"] },
 }
 
 local LATEST_ID = #WHATS_NEW

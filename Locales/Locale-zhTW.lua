@@ -515,3 +515,6 @@ L["Only works for tracked quests, out of combat. It goes through Blizzard's own 
 L["Blizzard's tracker has no room for this quest (too many tracked quests), so this opens the quest log instead."] = "暴雪的追蹤器沒有空間顯示此任務（追蹤的任務太多），因此改為開啟任務日誌。"
 L["This quest isn't tracked, so this opens the quest log instead."] = "此任務未被追蹤，因此改為開啟任務日誌。"
 L["Reduced XP: the quest is %d levels below you."] = "經驗降低：任務比你低 %d 級。"
+L["Better with QuestieDB"] = "搭配QuestieDB更好用"
+L["With the QuestieDB addon installed, quests count as being in your zone when their objectives are there, even when they are filed under another zone. Quests the game gives no item button get one when you carry the item they use, like a chest the quest gave you or the jars inside it. This works on the quest item bar too."] = "安裝QuestieDB插件後，任務目標位於你所在區域時，即使任務歸在其他區域下，也會算作目前區域的任務。遊戲沒有給予物品按鈕的任務，在你攜帶其所用物品時也會獲得按鈕，例如任務給你的箱子或箱子裡的罐子。任務物品列同樣適用。"
+L["(Needs the QuestieDB addon, which isn't installed.)"] = "（需要QuestieDB插件，但尚未安裝。）"

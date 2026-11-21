@@ -341,6 +341,7 @@ end
 -- update (reset by CollectQuests).
 local bagQuestItems
 local bagQuestItemIDs = {}  -- [itemID] = true, filled with bagQuestItems
+local bagUsableIDs = {}     -- [itemID] = true for any item that has a use effect or opens
 local NUM_BAGS = NUM_TOTAL_EQUIPPED_BAG_SLOTS or NUM_BAG_SLOTS or 4
 local QUEST_ITEM_CLASS = Enum.ItemClass and Enum.ItemClass.Questitem or 12
 
@@ -348,11 +349,14 @@ local function GetBagQuestItems()
    if bagQuestItems then return bagQuestItems end
    bagQuestItems = {}
    wipe(bagQuestItemIDs)
+   wipe(bagUsableIDs)
    if not (C_Container and C_Container.GetContainerNumSlots) then return bagQuestItems end
    for bag = 0, NUM_BAGS do
       for slot = 1, C_Container.GetContainerNumSlots(bag) or 0 do
          local itemID = C_Container.GetContainerItemID(bag, slot)
          if itemID then
+            local info = C_Container.GetContainerItemInfo and C_Container.GetContainerItemInfo(bag, slot)
+            if (info and info.hasLoot) or C_Item.GetItemSpell(itemID) then bagUsableIDs[itemID] = true end
             local questInfo = C_Container.GetContainerItemQuestInfo and C_Container.GetContainerItemQuestInfo(bag, slot)
             local classID = select(6, C_Item.GetItemInfoInstant(itemID))
             local isQuestItem = classID == QUEST_ITEM_CLASS or (questInfo and questInfo.isQuestItem)
@@ -377,6 +381,8 @@ local function GetBagQuestItems()
    end
    return bagQuestItems
 end
+--- Bags changed: scan them again on next use.
+function mod.ResetBagQuestItems() bagQuestItems = nil end
 
 -- QuestieDB (the database addon Questie uses, with a public API): the item
 -- a quest gives you when you accept it. nil when QuestieDB isn't loaded,
@@ -393,6 +399,8 @@ local function QuestieDB()
    end
    return questieDBUsable and lib or nil
 end
+
+function mod.HasQuestieDB() return QuestieDB() ~= nil end
 
 local function QuestieSourceItem(questID)
    local lib = QuestieDB()
@@ -477,6 +485,96 @@ local function HasObjectiveInZone(questID, currentZones)
    return false
 end
 
+-- QuestieDB once more: a usable item for quests the game gives no quest
+-- item button, e.g. a jar to fill from a mob. Candidates are the item the
+-- quest gives on accepting, the items of "use item" objectives, and
+-- items in the bags that come out of the item the quest gives (a chest of
+-- jars; not always quest items). The first one in the bags that has a use effect or opens is it,
+-- so the chest comes before what's in it.
+local questItemCandidates = {}  -- [questID] = { source = itemID?, itemID, ... } or false
+local itemContainers = {}       -- [itemID] = { [containerItemID] = true } or false
+
+local function LookupItemCandidates(lib, questID)
+   local list = {}
+   local ok, sourceItem = pcall(lib.Quest.sourceItemId, questID)
+   if ok and type(sourceItem) == "number" then
+      list.source = sourceItem
+      list[#list + 1] = sourceItem
+   end
+   local objectives
+   ok, objectives = pcall(lib.Quest.objectives, questID)
+   if ok and type(objectives) == "table" and type(objectives[6]) == "table" then
+      for _, o in ipairs(objectives[6]) do
+         if type(o[3]) == "number" then list[#list + 1] = o[3] end
+      end
+   end
+   return (list.source or #list > 0) and list or false
+end
+
+local function ComesFrom(lib, itemID, containerID)
+   local containers = itemContainers[itemID]
+   if containers == nil then
+      local ok, drops = pcall(lib.Item.itemDrops, itemID)
+      containers = false
+      if ok and type(drops) == "table" and #drops > 0 then
+         containers = {}
+         for _, id in ipairs(drops) do containers[id] = true end
+      end
+      itemContainers[itemID] = containers
+   end
+   return containers and containers[containerID] or false
+end
+
+-- In the bags, with a use effect or opening (a chest). Needs GetBagQuestItems.
+local function IsUsableInBags(itemID)
+   return bagUsableIDs[itemID] or false
+end
+
+local function QuestieUsableItem(questID)
+   local lib = QuestieDB()
+   if not lib then return nil end
+   local list = questItemCandidates[questID]
+   if list == nil then
+      list = LookupItemCandidates(lib, questID)
+      questItemCandidates[questID] = list
+   end
+   if not list then return nil end
+   GetBagQuestItems()
+   for _, itemID in ipairs(list) do
+      if IsUsableInBags(itemID) then return itemID end
+   end
+   if list.source then
+      local found
+      for itemID in pairs(bagUsableIDs) do
+         -- Lowest ID when there are several, so the button doesn't flip.
+         if (not found or itemID < found) and ComesFrom(lib, itemID, list.source) then
+            found = itemID
+         end
+      end
+      return found
+   end
+end
+
+--- The quest's usable item: { itemID, texture, charges, fromBags } from
+--- the quest log, or from the bags via QuestieDB. nil if none to show.
+function mod.GetQuestItem(questID, logIndex, isComplete)
+   if logIndex and GetQuestLogSpecialItemInfo then
+      local link, texture, charges, showItemWhenComplete = GetQuestLogSpecialItemInfo(logIndex)
+      local itemID = link and tonumber(link:match("item:(%d+)"))
+      if itemID then
+         if isComplete and not showItemWhenComplete then return nil end
+         return itemID, texture, charges, false
+      end
+   end
+   if isComplete then return nil end
+   local itemID = QuestieUsableItem(questID)
+   if itemID then
+      return itemID, C_Item.GetItemIconByID(itemID), C_Item.GetItemCount(itemID), true
+   end
+end
+
+mod.HasObjectiveInZone = HasObjectiveInZone
+
 -- A complete quest that was complete from the moment it was accepted: just
 -- go and talk to someone (breadcrumbs, deliveries). Either it has no
 -- objectives, or only "log" ones that repeat the quest's summary ("Take
@@ -552,15 +650,13 @@ local function BuildQuest(info)
       quest.completionText = GetQuestLogCompletionText(logIndex)
    end
    -- Usable quest item (shown as a secure item button).
-   if logIndex and GetQuestLogSpecialItemInfo then
-      local link, texture, charges, showItemWhenComplete = GetQuestLogSpecialItemInfo(logIndex)
-      local itemID = link and tonumber(link:match("item:(%d+)"))
-      if itemID and (not quest.isComplete or showItemWhenComplete) then
-         quest.hasItem = true
-         quest.itemID = itemID
-         quest.itemTexture = texture
-         quest.itemCharges = charges
-      end
+   local itemID, texture, charges, fromBags = mod.GetQuestItem(questID, logIndex, quest.isComplete)
+   if itemID then
+      quest.hasItem = true
+      quest.itemID = itemID
+      quest.itemTexture = texture
+      quest.itemCharges = charges
+      quest.itemFromBags = fromBags
    end
    return quest
 end
@@ -1073,7 +1169,7 @@ mod.ArrangeSections = ArrangeSections
 
 function mod:CollectQuests()
    local profile = self.db.profile
-   bagQuestItems = nil  -- bags may have changed
+   mod.ResetBagQuestItems()  -- bags may have changed
    wipe(questComplete)
    RefreshQuestTimers()
    local zoneNames = GetCurrentZoneNames()

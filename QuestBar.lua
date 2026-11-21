@@ -274,23 +274,26 @@ end
 
 -- Fills `entries` with the usable quest items in the log, in log order.
 local function CollectItems()
+   mod.ResetBagQuestItems()
    local count = 0
    -- Only items of quests nearby (see IsNear), plus the focused quest's.
    local maxDistance = mod.db.profile.questBarMaxDistance or 0
    local focused = mod:GetFocusedQuestID()
    local useOnMap = not IsInInstance()
+   local zoneNames = useOnMap and mod.GetCurrentZoneNames()
    for i = 1, C_QuestLog.GetNumQuestLogEntries() do
       local info = C_QuestLog.GetInfo(i)
       if info and not info.isHeader and not info.isHidden then
-         local link, texture, charges, showWhenComplete = GetQuestLogSpecialItemInfo(i)
-         local itemID = link and tonumber(link:match("item:(%d+)"))
+         local itemID, texture, charges, fromBags = mod.GetQuestItem(info.questID, i, C_QuestLog.IsComplete(info.questID))
          local distance = itemID and mod.GetQuestDistance(info.questID)
          -- Near: within the distance of the quest's objective area (or turn-in
          -- when complete), or without a known distance, shown on this zone's map.
+         -- (or QuestieDB places its objectives in this zone).
          local near = maxDistance <= 0 or info.questID == focused
             or (distance and distance <= maxDistance)
-            or (not distance and useOnMap and info.isOnMap)
-         if itemID and near and (showWhenComplete or not C_QuestLog.IsComplete(info.questID)) then
+            or (not distance and useOnMap and (info.isOnMap
+               or (itemID and mod.HasObjectiveInZone(info.questID, zoneNames))))
+         if itemID and near then
             count = count + 1
             local entry = entries[count] or {}
             entries[count] = entry
@@ -298,6 +301,7 @@ local function CollectItems()
             entry.itemID = itemID
             entry.itemTexture = texture
             entry.itemCharges = charges
+            entry.itemFromBags = fromBags
             entry.distance = distance
          end
       end
@@ -322,6 +326,7 @@ local function CollectTestItems()
          entry.itemID = itemID
          entry.itemTexture = C_Item.GetItemIconByID(itemID)
          entry.itemCharges = C_Item.GetItemCount(itemID)
+         entry.itemFromBags = true
          entry.distance = nil
       end
    end

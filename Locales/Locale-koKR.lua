@@ -515,3 +515,6 @@ L["Only works for tracked quests, out of combat. It goes through Blizzard's own 
 L["Blizzard's tracker has no room for this quest (too many tracked quests), so this opens the quest log instead."] = "블리자드 추적기에 이 퀘스트를 표시할 자리가 없어(추적 중인 퀘스트가 너무 많음) 대신 퀘스트 목록을 엽니다."
 L["This quest isn't tracked, so this opens the quest log instead."] = "이 퀘스트는 추적 중이 아니므로 대신 퀘스트 목록을 엽니다."
 L["Reduced XP: the quest is %d levels below you."] = "경험치 감소: 퀘스트가 당신보다 %d레벨 낮습니다."
+L["Better with QuestieDB"] = "QuestieDB와 함께 더 좋게"
+L["With the QuestieDB addon installed, quests count as being in your zone when their objectives are there, even when they are filed under another zone. Quests the game gives no item button get one when you carry the item they use, like a chest the quest gave you or the jars inside it. This works on the quest item bar too."] = "QuestieDB 애드온이 설치되어 있으면, 다른 지역으로 분류된 퀘스트라도 목표가 현재 지역에 있으면 현재 지역 퀘스트로 취급합니다. 게임이 아이템 버튼을 주지 않는 퀘스트도 사용하는 아이템을 가지고 있으면 버튼이 생깁니다. 예를 들어 퀘스트로 받은 상자나 그 안의 병입니다. 퀘스트 아이템 바에서도 작동합니다."
+L["(Needs the QuestieDB addon, which isn't installed.)"] = "(QuestieDB 애드온이 필요하지만 설치되어 있지 않습니다.)"

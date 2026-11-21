@@ -517,3 +517,6 @@ L["Only works for tracked quests, out of combat. It goes through Blizzard's own 
 L["Blizzard's tracker has no room for this quest (too many tracked quests), so this opens the quest log instead."] = true
 L["This quest isn't tracked, so this opens the quest log instead."] = true
 L["Reduced XP: the quest is %d levels below you."] = true
+L["Better with QuestieDB"] = true
+L["With the QuestieDB addon installed, quests count as being in your zone when their objectives are there, even when they are filed under another zone. Quests the game gives no item button get one when you carry the item they use, like a chest the quest gave you or the jars inside it. This works on the quest item bar too."] = true
+L["(Needs the QuestieDB addon, which isn't installed.)"] = true
