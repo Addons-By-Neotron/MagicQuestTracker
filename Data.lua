@@ -383,16 +383,98 @@ end
 -- is an incompatible version, or doesn't know the quest.
 local QUESTIEDB_CONTRACT = 4
 local questieDBUsable  -- nil until checked
-local function QuestieSourceItem(questID)
+local function QuestieDB()
    local lib = LibQuestieDB
    if not lib then return nil end
    if questieDBUsable == nil then
       local ok, compatible = pcall(lib.RequireContract, QUESTIEDB_CONTRACT)
-      questieDBUsable = ok and compatible and lib.Quest ~= nil and type(lib.Quest.sourceItemId) == "function"
+      questieDBUsable = ok and compatible and lib.Quest ~= nil and lib.Npc ~= nil
+         and lib.Object ~= nil and lib.Item ~= nil or false
    end
-   if not questieDBUsable then return nil end
+   return questieDBUsable and lib or nil
+end
+
+local function QuestieSourceItem(questID)
+   local lib = QuestieDB()
+   if not lib then return nil end
    local ok, itemID = pcall(lib.Quest.sourceItemId, questID)
    return ok and type(itemID) == "number" and itemID or nil
+end
+
+-- QuestieDB again: the zones where a quest's objectives are (mob, object
+-- and item drop spawns, explore triggers), for quests whose objectives are
+-- in another zone than the quest log header and Blizzard doesn't put on
+-- that zone's map. The data is static, so it's looked up once per quest.
+local MAX_DROP_SOURCES = 25  -- items dropped by everything are no clue
+local areaNames = {}
+local questObjectiveZones = {}  -- [questID] = { [zoneName] = true } or false
+
+local function AddSpawnZones(zones, spawns)
+   if type(spawns) ~= "table" then return end
+   for areaID in pairs(spawns) do
+      local name = areaNames[areaID]
+      if name == nil then
+         name = type(areaID) == "number" and C_Map.GetAreaInfo(areaID) or false
+         areaNames[areaID] = name
+      end
+      if name then zones[name] = true end
+   end
+end
+
+local function AddEntityZones(zones, db, id)
+   local ok, spawns = pcall(db.spawns, id)
+   if ok then AddSpawnZones(zones, spawns) end
+end
+
+local function AddDropZones(zones, lib, itemID)
+   local ok, npcs = pcall(lib.Item.npcDrops, itemID)
+   if ok and type(npcs) == "table" and #npcs <= MAX_DROP_SOURCES then
+      for _, npcID in ipairs(npcs) do AddEntityZones(zones, lib.Npc, npcID) end
+   end
+   local objects
+   ok, objects = pcall(lib.Item.objectDrops, itemID)
+   if ok and type(objects) == "table" and #objects <= MAX_DROP_SOURCES then
+      for _, objectID in ipairs(objects) do AddEntityZones(zones, lib.Object, objectID) end
+   end
+end
+
+local function LookupObjectiveZones(lib, questID)
+   local ok, objectives = pcall(lib.Quest.objectives, questID)
+   if not ok or type(objectives) ~= "table" then return false end
+   local zones = {}
+   for _, o in ipairs(objectives[1] or {}) do AddEntityZones(zones, lib.Npc, o[1]) end
+   for _, o in ipairs(objectives[2] or {}) do AddEntityZones(zones, lib.Object, o[1]) end
+   for _, o in ipairs(objectives[3] or {}) do AddDropZones(zones, lib, o[1]) end
+   for _, o in ipairs(objectives[5] or {}) do
+      if type(o[1]) == "table" then
+         for _, npcID in ipairs(o[1]) do AddEntityZones(zones, lib.Npc, npcID) end
+      end
+   end
+   local trigger
+   ok, trigger = pcall(lib.Quest.triggerEnd, questID)
+   if ok and type(trigger) == "table" then AddSpawnZones(zones, trigger[2]) end
+   local extra
+   ok, extra = pcall(lib.Quest.extraObjectives, questID)
+   if ok and type(extra) == "table" then
+      for _, o in ipairs(extra) do AddSpawnZones(zones, o[1]) end
+   end
+   return next(zones) and zones or false
+end
+
+--- True when QuestieDB places one of the quest's objectives in the current zone.
+local function HasObjectiveInZone(questID, currentZones)
+   local zones = questObjectiveZones[questID]
+   if zones == nil then
+      local lib = QuestieDB()
+      if not lib then return false end
+      zones = LookupObjectiveZones(lib, questID)
+      questObjectiveZones[questID] = zones
+   end
+   if not zones then return false end
+   for name in pairs(zones) do
+      if currentZones[name] then return true end
+   end
+   return false
 end
 
 -- A complete quest that was complete from the moment it was accepted: just
@@ -1019,8 +1101,11 @@ function mod:CollectQuests()
             numQuests = numQuests + 1
             local zoneRank = GetZoneRank(header, zoneNames)
             local isCurrentZone = zoneRank > 0
+            -- Objectives here although the quest is filed elsewhere.
+            local objectivesHere = not isCurrentZone and useOnMap
+               and (info.isOnMap or (not questComplete[info.questID] and HasObjectiveInZone(info.questID, zoneNames)))
             local visible = true
-            if profile.onlyCurrentZone and not (isCurrentZone or (useOnMap and info.isOnMap)) then
+            if profile.onlyCurrentZone and not (isCurrentZone or objectivesHere) then
                visible = false
             end
             if visible and not profile.showAllQuests and C_QuestLog.GetQuestWatchType(info.questID) == nil then
@@ -1055,7 +1140,7 @@ function mod:CollectQuests()
                   pois[quest.questID] = nil
                end
                quest.zoneName = header
-               quest.inCurrentZone = isCurrentZone or (useOnMap and info.isOnMap) or false
+               quest.inCurrentZone = isCurrentZone or objectivesHere or false
                if quest.inCurrentZone then
                   -- e.g. a Stormwind quest with objectives in this zone
                   section.hasLocalQuests = true
