@@ -118,6 +118,9 @@ local function QuestLog()
       { "Westfall", false, {
          title = "Fishing Frenzy", level = 11, distance = 2600, frequency = daily,
          objectives = { Objective("Oil Covered Fish: 2/5") } } },
+      { "Westfall", false, {
+         title = "Report to Gryan Stoutmantle", level = 10, distance = 1900, watched = true, complete = true,
+         travel = true, completionText = "Speak to Gryan Stoutmantle at Sentinel Hill" } },
       { "Duskwood", false, {
          title = "Worgen in the Woods", level = 20, distance = 5200, watched = true, complete = true,
          completionText = "Return to Commander Althea Ebonlocke" } },
@@ -141,7 +144,7 @@ local function BuildQuest(zone, isCurrent, def)
       questID = StableID(def.title),
       title = def.title, level = def.level, difficultyLevel = def.level,
       distance = def.distance, frequency = def.frequency,
-      isComplete = def.complete or false, isFailed = false,
+      isComplete = def.complete or false, isFailed = false, isTravel = def.travel,
       isWatched = def.watched or false, isSuperTracked = def.focused or false,
       isElite = def.elite or false, tagName = def.tag,
       isForeverQuest = def.forever and mod.IS_FOREVER or false,

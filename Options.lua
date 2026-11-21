@@ -591,6 +591,23 @@ local function BuildOptions()
                      order = 5,
                      width = DROPDOWN_WIDTH,
                   },
+                  travelSection = {
+                     type = "toggle",
+                     name = L["Travel section"],
+                     desc = L["Show quests that were complete as soon as you accepted them, with nothing to do but talk to someone, in their own section. They are kept apart from the quests you completed yourself."],
+                     order = 5.1,
+                     width = COLUMN_WIDTH,
+                  },
+                  travelPosition = {
+                     type = "select",
+                     name = L["Travel section position"],
+                     desc = L["Where the Travel section goes: above or below the zones (and the Completed section)."],
+                     values = { top = L["Above the zones"], bottom = L["Below the zones"] },
+                     sorting = { "top", "bottom" },
+                     order = 5.2,
+                     width = DROPDOWN_WIDTH,
+                     disabled = function() return not mod.db.profile.travelSection end,
+                  },
                   showRecipes = {
                      type = "toggle",
                      name = L["Show tracked recipes"],

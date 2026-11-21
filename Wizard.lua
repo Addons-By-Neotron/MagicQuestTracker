@@ -132,6 +132,7 @@ local BLIZZARD_STYLE = {
    showLevel = mod.IS_FOREVER or false,
    focusedSection = "none",
    timedSection = false,
+   travelSection = false,
    completedSort = "normal",
    completedSection = "none",
    zoneSort = "distance",
@@ -661,6 +662,9 @@ pageBuilders[4] = function(page)
    page:Option(L["Timed section"],
       L["Show quests with a time limit in their own section on top, least time left first. They are shown whatever the filters."],
       "timedSection")
+   page:Option(L["Travel section"],
+      L["Show quests that were complete as soon as you accepted them, with nothing to do but talk to someone, in their own section. They are kept apart from the quests you completed yourself."],
+      "travelSection")
 end
 
 pageBuilders[5] = function(page)
@@ -1019,6 +1023,10 @@ local WHATS_NEW = {
    -- No switch here: turning it on goes through the warning in the settings.
    { L["Left-click opens the map"],
       L["If you would rather have left-click open Blizzard's map like before, turn it on in the Quests settings. It breaks parts of the map in combat until you reload, so you have to confirm it first."] },
+   { L["Travel section"],
+      L["Show quests that were complete as soon as you accepted them, with nothing to do but talk to someone, in their own section. They are kept apart from the quests you completed yourself."],
+      function() return mod:GetWizardOption("travelSection") end,
+      function(value) mod:SetWizardOption("travelSection", value) end },
 }
 
 local LATEST_ID = #WHATS_NEW

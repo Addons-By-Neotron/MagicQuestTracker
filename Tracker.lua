@@ -1850,7 +1850,8 @@ function mod:RenderPass(reserveScrollbar, sections, numQuests, numShown, recipes
                local hideHeader = hideHeader and not section.isSpecial
                local collapsed = not hideHeader and collapsedZones[section.foldKey or section.name]
                local count = #section.quests
-               if section.foldKey ~= mod.COMPLETED_FOLD_KEY and section.numComplete and section.numComplete > 0 then
+               if section.foldKey ~= mod.COMPLETED_FOLD_KEY and section.foldKey ~= mod.TRAVEL_FOLD_KEY
+                  and section.numComplete and section.numComplete > 0 then
                   count = format("%d, %s", count, format(L["%d complete"], section.numComplete))
                end
                local text = profile.simpleZoneHeaders and section.name or format("%s (%s)", section.name, count)
@@ -2108,6 +2109,9 @@ local function AddQuestFilterItems(root)
    AddChoices(root, L["Completed section"], "completedSection", {
       { "none", L["Disabled"] }, { "all", L["All"] }, { "current", L["Current zone"] },
    })
+   root:CreateCheckbox(L["Travel section"],
+      function() return mod.db.profile.travelSection end,
+      function() ToggleFilter("travelSection") end)
 end
 
 function mod:ShowTitleMenu(owner)

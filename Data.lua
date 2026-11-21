@@ -330,6 +330,29 @@ function mod:IsDifficultyFiltered(difficulty, profile)
       or (difficulty == "trivial" and profile.hideGrayQuests) or false
 end
 
+local function NormalizeText(text)
+   return (text:gsub("%s+", " "):gsub("^ ", ""):gsub(" $", ""):lower())
+end
+
+-- A complete quest that was complete from the moment it was accepted: just
+-- go and talk to someone (breadcrumbs, deliveries). Either it has no
+-- objectives, or only "log" ones that repeat the quest's summary ("Take
+-- the letter to ..."), which the game marks done on accepting.
+local function IsTravelQuest(questID, logIndex)
+   local list = C_QuestLog.GetQuestObjectives(questID)
+   if not list or #list == 0 then return true end
+   local summary
+   for _, obj in ipairs(list) do
+      if obj.type ~= "log" or not obj.text or obj.text == "" then return false end
+      if summary == nil then
+         summary = logIndex and GetQuestLogQuestText and select(2, GetQuestLogQuestText(logIndex)) or false
+         summary = summary and summary ~= "" and NormalizeText(summary) or false
+      end
+      if not summary or NormalizeText(obj.text) ~= summary then return false end
+   end
+   return true
+end
+
 local function BuildQuest(info)
    local questID = info.questID
    local logIndex = info.questLogIndex
@@ -351,6 +374,7 @@ local function BuildQuest(info)
    quest.distance = GetQuestDistance(questID)
    quest.isForeverQuest = IS_FOREVER and questID > MAX_VANILLA_QUEST_ID
    quest.objectives = BuildObjectives(questID)
+   quest.isTravel = quest.isComplete and IsTravelQuest(questID, logIndex) or nil
    -- Time limit (escort and other timed quests): absolute GetTime() it runs out.
    local timeTotal, timeElapsed = C_QuestLog.GetTimeAllowed and C_QuestLog.GetTimeAllowed(questID)
    if timeTotal and timeElapsed and timeElapsed < timeTotal and not quest.isFailed then
@@ -490,6 +514,7 @@ end
 mod.FOCUSED_FOLD_KEY = "\001focused"
 mod.COMPLETED_FOLD_KEY = "\001completed"
 mod.TIMED_FOLD_KEY = "\001timed"
+mod.TRAVEL_FOLD_KEY = "\001travel"
 
 -- Moves the quests for which take(quest, section) is true out of their sections, in
 -- the order they are listed. Sections left empty are dropped. Returns the
@@ -540,11 +565,14 @@ local function NewSpecialSection(name, foldKey, quests)
    return section
 end
 
-local function IsComplete(quest) return quest.isComplete end
+-- Completed, in a zone (the Travel section keeps its quests).
+local function IsComplete(quest, section)
+   return quest.isComplete and not section.isSpecial
+end
 
 -- Completed, and filed under the current zone or one of its sub-areas.
 local function IsCompleteHere(quest, section)
-   return quest.isComplete and section.isCurrent
+   return quest.isComplete and section.isCurrent and not section.isSpecial
 end
 
 -- Moves completed quests to the start ("first") or end ("last") of the
@@ -618,6 +646,27 @@ end
 
 local function IsTimed(quest) return quest.timerEnd ~= nil end
 
+local function IsTravel(quest) return quest.isTravel end
+
+-- Moves the quests that were complete when accepted (nothing to do but
+-- talk to someone) into a section of their own. Placed by
+-- PlaceSpecialSections.
+local function SeparateTravelQuests(sections, profile)
+   local pinned = sections[1] and sections[1].isPinned and tremove(sections, 1)
+   local travel
+   sections, travel = TakeQuests(sections, IsTravel)
+   if #travel > 0 then
+      SortQuests(travel, profile)
+      tinsert(sections, NewSpecialSection(L["Travel"], mod.TRAVEL_FOLD_KEY, travel))
+   else
+      del(travel)
+   end
+   if pinned then
+      tinsert(sections, 1, pinned)
+   end
+   return sections
+end
+
 -- With zone headers always hidden the zones read as one list, so they are
 -- merged into one section and sorted as a whole (current zone first if
 -- set). Sections on top stay apart.
@@ -663,28 +712,34 @@ end
 
 -- Puts the timed section on top of all, and the focused / tracked and the
 -- completed section above or below the zones, as the profile says
--- (together, the focused one comes first).
+-- (together, the focused one comes first), and the travel section after
+-- the completed one.
 local function PlaceSpecialSections(sections, profile, timed)
-   local pinned, completed
+   local pinned, completed, travel
    local zones = new()
    for _, section in ipairs(sections) do
       if section.isPinned then
          pinned = section
       elseif section.foldKey == mod.COMPLETED_FOLD_KEY then
          completed = section
+      elseif section.foldKey == mod.TRAVEL_FOLD_KEY then
+         travel = section
       else
          tinsert(zones, section)
       end
    end
    local completedBottom = profile.completedPosition == "bottom"
       or (profile.completedPosition == nil and profile.completedSort == "last")
+   local travelBottom = profile.travelPosition ~= "top"
    local result = new()
    if timed then tinsert(result, timed) end
    if pinned and profile.focusedPosition ~= "bottom" then tinsert(result, pinned) end
    if completed and not completedBottom then tinsert(result, completed) end
+   if travel and not travelBottom then tinsert(result, travel) end
    for _, section in ipairs(zones) do tinsert(result, section) end
    if pinned and profile.focusedPosition == "bottom" then tinsert(result, pinned) end
    if completed and completedBottom then tinsert(result, completed) end
+   if travel and travelBottom then tinsert(result, travel) end
    del(sections)
    del(zones)
    return result
@@ -763,6 +818,10 @@ local function ArrangeSections(sections, profile)
       -- its zone: only the focused quest goes on top then.
       local includeWatched = profile.focusedSection == "tracked" and profile.showAllQuests
       sections = PinFocusedQuests(sections, includeWatched, profile.completedSort)
+   end
+   -- Before the completed section, which would take them too.
+   if profile.travelSection then
+      sections = SeparateTravelQuests(sections, profile)
    end
    if profile.completedSection == "all" or profile.completedSection == "current" then
       sections = SeparateCompletedQuests(sections, profile, profile.completedSection == "current")

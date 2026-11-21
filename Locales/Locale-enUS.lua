@@ -447,6 +447,11 @@ L["Opening the map from an addon taints Blizzard's map. Until you reload, the ma
 L["I understand this will break things in combat"] = true
 L["Turn on"] = true
 L["If you would rather have left-click open Blizzard's map like before, turn it on in the Quests settings. It breaks parts of the map in combat until you reload, so you have to confirm it first."] = true
+L["Travel"] = true
+L["Travel section"] = true
+L["Show quests that were complete as soon as you accepted them, with nothing to do but talk to someone, in their own section. They are kept apart from the quests you completed yourself."] = true
+L["Travel section position"] = true
+L["Where the Travel section goes: above or below the zones (and the Completed section)."] = true
 L["Hide quests that are too difficult for your level. The focused quest is always shown. Also in the right-click menu of the title and the Quests header."] = true
 L["Hide quests that are too easy to give much experience. The focused quest is always shown. Also in the right-click menu of the title and the Quests header."] = true
 L["Open quest log"] = true
