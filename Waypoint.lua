@@ -22,6 +22,7 @@ along with MagicQuestTracker.  If not, see <https://www.gnu.org/licenses/>.
 **********************************************************************
 ]]
 local mod = LibStub("AceAddon-3.0"):GetAddon("MagicQuestTracker")
+local format = string.format
 local L = LibStub("AceLocale-3.0"):GetLocale("MagicQuestTracker")
 
 local C_Map = C_Map
@@ -107,7 +108,8 @@ local function SetTomTomWaypoint(self, quest)
       return
    end
    -- Replace our previous waypoint rather than piling them up.
-   if self.tomtomWaypoint and TomTom.RemoveWaypoint then
+   if self.tomtomWaypoint and TomTom.RemoveWaypoint
+      and (not TomTom.IsValidWaypoint or TomTom:IsValidWaypoint(self.tomtomWaypoint)) then
       TomTom:RemoveWaypoint(self.tomtomWaypoint)
    end
    self.tomtomWaypoint = TomTom:AddWaypoint(location.mapID, location.x, location.y, {
@@ -115,6 +117,30 @@ local function SetTomTomWaypoint(self, quest)
       crazy = true,
       from = "MagicQuestTracker",
    })
+   self.tomtomQuestID = quest.questID
+   self.tomtomLocation = format("%d:%.3f:%.3f", location.mapID, location.x, location.y)
+end
+
+--- Moves our TomTom waypoint along when the focused quest it points to
+--- moves on (next objective area, then the turn-in). Only for a quest this
+--- addon set a waypoint for, while it stays focused; focusing another
+--- quest ends it. TomTom removes a waypoint on arrival, so a missing one
+--- is added again once the location changes.
+function mod:UpdateFocusWaypoint()
+   local questID = self.tomtomQuestID
+   if not (questID and self.db.profile.tomtomFollowFocus and self:HasTomTom()) then return end
+   if self:GetFocusedQuestID() ~= questID or not C_QuestLog.GetLogIndexForQuestID(questID) then
+      self.tomtomQuestID = nil  -- focus moved on, or turned in
+      return
+   end
+   local quest = { questID = questID, title = C_QuestLog.GetTitleForQuestID(questID),
+      zoneName = self.GetQuestHeader(questID) }
+   local location = self:GetQuestLocation(quest)
+   if not location then return end
+   local key = format("%d:%.3f:%.3f", location.mapID, location.x, location.y)
+   if key ~= self.tomtomLocation then
+      SetTomTomWaypoint(self, quest)
+   end
 end
 
 --- Focuses (super tracks) a quest; 0 stops focusing. Called from addon

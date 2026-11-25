@@ -31,6 +31,8 @@ local new, del = mod.new, mod.del
 -- matched to its dungeon, and whether the quests in the log are complete
 -- (refreshed per collect).
 local questHeaders = {}
+--- The quest log header (zone) a quest was last seen under, if any.
+function mod.GetQuestHeader(questID) return questHeaders[questID] end
 local questComplete = {}
 
 -- WoW Forever (Interface 16xxx) adds quests on top of original Classic.
@@ -131,6 +133,7 @@ local function GetZoneRank(header, zoneNames)
    end
    return 0
 end
+mod.GetZoneRank = GetZoneRank
 
 --- /mqt dungeondebug: what the Encounter Journal knows about the current
 --- instance (for a Forever dungeon block like Retail's).
@@ -1207,8 +1210,10 @@ function mod:CollectQuests()
             local zoneRank = GetZoneRank(header, zoneNames)
             local isCurrentZone = zoneRank > 0
             -- Objectives here although the quest is filed elsewhere.
-            local objectivesHere = not isCurrentZone and useOnMap
-               and (info.isOnMap or (not questComplete[info.questID] and HasObjectiveInZone(info.questID, zoneNames)))
+            -- (QuestieDB's spawn zones hold in instances too, isOnMap doesn't.)
+            local objectivesHere = not isCurrentZone
+               and ((useOnMap and info.isOnMap)
+                  or (not questComplete[info.questID] and HasObjectiveInZone(info.questID, zoneNames)))
             local visible = true
             if profile.onlyCurrentZone and not (isCurrentZone or objectivesHere) then
                visible = false

@@ -819,6 +819,14 @@ local function BuildOptions()
                      hidden = function() return not mod:HasTomTom() end,
                      disabled = function() return not mod.db.profile.blizzardFocus end,
                   },
+                  tomtomFollowFocus = {
+                     type = "toggle",
+                     name = L["TomTom waypoint follows focus"],
+                     desc = L["When the focused quest has the TomTom waypoint you set, move the waypoint along as the quest moves on: to the next objective area, then to the turn-in."],
+                     order = 3.5,
+                     width = COLUMN_WIDTH,
+                     hidden = function() return not mod:HasTomTom() end,
+                  },
                   waypointMode = {
                      type = "select",
                      name = L["Ctrl-click navigation"],

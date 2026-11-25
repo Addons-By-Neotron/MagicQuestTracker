@@ -147,6 +147,7 @@ mod.defaults = {
       showDirection = false,
       arrowSize = 16,
       arrowMaxDistance = 1000,       -- yards, 0 = no limit
+      tomtomFollowFocus = true,      -- move our TomTom waypoint along with the focused quest
       waypointMode = "both",         -- ctrl-click: tomtom | blizzard | both
       poiTomTom = true,              -- clicking a quest's POI button also sets the TomTom waypoint
       blizzardFocus = true,          -- focus (super track) quests; off avoids taint errors
@@ -294,6 +295,11 @@ function mod:OnEnable()
       self:RegisterEvent(event, "RequestUpdate")
    end
    self:RegisterEvent("PLAYER_ENTERING_WORLD")
+   -- Quest map POIs move (objective area -> turn-in) a little after the
+   -- quest log update that completes the quest.
+   if IsEventValid("QUEST_POI_UPDATE") then
+      self:RegisterEvent("QUEST_POI_UPDATE", "UpdateFocusWaypoint")
+   end
    self:RegisterEvent("PLAYER_REGEN_ENABLED")
    self:RegisterEvent("PLAYER_REGEN_DISABLED")
    self:RegisterEvent("ZONE_CHANGED_NEW_AREA", function()
@@ -558,6 +564,7 @@ function mod:RunUpdate()
    self:CheckQuestLogFull()
    local sections, numQuests, numShown = self:CollectQuests()
    self:UpdateQuestBar()
+   self:UpdateFocusWaypoint()
    local recipes = self.db.profile.showRecipes and self:CollectRecipes() or nil
    local tasks = self:CollectTasks()
    local scenario = self:CollectScenario() or self:CollectDungeon()

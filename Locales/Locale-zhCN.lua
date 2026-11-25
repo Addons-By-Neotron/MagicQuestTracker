@@ -518,3 +518,7 @@ L["Reduced XP: the quest is %d levels below you."] = "经验降低：任务比�
 L["Better with QuestieDB"] = "配合QuestieDB更好用"
 L["With the QuestieDB addon installed, quests count as being in your zone when their objectives are there, even when they are filed under another zone. Quests the game gives no item button get one when you carry the item they use, like a chest the quest gave you or the jars inside it. This works on the quest item bar too."] = "安装QuestieDB插件后，任务目标位于你所在区域时，即使任务归在其他区域下，也会算作当前区域的任务。游戏没有给出物品按钮的任务，在你携带其所用物品时也会获得按钮，例如任务给你的箱子或箱子里的罐子。任务物品栏同样适用。"
 L["(Needs the QuestieDB addon, which isn't installed.)"] = "（需要QuestieDB插件，但尚未安装。）"
+L["TomTom waypoint follows focus"] = "TomTom路径点跟随焦点"
+L["When the focused quest has the TomTom waypoint you set, move the waypoint along as the quest moves on: to the next objective area, then to the turn-in."] = "当焦点任务带有你设置的TomTom路径点时，路径点会随任务进展移动：先到下一个目标区域，再到交任务处。"
+L["A TomTom waypoint you set for a quest (ctrl-click or its icon) now moves along while that quest is focused: to the next objective area, then to the turn-in once it's complete. It's on by default; turn it off here or in the settings."] = "你为任务设置的TomTom路径点（Ctrl点击或点击其图标）现在会在该任务处于焦点时跟着移动：先到下一个目标区域，完成后到交任务处。默认开启；可在此处或设置中关闭。"
+L["(Needs the TomTom addon, which isn't installed.)"] = "（需要TomTom插件，但尚未安装。）"

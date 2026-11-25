@@ -280,18 +280,22 @@ local function CollectItems()
    local maxDistance = mod.db.profile.questBarMaxDistance or 0
    local focused = mod:GetFocusedQuestID()
    local useOnMap = not IsInInstance()
-   local zoneNames = useOnMap and mod.GetCurrentZoneNames()
+   local zoneNames = mod.GetCurrentZoneNames()
+   local headerHere = false
    for i = 1, C_QuestLog.GetNumQuestLogEntries() do
       local info = C_QuestLog.GetInfo(i)
-      if info and not info.isHeader and not info.isHidden then
+      if info and info.isHeader then
+         headerHere = info.title and mod.GetZoneRank(info.title, zoneNames) > 0 or false
+      elseif info and not info.isHidden then
          local itemID, texture, charges, fromBags = mod.GetQuestItem(info.questID, i, C_QuestLog.IsComplete(info.questID))
          local distance = itemID and mod.GetQuestDistance(info.questID)
          -- Near: within the distance of the quest's objective area (or turn-in
          -- when complete), or without a known distance, shown on this zone's map.
-         -- (or QuestieDB places its objectives in this zone).
+         -- (or QuestieDB places its objectives in this zone), or filed under
+         -- this zone (dungeon quests, which have no distance or map pin there).
          local near = maxDistance <= 0 or info.questID == focused
             or (distance and distance <= maxDistance)
-            or (not distance and useOnMap and (info.isOnMap
+            or (not distance and (headerHere or (useOnMap and info.isOnMap)
                or (itemID and mod.HasObjectiveInZone(info.questID, zoneNames))))
          if itemID and near then
             count = count + 1

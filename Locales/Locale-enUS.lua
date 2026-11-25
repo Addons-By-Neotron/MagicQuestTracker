@@ -520,3 +520,7 @@ L["Reduced XP: the quest is %d levels below you."] = true
 L["Better with QuestieDB"] = true
 L["With the QuestieDB addon installed, quests count as being in your zone when their objectives are there, even when they are filed under another zone. Quests the game gives no item button get one when you carry the item they use, like a chest the quest gave you or the jars inside it. This works on the quest item bar too."] = true
 L["(Needs the QuestieDB addon, which isn't installed.)"] = true
+L["TomTom waypoint follows focus"] = true
+L["When the focused quest has the TomTom waypoint you set, move the waypoint along as the quest moves on: to the next objective area, then to the turn-in."] = true
+L["A TomTom waypoint you set for a quest (ctrl-click or its icon) now moves along while that quest is focused: to the next objective area, then to the turn-in once it's complete. It's on by default; turn it off here or in the settings."] = true
+L["(Needs the TomTom addon, which isn't installed.)"] = true

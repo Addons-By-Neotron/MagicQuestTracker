@@ -518,3 +518,7 @@ L["Reduced XP: the quest is %d levels below you."] = "경험치 감소: 퀘스�
 L["Better with QuestieDB"] = "QuestieDB와 함께 더 좋게"
 L["With the QuestieDB addon installed, quests count as being in your zone when their objectives are there, even when they are filed under another zone. Quests the game gives no item button get one when you carry the item they use, like a chest the quest gave you or the jars inside it. This works on the quest item bar too."] = "QuestieDB 애드온이 설치되어 있으면, 다른 지역으로 분류된 퀘스트라도 목표가 현재 지역에 있으면 현재 지역 퀘스트로 취급합니다. 게임이 아이템 버튼을 주지 않는 퀘스트도 사용하는 아이템을 가지고 있으면 버튼이 생깁니다. 예를 들어 퀘스트로 받은 상자나 그 안의 병입니다. 퀘스트 아이템 바에서도 작동합니다."
 L["(Needs the QuestieDB addon, which isn't installed.)"] = "(QuestieDB 애드온이 필요하지만 설치되어 있지 않습니다.)"
+L["TomTom waypoint follows focus"] = "TomTom 경유지가 주시를 따라감"
+L["When the focused quest has the TomTom waypoint you set, move the waypoint along as the quest moves on: to the next objective area, then to the turn-in."] = "주시 중인 퀘스트에 직접 설정한 TomTom 경유지가 있으면, 퀘스트가 진행됨에 따라 경유지가 다음 목표 지역으로, 그다음 완료 장소로 이동합니다."
+L["A TomTom waypoint you set for a quest (ctrl-click or its icon) now moves along while that quest is focused: to the next objective area, then to the turn-in once it's complete. It's on by default; turn it off here or in the settings."] = "퀘스트에 설정한 TomTom 경유지(Ctrl-클릭 또는 아이콘)가 이제 그 퀘스트를 주시하는 동안 따라 이동합니다: 다음 목표 지역으로, 완료되면 완료 장소로. 기본으로 켜져 있으며, 여기나 설정에서 끌 수 있습니다."
+L["(Needs the TomTom addon, which isn't installed.)"] = "(TomTom 애드온이 필요하지만 설치되어 있지 않습니다.)"

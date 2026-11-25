@@ -1045,6 +1045,12 @@ local WHATS_NEW = {
       nil, nil,
       function() return mod.HasQuestieDB() end,
       needs = L["(Needs the QuestieDB addon, which isn't installed.)"] },
+   { L["TomTom waypoint follows focus"],
+      L["A TomTom waypoint you set for a quest (ctrl-click or its icon) now moves along while that quest is focused: to the next objective area, then to the turn-in once it's complete. It's on by default; turn it off here or in the settings."],
+      function() return mod:GetWizardOption("tomtomFollowFocus") end,
+      function(value) mod:SetWizardOption("tomtomFollowFocus", value) end,
+      function() return mod:HasTomTom() end,
+      needs = L["(Needs the TomTom addon, which isn't installed.)"] },
 }
 
 local LATEST_ID = #WHATS_NEW
