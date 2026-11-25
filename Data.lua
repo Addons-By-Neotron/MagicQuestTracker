@@ -2177,18 +2177,34 @@ local function Coins(copper)
    return GetCoinTextureString and GetCoinTextureString(copper) or GetMoneyString(copper)
 end
 
+-- Whether the player can still gain XP (not at max level, XP not turned off).
+local function CanGainXP()
+   if IsXPUserDisabled and IsXPUserDisabled() then return false end
+   if GameRulesUtil and GameRulesUtil.IsPlayerAtEffectiveMaxLevel then
+      return not GameRulesUtil.IsPlayerAtEffectiveMaxLevel()
+   end
+   local maxLevel = GetMaxLevelForPlayerExpansion and GetMaxLevelForPlayerExpansion() or MAX_PLAYER_LEVEL
+   return not maxLevel or UnitLevel("player") < maxLevel
+end
+
+--- Whether a run's XP is worth showing: some was gained, or could be.
+local function ShowRunXP(killXP, questXP)
+   return killXP + questXP > 0 or CanGainXP()
+end
+
 -- Lines below the bosses: XP, money (coins and items' vendor value), then
 -- time and deaths.
 local function AddRunStats(self, dungeon, run, profile, stoppedAt)
    dungeon.stats = new()
    local parts = new()
    local killXP = math.max(0, (run.xp or 0) - (run.turnInXP or 0))
-   if profile.dungeonStatsXP then
+   local questXP = UpdateRunQuests(run)
+   local showXP = ShowRunXP(killXP, questXP)
+   if profile.dungeonStatsXP and showXP then
       tinsert(parts, format(L["XP: %s"], Number(killXP)))
    end
-   local questXP = UpdateRunQuests(run)
    -- Totals for the per hour tooltip.
-   dungeon.runKillXP, dungeon.runQuestXP = killXP, questXP
+   dungeon.runKillXP, dungeon.runQuestXP, dungeon.runShowXP = killXP, questXP, showXP
    dungeon.runCoins, dungeon.runItems = run.money or 0, run.itemValue or 0
    dungeon.runStarted, dungeon.runFinished = run.started, run.finished or stoppedAt
    if profile.dungeonStatsQuestXP and questXP > 0 then
@@ -2332,15 +2348,22 @@ local function RunSummaryLines(self, plain)
    local seconds = run.started and math.max(0, ended - run.started) or 0
    local lines = {}
    tinsert(lines, format(L["Run summary: %s (%d/%d bosses)"], name, numKilled, numBosses))
-   tinsert(lines, format(L["XP: %s"], Number(killXP)) .. SEPARATOR .. format(L["Quest XP: %s"], Number(questXP)))
+   local showXP = ShowRunXP(killXP, questXP)
+   if showXP then
+      tinsert(lines, format(L["XP: %s"], Number(killXP)) .. SEPARATOR .. format(L["Quest XP: %s"], Number(questXP)))
+   end
    tinsert(lines, format(L["Coins: %s"], money(coins)) .. SEPARATOR .. format(L["Items: %s"], money(items)))
    local line = format(L["Deaths: %d"], run.deaths or 0)
    if run.started then line = format(L["Time: %s"], mod.FormatClock(seconds)) .. SEPARATOR .. line end
    tinsert(lines, line)
    if seconds >= 60 then
       local hours = seconds / 3600
-      tinsert(lines, format(L["%s XP per hour"], Number(math.floor((killXP + questXP) / hours + 0.5)))
-         .. SEPARATOR .. format(L["%s per hour"], money(math.floor((coins + items) / hours + 0.5))))
+      local perHour = format(L["%s per hour"], money(math.floor((coins + items) / hours + 0.5)))
+      if showXP then
+         perHour = format(L["%s XP per hour"], Number(math.floor((killXP + questXP) / hours + 0.5)))
+            .. SEPARATOR .. perHour
+      end
+      tinsert(lines, perHour)
    end
    return lines
 end

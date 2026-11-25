@@ -319,6 +319,7 @@ L["Kills"] = true
 L["Coins"] = true
 L["Items"] = true
 L["XP from kills and quests, money from coins and the loot's vendor value, over the run time."] = true
+L["Money from coins and the loot's vendor value, over the run time."] = true
 L["Time: %s"] = true
 L["Dungeon run stats"] = true
 L["Show run stats"] = true

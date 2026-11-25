@@ -553,13 +553,17 @@ function mod:ShowRunRatesTooltip(owner, dungeon)
       end
       local killXP, questXP = dungeon.runKillXP or 0, dungeon.runQuestXP or 0
       local coins, items = dungeon.runCoins or 0, dungeon.runItems or 0
-      Line(L["XP per hour"], Number(Rate(killXP + questXP)))
-      Line(L["Kills"], Number(Rate(killXP)), true)
-      Line(L["Quests"], Number(Rate(questXP)), true)
+      if dungeon.runShowXP ~= false then
+         Line(L["XP per hour"], Number(Rate(killXP + questXP)))
+         Line(L["Kills"], Number(Rate(killXP)), true)
+         Line(L["Quests"], Number(Rate(questXP)), true)
+      end
       Line(L["Money per hour"], Coins(Rate(coins + items)))
       Line(L["Coins"], Coins(Rate(coins)), true)
       Line(L["Items"], Coins(Rate(items)), true)
-      GameTooltip:AddLine(L["XP from kills and quests, money from coins and the loot's vendor value, over the run time."],
+      GameTooltip:AddLine(dungeon.runShowXP ~= false
+         and L["XP from kills and quests, money from coins and the loot's vendor value, over the run time."]
+         or L["Money from coins and the loot's vendor value, over the run time."],
          0.7, 0.7, 0.7, true)
    end
    GameTooltip:Show()
