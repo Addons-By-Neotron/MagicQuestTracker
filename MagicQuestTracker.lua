@@ -146,6 +146,7 @@ mod.defaults = {
       distanceUnits = "yards",       -- yards | meters | imperial (yd/mi) | metric (m/km)
       showDirection = false,
       arrowSize = 16,
+      arrowPosition = "before",      -- before | after the distance
       arrowMaxDistance = 1000,       -- yards, 0 = no limit
       tomtomFollowFocus = true,      -- move our TomTom waypoint along with the focused quest
       waypointMode = "both",         -- ctrl-click: tomtom | blizzard | both

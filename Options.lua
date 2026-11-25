@@ -904,6 +904,22 @@ local function BuildOptions()
                         mod:RequestUpdate()
                      end,
                   },
+                  arrowPosition = {
+                     type = "select",
+                     name = L["Arrow position"],
+                     desc = L["Show the arrow before or after the distance."],
+                     values = {
+                        before = L["Before distance"],
+                        after = L["After distance"],
+                     },
+                     sorting = { "before", "after" },
+                     order = 11,
+                     width = COLUMN_WIDTH,
+                     disabled = function()
+                        local profile = mod.db.profile
+                        return not (profile.showDirection and profile.showDistance)
+                     end,
+                  },
                },
             },
             buttons = {

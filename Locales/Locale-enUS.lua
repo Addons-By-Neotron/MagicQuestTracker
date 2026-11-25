@@ -525,3 +525,7 @@ L["TomTom waypoint follows focus"] = true
 L["When the focused quest has the TomTom waypoint you set, move the waypoint along as the quest moves on: to the next objective area, then to the turn-in."] = true
 L["A TomTom waypoint you set for a quest (ctrl-click or its icon) now moves along while that quest is focused: to the next objective area, then to the turn-in once it's complete. It's on by default; turn it off here or in the settings."] = true
 L["(Needs the TomTom addon, which isn't installed.)"] = true
+L["Arrow position"] = true
+L["Show the arrow before or after the distance."] = true
+L["Before distance"] = true
+L["After distance"] = true

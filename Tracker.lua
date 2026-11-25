@@ -705,13 +705,14 @@ local function AddLine(kind, data, text, role, indent, spacing, color, highlight
    line:EnableMouse(highlightColor ~= nil and not mod.previewing)
 
    local width = layout.width - indent - (layout.rightInset or 0) - foldLeft - foldRight
+   local arrowAfter = arrowTarget and mod.db.profile.arrowPosition == "after"
    if rightText then
       local right = line.rightText
       right:SetFontObject(fontObjects.objective)
       right:SetText(rightText)
       right:SetTextColor(unpack(colors.distance))
       right:ClearAllPoints()
-      right:SetPoint("TOPRIGHT", -(layout.rightInset or 0), 0)
+      right:SetPoint("TOPRIGHT", -(layout.rightInset or 0) - (arrowAfter and mod.db.profile.arrowSize + 3 or 0), 0)
       right:Show()
       width = width - right:GetStringWidth() - 4
    else
@@ -728,10 +729,10 @@ local function AddLine(kind, data, text, role, indent, spacing, color, highlight
    if line.previewItem then line.previewItem:Hide() end
    if line.bar then line.bar:Hide() end
    if arrowTarget then
-      -- Arrow sits left of the distance text, centered on the first text
-      -- line (it may be taller than the text); rotated by mod:UpdateArrows().
+      -- Arrow sits left or right of the distance text, centered on the first
+      -- text line (it may be taller than the text); rotated by mod:UpdateArrows().
       local size = mod.db.profile.arrowSize
-      local offset = (layout.rightInset or 0) + (rightText and line.rightText:GetStringWidth() + 3 or 0)
+      local offset = (layout.rightInset or 0) + (rightText and not arrowAfter and line.rightText:GetStringWidth() + 3 or 0)
       local lineHeight = mod:GetFonts()[role].size
       line.arrow:SetSize(size, size)
       line.arrow:SetVertexColor(unpack(colors.arrow))
