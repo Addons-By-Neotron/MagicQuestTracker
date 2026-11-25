@@ -6,7 +6,7 @@ A replacement for the built-in objective tracker for WoW Retail and Classic Fore
 - Quests are grouped by zone (quest log header), using only the built-in quest log API (no quest database).
 - Optionally shows the current zone first; remaining zones are sorted by their lowest quest level, name or quest distance.
 - Quests within a zone are sorted by level, name, or straight-line distance to the quest's next map location.
-- Optional distance (yards) and direction arrow on each quest.
+- Optional distance (yards) and direction arrow on each quest, with the arrow before or after the distance.
 - Option to hide quests that aren't in the current zone.
 - Option to auto-fold every zone except the current one when you change zones.
 - Three views: all quests, current zone only, or only the quests on the built-in watch list (like the built-in tracker). Middle-click the title to switch.
